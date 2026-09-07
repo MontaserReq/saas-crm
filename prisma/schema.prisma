@@ -1,0 +1,641 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  phone        String?
+  passwordHash String
+  avatar       String?
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  accessMode   String    @default("ANY_IP") // ANY_IP | RESTRICTED_IPS
+  allowedIps   String? // JSON array; retained independently from login history
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  // Independent reporting hierarchy (separate from roles and permissions)
+  reportsToUserId String?
+  reportsTo       User?   @relation("UserReporting", fields: [reportsToUserId], references: [id], onDelete: SetNull)
+  directReports   User[]  @relation("UserReporting")
+
+  // Relations
+  ticketAssignees         TicketAssignee[]
+  createdTickets          Ticket[]                @relation("TicketCreator")
+  createdAssignments      SchoolAssignment[]      @relation("AssignmentCreator")
+  notes                   Note[]                  @relation("NoteAuthor")
+  communicationAttempts   CommunicationAttempt[]  @relation("AttemptAuthor")
+  assignmentHistoryFrom   AssignmentHistory[]     @relation("AssignFrom")
+  assignmentHistoryTo     AssignmentHistory[]     @relation("AssignTo")
+  assignmentHistoryAction AssignmentHistory[]     @relation("AssignPerformed")
+  notifications           Notification[]
+  auditLogs               AuditLog[]              @relation("AuditActor")
+  activityEvents          ActivityEvent[]         @relation("ActivityActor")
+  todos                   Todo[]                  @relation("UserTodos")
+  createdSchools          School[]                @relation("SchoolCreator")
+  responsibleSchools      School[]                @relation("SchoolResponsible")
+  managedDepartments      DepartmentManager[]
+  sentMessages            Message[]               @relation("SentMessages")
+  receivedMessages        MessageRecipient[]      @relation("ReceivedMessages")
+  chatMemberships         ChatParticipant[]
+  sentChatMessages        ChatMessage[]           @relation("ChatMessageSender")
+  loginSessions           LoginSession[]
+  passwordResetTokens     PasswordResetToken[]
+  schoolApprovalRequests  SchoolApprovalRequest[] @relation("SchoolApprovalRequester")
+  schoolApprovalDecisions SchoolApprovalRequest[] @relation("SchoolApprovalDecider")
+  assignedCalendarEvents  CalendarEvent[]         @relation("CalendarAssignedUser")
+  createdCalendarEvents   CalendarEvent[]         @relation("CalendarCreator")
+  taskTypeMemberships     TaskTypeMember[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  userPermissions UserPermission[]
+
+  @@index([roleId])
+  @@index([departmentId])
+  @@index([reportsToUserId])
+  @@index([email])
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  name        String  @unique // SUPER_ADMIN, ADMIN, SCHOOL_MANAGER, MEMBER
+  displayName String
+  description String?
+  isSystem    Boolean @default(false)
+
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+  users           User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  code        String  @unique // e.g. "tickets.view_assigned", "tickets.view_all"
+  name        String
+  module      String // "tickets", "schools", "assignments", "users", "roles", "departments", "task_types", "analytics", "audit_logs", "todos"
+  description String?
+
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  @@index([module])
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model UserPermission {
+  id           String     @id @default(cuid())
+  userId       String
+  permissionId String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  Role         Role?      @relation(fields: [roleId], references: [id])
+  roleId       String?
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+}
+
+model Department {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique // "PR", "SCHOOL_OUTREACH", "VISITS", "DATA_COLLECTION", "NGOS", "MANAGEMENT", "MEDIA"
+  description String?
+  isActive    Boolean @default(true)
+
+  users    User[]
+  managers DepartmentManager[]
+  tickets  Ticket[]
+  taskTypes TaskType[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DepartmentManager {
+  id           String     @id @default(cuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([departmentId, userId])
+  @@index([departmentId])
+  @@index([userId])
+}
+
+model School {
+  id                String    @id @default(cuid())
+  name              String
+  contactPerson     String?
+  phone             String?
+  whatsapp          String?
+  email             String?
+  city              String
+  area              String?
+  schoolType        String    @default("PRIVATE") // "PRIVATE", "GOVERNMENT", "INTERNATIONAL", "COMMUNITY", "OTHER"
+  classification    String    @default("A") // "A", "B", "C"
+  notes             String?
+  status            String    @default("ACTIVE") // "ACTIVE", "INACTIVE", "CONTACTED", "ASSIGNED"
+  isDeleted         Boolean   @default(false)
+  isPublic          Boolean   @default(false)
+  publicDescription String?
+  deletedAt         DateTime?
+
+  responsibleEmployeeId String?
+  responsibleEmployee   User?   @relation("SchoolResponsible", fields: [responsibleEmployeeId], references: [id])
+
+  createdById String?
+  createdBy   User?   @relation("SchoolCreator", fields: [createdById], references: [id])
+
+  tickets          Ticket[]
+  calendarEvents   CalendarEvent[]
+  approvalRequests SchoolApprovalRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([city])
+  @@index([status])
+  @@index([schoolType])
+  @@index([classification])
+  @@index([responsibleEmployeeId])
+  @@index([isDeleted])
+}
+
+model SchoolApprovalRequest {
+  id              String    @id @default(cuid())
+  schoolId        String
+  school          School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  requesterId     String
+  requester       User      @relation("SchoolApprovalRequester", fields: [requesterId], references: [id])
+  decidedById     String?
+  decidedBy       User?     @relation("SchoolApprovalDecider", fields: [decidedById], references: [id])
+  type            String // EDIT | DELETE
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  previousData    String?
+  proposedData    String?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  decidedAt       DateTime?
+
+  @@index([status, type])
+  @@index([schoolId, createdAt])
+  @@index([requesterId])
+}
+
+model ChatConversation {
+  id           String            @id @default(cuid())
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([updatedAt])
+}
+
+model ChatParticipant {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+  joinedAt       DateTime         @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId, lastReadAt])
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User             @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  content        String
+  createdAt      DateTime         @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+}
+
+model LoginSession {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress           String?
+  deviceInfo          String?
+  browser             String?
+  operatingSystem     String?
+  approximateLocation String?
+  loginAt             DateTime  @default(now())
+  logoutAt            DateTime?
+  denied              Boolean   @default(false)
+  expiresAt           DateTime  @default(now())
+
+  @@index([userId, loginAt])
+  @@index([ipAddress])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model SchoolAssignment {
+  id            String  @id @default(cuid())
+  batchNumber   String  @unique // e.g. "ASN-2026-0001"
+  title         String
+  strategy      String  @default("EQUAL_DISTRIBUTION") // "EQUAL_DISTRIBUTION", "MANUAL"
+  totalSchools  Int
+  assignedCount Int
+  notes         String?
+
+  createdById String
+  createdBy   User   @relation("AssignmentCreator", fields: [createdById], references: [id])
+
+  tickets Ticket[]
+
+  createdAt DateTime @default(now())
+
+  @@index([createdById])
+  @@index([createdAt])
+}
+
+model TaskType {
+  id          String  @id @default(cuid())
+  name        String
+  // Legacy code retained only for historical ticket references. Not user-editable. Not surfaced in UI.
+  code        String? @unique
+  description String?
+  isActive    Boolean @default(true)
+  createdById String?
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  tickets Ticket[]
+  members TaskTypeMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([departmentId])
+}
+
+model TaskTypeMember {
+  id             String   @id @default(cuid())
+  taskTypeId     String
+  taskType       TaskType @relation(fields: [taskTypeId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responsibility String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([taskTypeId, userId])
+  @@index([userId])
+}
+
+model Ticket {
+  id           String            @id @default(cuid())
+  ticketNumber String            @unique // e.g. "CL-00101"
+  schoolId     String?
+  school       School?           @relation(fields: [schoolId], references: [id])
+  taskTypeId   String?
+  taskType     TaskType?         @relation(fields: [taskTypeId], references: [id])
+  departmentId String
+  department   Department        @relation(fields: [departmentId], references: [id])
+  assignmentId String?
+  assignment   SchoolAssignment? @relation(fields: [assignmentId], references: [id])
+
+  subject         String
+  priority        String  @default("MEDIUM") // "LOW", "MEDIUM", "HIGH", "URGENT"
+  status          String  @default("PENDING") // "PENDING", "SEEN", "ACCEPTED", "REJECTED", "IN_PROGRESS", "TRANSFERRED", "UNREACHABLE", "COMPLETED", "CLOSED"
+  rejectionReason String?
+
+  createdById String
+  createdBy   User   @relation("TicketCreator", fields: [createdById], references: [id])
+
+  dueDate    DateTime?
+  followUpAt DateTime?
+
+  assignees             TicketAssignee[]
+  notes                 Note[]
+  attachments           Attachment[]
+  communicationAttempts CommunicationAttempt[]
+  assignmentHistory     AssignmentHistory[]
+  activityEvents        ActivityEvent[]
+  calendarEvents        CalendarEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([schoolId])
+  @@index([departmentId])
+  @@index([taskTypeId])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+model TicketAssignee {
+  id           String    @id @default(cuid())
+  ticketId     String
+  ticket       Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  isCurrent    Boolean   @default(true)
+  role         String    @default("ASSIGNEE") // "ASSIGNEE", "CC"
+  assignedAt   DateTime  @default(now())
+  unassignedAt DateTime?
+
+  @@index([ticketId, userId])
+  @@index([userId, isCurrent])
+}
+
+model AssignmentHistory {
+  id            String  @id @default(cuid())
+  ticketId      String
+  ticket        Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fromUserId    String?
+  fromUser      User?   @relation("AssignFrom", fields: [fromUserId], references: [id])
+  toUserId      String
+  toUser        User    @relation("AssignTo", fields: [toUserId], references: [id])
+  performedById String
+  performedBy   User    @relation("AssignPerformed", fields: [performedById], references: [id])
+  action        String // "INITIAL_ASSIGNMENT", "TRANSFER", "REASSIGN", "CC_ADDED"
+  reason        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([toUserId])
+  @@index([fromUserId])
+}
+
+model Note {
+  id               String  @id @default(cuid())
+  ticketId         String
+  ticket           Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId         String
+  author           User    @relation("NoteAuthor", fields: [authorId], references: [id])
+  content          String
+  priority         String? // Optional note highlight
+  transferToUserId String?
+
+  attachments Attachment[]
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+  @@index([authorId])
+}
+
+model Attachment {
+  id              String  @id @default(cuid())
+  ticketId        String?
+  ticket          Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  noteId          String?
+  note            Note?   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  originalName    String
+  mimeType        String
+  size            Int
+  storageKey      String  @unique
+  storageProvider String  @default("local")
+  uploadedById    String
+
+  createdAt DateTime @default(now())
+
+  @@index([noteId])
+  @@index([ticketId])
+  @@index([storageKey])
+}
+
+model CommunicationAttempt {
+  id            String  @id @default(cuid())
+  ticketId      String
+  ticket        Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  performedById String
+  performedBy   User    @relation("AttemptAuthor", fields: [performedById], references: [id])
+  attemptNumber Int
+  method        String // "PHONE", "WHATSAPP", "EMAIL", "IN_PERSON", "OTHER"
+  result        String // "NO_ANSWER", "BUSY", "ANSWERED", "WRONG_NUMBER", "WHATSAPP_SENT", "EMAIL_SENT", "REPLIED", "CALLBACK_REQUESTED", "INVALID_CONTACT", "OTHER"
+  note          String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, attemptNumber])
+  @@index([performedById])
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String // "TICKET_ASSIGNED", "TICKET_TRANSFERRED", "TICKET_ACCEPTED", "TICKET_REJECTED", "NEW_NOTE", "STATUS_CHANGED", "MENTION"
+  title      String
+  message    String
+  entityType String? // "ticket", "school", "assignment", "todo"
+  entityId   String?
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id         String  @id @default(cuid())
+  actorId    String?
+  actor      User?   @relation("AuditActor", fields: [actorId], references: [id])
+  action     String // e.g. "AUTH_LOGIN", "TICKET_CREATED", "TICKET_SEEN", "TICKET_ACCEPTED", "TICKET_REJECTED", "TICKET_TRANSFERRED", "NOTE_CREATED", "SCHOOL_IMPORTED"
+  entityType String // "Ticket", "School", "Assignment", "User", "Role", "Note", etc.
+  entityId   String?
+  metadata   String? // JSON string
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model ActivityEvent {
+  id          String  @id @default(cuid())
+  ticketId    String
+  ticket      Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorId     String
+  actor       User    @relation("ActivityActor", fields: [actorId], references: [id])
+  type        String // "CREATED", "SEEN", "ACCEPTED", "REJECTED", "IN_PROGRESS", "NOTE_ADDED", "TRANSFERRED", "COMMUNICATION_ATTEMPT", "COMPLETED", "CLOSED"
+  title       String
+  description String?
+  metadata    String? // JSON string
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+  @@index([actorId])
+}
+
+model Todo {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation("UserTodos", fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  priority    String    @default("MEDIUM") // "LOW", "MEDIUM", "HIGH"
+  color       String    @default("yellow") // "yellow", "blue", "green", "pink", "purple", "orange"
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+  dueDate     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, isCompleted])
+  @@index([userId, createdAt])
+}
+
+model Message {
+  id          String              @id @default(cuid())
+  senderId    String
+  sender      User                @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  subject     String
+  content     String
+  recipients  MessageRecipient[]
+  attachments MessageAttachment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+model MessageRecipient {
+  id         String    @id @default(cuid())
+  messageId  String
+  message    Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation("ReceivedMessages", fields: [userId], references: [id], onDelete: Cascade)
+  type       String    @default("TO") // "TO", "CC"
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+  isArchived Boolean   @default(false)
+  isDeleted  Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, isDeleted])
+  @@index([messageId])
+}
+
+model MessageAttachment {
+  id              String  @id @default(cuid())
+  messageId       String
+  message         Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  originalName    String
+  mimeType        String
+  size            Int
+  storageKey      String  @unique
+  storageProvider String  @default("local")
+  uploadedById    String
+
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+  @@index([storageKey])
+}
+
+model CalendarEvent {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  type        String    @default("EVENT") // "MEETING", "FOLLOW_UP", "DUE_DATE", "TASK", "EVENT"
+  startDate   DateTime
+  endDate     DateTime?
+  allDay      Boolean   @default(false)
+  location    String?
+
+  userId String?
+  user   User?   @relation("CalendarAssignedUser", fields: [userId], references: [id])
+
+  createdById String
+  createdBy   User   @relation("CalendarCreator", fields: [createdById], references: [id])
+
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, startDate])
+  @@index([createdById])
+  @@index([startDate])
+  @@index([type])
+}
+
+model MessageTemplate {
+  id        String  @id @default(cuid())
+  code      String  @unique
+  title     String
+  titleAr   String
+  subject   String
+  subjectAr String
+  content   String
+  contentAr String
+  category  String  @default("GENERAL") // "MEETING", "PERMISSION", "FOLLOW_UP", "APPROVAL", "NOTICE", "GENERAL"
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}

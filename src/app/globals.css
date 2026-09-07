@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Application canvas: a calm off-white that keeps white surfaces distinct. */
+    --background: 240 5% 96.5%;
+    --foreground: 222 22% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 22% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 22% 18%;
+    --primary: 271 76% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 240 8% 94%;
+    --secondary-foreground: 222 22% 18%;
+    --muted: 240 8% 94%;
+    --muted-foreground: 215 14% 42%;
+    --accent: 270 50% 95%;
+    --accent-foreground: 271 76% 40%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 240 8% 89%;
+    --input: 240 8% 87%;
+    --ring: 271 76% 53%;
+    --radius: 0.625rem;
+    --font-inter: 'Inter', sans-serif;
+    --font-tajawal: 'Tajawal', sans-serif;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+    --card: 224 71% 6%;
+    --card-foreground: 210 40% 98%;
+    --popover: 224 71% 6%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 271 76% 60%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 271 50% 18%;
+    --accent-foreground: 271 76% 85%;
+    --destructive: 0 62.8% 50.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 271 76% 60%;
+  }
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-tajawal), var(--font-inter), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+@media (max-width: 640px) {
+  button, input, select, textarea { min-height: 2.5rem; }
+}
+
+[dir="ltr"] body {
+  font-family: var(--font-inter), var(--font-tajawal), sans-serif;
+}
+
+/* Custom Sticky Note Shadows */
+.sticky-note-shadow {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05),
+              0 10px 15px -3px rgba(0, 0, 0, 0.03);
+}
+
+.sticky-note-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease-in-out;
+}

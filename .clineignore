@@ -1,0 +1,30 @@
+
+# Dependency and build folders
+node_modules/
+.next/
+dist/
+build/
+out/
+
+# Database migration locks and large schema generated artifacts
+prisma/client/
+prisma/migrations/
+*.sqlite
+
+# Environment and secret files
+.env
+.env.*
+
+# Log files, caches, and media assets
+*.log
+.cache/
+public/assets/
+uploads/
+
+# Lockfiles
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Other generated files
+tsconfig.tsbuildinfo
