@@ -129,9 +129,9 @@ model Department {
   description String?
   isActive    Boolean @default(true)
 
-  users    User[]
-  managers DepartmentManager[]
-  tickets  Ticket[]
+  users     User[]
+  managers  DepartmentManager[]
+  tickets   Ticket[]
   taskTypes TaskType[]
 
   createdAt DateTime @default(now())

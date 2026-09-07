@@ -1,4 +1,4 @@
-'use server';
+﻿'use server';
 
 import prisma from '@/lib/db/prisma';
 import { requireAuth } from '@/lib/auth/session';
@@ -174,7 +174,8 @@ export async function createTicketAction(input: {
   schoolId?: string | null;
   taskTypeId?: string | null;
   departmentId?: string;
-  assignedToUserId?: string;
+  // NOTE: assignedToUserId is intentionally removed from the public API.
+  // The assignee is always computed from currentUser.reportsToUserId server-side.
   subject?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate?: string | null;
@@ -183,24 +184,20 @@ export async function createTicketAction(input: {
   try {
     const user = await requireAuth();
     ticketPermission(user, PERMISSIONS.TICKETS_CREATE);
-    let departmentId = input.departmentId;
-
-    if (!departmentId) {
-      const firstDept = await prisma.department.findFirst({ where: { isActive: true } });
-      departmentId = firstDept?.id || user.departmentId || '';
-    }
+    // The department defaults to the user's own department (not the first department in the DB).
+    const departmentId = input.departmentId || user.departmentId;
 
     const school = input.schoolId ? await prisma.school.findUnique({ where: { id: input.schoolId }, select: { name: true } }) : null;
     const taskType = input.taskTypeId ? await prisma.taskType.findUnique({ where: { id: input.taskTypeId }, select: { name: true } }) : null;
     const subject = input.subject?.trim() || `${taskType?.name || 'Task'} - ${school?.name || 'School'}`;
 
+    // The ticket is auto-assigned server-side to currentUser.reportsToUserId.
     const ticket = await TicketService.createTicket(user, {
       schoolId: input.schoolId || null,
       taskTypeId: input.taskTypeId || null,
-      departmentId: departmentId || '',
+      departmentId,
       subject,
       priority: input.priority,
-      assignedToUserId: input.assignedToUserId,
       dueDate: input.dueDate,
       initialNote: input.initialNote,
     });

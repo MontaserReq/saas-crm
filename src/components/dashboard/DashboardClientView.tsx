@@ -42,7 +42,7 @@ interface DashboardClientViewProps {
   schools?: Array<{ id: string; name: string }>;
   taskTypes?: Array<{ id: string; name: string }>;
   users?: Array<{ id: string; name: string; email: string; reportsToUserId?: string | null; department?: { name: string } | null }>;
-  managerName?: string | null;
+  directManager?: { id: string; name: string; isActive: boolean } | null;
 }
 
 export function DashboardClientView({
@@ -51,7 +51,7 @@ export function DashboardClientView({
   schools = [],
   taskTypes = [],
   users = [],
-  managerName,
+  directManager,
 }: DashboardClientViewProps) {
   const { t, language, getStatusLabel } = useI18n();
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
@@ -264,7 +264,7 @@ export function DashboardClientView({
         <TicketFormModal
           isOpen={isNewTicketOpen}
           onClose={() => setIsNewTicketOpen(false)}
-          managerName={managerName}
+          directManager={directManager}
         />
       )}
     </div>

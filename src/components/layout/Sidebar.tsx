@@ -33,10 +33,10 @@ interface SidebarProps {
   schools?: Array<{ id: string; name: string }>;
   taskTypes?: Array<{ id: string; name: string }>;
   users?: Array<{ id: string; name: string; email: string; reportsToUserId?: string | null; department?: { name: string } | null }>;
-  managerName?: string | null;
+  directManager?: { id: string; name: string; isActive: boolean } | null;
 }
 
-export function Sidebar({ user, schools = [], taskTypes = [], users = [], managerName }: SidebarProps) {
+export function Sidebar({ user, schools = [], taskTypes = [], users = [], directManager }: SidebarProps) {
   const pathname = usePathname();
   const { t } = useI18n();
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
@@ -210,7 +210,7 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], manage
         <TicketFormModal
           isOpen={isNewTicketOpen}
           onClose={() => setIsNewTicketOpen(false)}
-          managerName={managerName}
+          directManager={directManager}
         />
       )}
     </aside>

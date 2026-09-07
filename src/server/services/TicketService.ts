@@ -1,4 +1,4 @@
-import prisma from '@/lib/db/prisma';
+﻿import prisma from '@/lib/db/prisma';
 import { UserSession, TicketStatus, PaginationParams, PaginatedResult } from '@/types';
 import {
   hasPermission,
@@ -689,17 +689,18 @@ export class TicketService {
 
   /**
    * Creates a new ticket manually.
+   * The assignee is ALWAYS derived server-side from the current users direct manager
+   * (User.reportsToUserId). Any client-supplied assignee identifier
+   * is intentionally ignored to prevent privilege escalation.
    */
   static async createTicket(
     user: UserSession,
     input: {
       schoolId?: string | null;
       taskTypeId?: string | null;
-      departmentId: string;
+      departmentId?: string;
       subject: string;
       priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
-      assigneeId?: string;
-      assignedToUserId?: string;
       dueDate?: string | null;
       initialNote?: string | null;
     }
@@ -712,8 +713,15 @@ export class TicketService {
     if (!input.subject || input.subject.trim().length < 3) {
       throw new Error('Subject must be at least 3 characters');
     }
+    // Resolve department: prefer explicit input, fall back to user's primary department
+    const departmentId = input.departmentId || user.departmentId;
 
-    const targetAssigneeId = input.assigneeId || input.assignedToUserId || user.id;
+    // SERVER-SIDE ASSIGNMENT SOURCE OF TRUTH:
+    // The assignee is derived from User.reportsToUserId. No client value is trusted.
+    if (!user.reportsToUserId) {
+      throw new Error('You cannot create a ticket because your direct manager is not assigned. Please contact an administrator to assign your direct manager.');
+    }
+    const targetAssigneeId = user.reportsToUserId;
     const targetAssignee = await prisma.user.findUnique({
       where: { id: targetAssigneeId },
       select: {
@@ -724,13 +732,12 @@ export class TicketService {
         userPermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } },
       },
     });
-    if (!targetAssignee?.isActive) throw new Error('The selected assignee is not active.');
-    if (targetAssignee.role.rolePermissions.length === 0 && targetAssignee.userPermissions.length === 0) {
-      throw new Error('The selected user is not eligible to receive tickets.');
+    if (!targetAssignee) throw new Error('Your direct manager account could not be found.');
+    if (!targetAssignee.isActive) {
+      throw new Error('You cannot create a ticket because your assigned direct manager is disabled. Please contact an administrator.');
     }
-    const canAssign = hasPermission(user, PERMISSIONS.TICKETS_ASSIGN) || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
-    if (targetAssigneeId !== user.id && !canAssign) {
-      throw new Error('Forbidden: ticket assignment permission required');
+    if (targetAssignee.role.rolePermissions.length === 0 && targetAssignee.userPermissions.length === 0) {
+      throw new Error('The assigned direct manager is not eligible to receive tickets.');
     }
 
     const count = await prisma.ticket.count();
@@ -742,7 +749,7 @@ export class TicketService {
           ticketNumber,
           schoolId: input.schoolId,
           taskTypeId: input.taskTypeId,
-          departmentId: input.departmentId,
+          departmentId: departmentId,
           subject: input.subject.trim(),
           priority: input.priority || 'MEDIUM',
           status: 'PENDING',
@@ -767,7 +774,7 @@ export class TicketService {
           toUserId: targetAssigneeId,
           performedById: user.id,
           action: 'INITIAL_ASSIGNMENT',
-          reason: 'Manual ticket assignment',
+          reason: 'Initial assignment via direct manager (User.reportsToUserId)',
         },
       });
 
@@ -798,7 +805,7 @@ export class TicketService {
           userId: targetAssigneeId,
           type: 'TICKET_ASSIGNED',
           title: 'New ticket assigned to you',
-          message: `${user.name} assigned ticket ${ticket.ticketNumber} to you.`,
+          message: `You have been assigned a new ticket by ${user.name}: ${ticket.ticketNumber}.`,
           entityType: 'ticket',
           entityId: ticket.id,
         },
@@ -811,7 +818,7 @@ export class TicketService {
           action: 'TICKET_CREATED',
           entityType: 'Ticket',
           entityId: ticket.id,
-          metadata: JSON.stringify({ ticketNumber, schoolId: input.schoolId }),
+          metadata: JSON.stringify({ ticketNumber, schoolId: input.schoolId, assigneeId: targetAssigneeId, assignmentSource: 'reportsToUserId' }),
         },
       });
 

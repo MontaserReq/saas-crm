@@ -33,7 +33,7 @@ export default async function DashboardPage() {
       select: { id: true, name: true, email: true, department: { select: { name: true } } },
       orderBy: { name: 'asc' },
     }),
-    user.reportsToUserId ? prisma.user.findUnique({ where: { id: user.reportsToUserId }, select: { name: true, isActive: true } }) : Promise.resolve(null),
+    user.reportsToUserId ? prisma.user.findUnique({ where: { id: user.reportsToUserId }, select: { id: true, name: true, isActive: true } }) : Promise.resolve(null),
   ]);
 
   return (
@@ -43,7 +43,7 @@ export default async function DashboardPage() {
       schools={schools}
       taskTypes={taskTypes}
       users={users}
-      managerName={manager?.isActive ? manager.name : null}
+      directManager={manager ?? null}
     />
   );
 }

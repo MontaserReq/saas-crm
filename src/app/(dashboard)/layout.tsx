@@ -30,12 +30,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
       select: { id: true, name: true, email: true, reportsToUserId: true, department: { select: { name: true } } },
       orderBy: { name: 'asc' },
     }) : Promise.resolve([]),
-    user.reportsToUserId ? prisma.user.findUnique({ where: { id: user.reportsToUserId }, select: { name: true, isActive: true } }) : Promise.resolve(null),
+    user.reportsToUserId ? prisma.user.findUnique({ where: { id: user.reportsToUserId }, select: { id: true, name: true, isActive: true } }) : Promise.resolve(null),
   ]);
 
   return (
     <div className="min-h-screen flex bg-background dark:bg-slate-950">
-      <Sidebar user={user} schools={schools} taskTypes={taskTypes} users={users} managerName={manager?.isActive ? manager.name : null} />
+      <Sidebar user={user} schools={schools} taskTypes={taskTypes} users={users} directManager={manager ?? null} />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Navbar user={user} notifications={notifications as any} />
         <main className="flex-1 p-4 sm:p-8 overflow-y-auto max-w-7xl w-full mx-auto">

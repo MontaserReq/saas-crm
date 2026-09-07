@@ -24,7 +24,7 @@ interface TicketsClientViewProps {
   taskTypes: any[];
   schools?: Array<{ id: string; name: string }>;
   users?: Array<{ id: string; name: string; email: string; reportsToUserId?: string | null; department?: { name: string } | null }>;
-  managerName?: string | null;
+  directManager?: { id: string; name: string; isActive: boolean } | null;
   initialSearch?: string;
   initialStatus?: string;
   initialPriority?: string;
@@ -37,7 +37,7 @@ export function TicketsClientView({
   taskTypes,
   schools = [],
   users = [],
-  managerName,
+  directManager,
   initialSearch = '',
   initialStatus = 'ALL',
   initialPriority = 'ALL',
@@ -295,7 +295,7 @@ export function TicketsClientView({
         <TicketFormModal
           isOpen={isNewTicketOpen}
           onClose={() => setIsNewTicketOpen(false)}
-          managerName={managerName}
+          directManager={directManager}
         />
       )}
     </div>

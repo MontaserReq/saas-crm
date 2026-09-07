@@ -180,7 +180,9 @@ export const translations = {
       "commModalDesc": "Record phone calls, WhatsApp messages, and meetings. Every attempt is immutable.",
       "commMethod": "Communication Method",
       "commResult": "Contact Result",
-      "commNotesOutcome": "Notes / Outcome Summary",
+ 
+      "incorrectInformation": "Incorrect Information",
+     "commNotesOutcome": "Notes / Outcome Summary",
       "commNotesPlaceholder": "Key discussion points, callback scheduled time, coordinator response...",
       "saveContactRecord": "Save Contact Record",
       "totalTicketsCount": "Total: {count} Tickets",
@@ -226,28 +228,15 @@ export const translations = {
       "closeConfirm": "Close Ticket",
       "closingReasonMinError": "Please provide a clear closing reason / outcome summary (at least 3 characters)",
       "closingReasonPlaceholderDesc": "Write final outcome details, e.g., Partnership signed, school coordinator declined, requirements fulfilled...",
-      "confirmCloseAction": "Confirm Ticket Closure"
-    },
-    
-      "notEligibleManager": "المسؤول المباشر المحدد غير مؤهل لاستلام التذاكر.",
+      "confirmCloseAction": "Confirm Ticket Closure",
+
       "directManager": "Direct Manager",
       "directManagerDesc": "The ticket will be automatically sent to your direct manager.",
       "noDirectManager": "No direct manager is configured for your account.",
       "noDirectManagerBlock": "You cannot create a ticket because your direct manager is not assigned. Please contact an administrator to assign your direct manager.",
       "managerDisabledBlock": "You cannot create a ticket because your assigned direct manager is disabled. Please contact an administrator.",
       "assignedByYou": "You have been assigned a new ticket by {name}.",
-      "initialAssignment": "Initial Assignment",
-      "initialAssignmentDesc": "Ticket Created and Assigned to Direct Manager",
-      "createTicketAssign": "Create Ticket",
-      "schoolOptional": "School (optional)",
-      "taskTypeOptional": "Task Type (optional)",
-      "subjectPlaceholder": "Subject / Task Title",
-      "initialNotePlaceholder": "Add an initial note (optional)...",
-      "ticketSubject": "Subject",
-      "initialNote": "Initial Note",
-      "validationRequired": "Required",
-      "notEligibleManager": "The assigned direct manager is not eligible to receive tickets.",
-      "schools": {
+    },"schools": {
       "title": "Schools Registry",
       "subtitle": "Maintain full registry of partner schools, coordinators, contact channels, and locations.",
       "addSchool": "Add School",
@@ -379,7 +368,13 @@ export const translations = {
       "activeNotesCount": "Active Notes",
       "completedNotesCount": "Completed Notes"
     },
-    "messages": {
+    
+      "downloadTemplate": "Download Template",
+      "submitDeletionRequest": "Submit deletion request",
+      "requestSchoolDeletion": "Request school deletion",
+      "deletingSubmittedMessage": "The school deletion request has been submitted and is pending administrator approval.",
+      "confirmDeletionRequest": "Are you sure you want to request deletion of this school? An administrator will review and approve the request.",
+      "messages": {
       "title": "Messages",
       "subtitle": "Internal team messaging and communication",
       "inbox": "Inbox",
@@ -418,8 +413,23 @@ export const translations = {
       "downloadAttachment": "Download",
       "templates": "Message Templates",
       "selectTemplate": "Select Template (Optional)...",
+      
+      "subjectPlaceholder": "Message subject...",
+      "contentPlaceholder": "Write your message here...",
+      "systemEvent": "System event",
+      "fileTooLarge": "File \"{name}\" is larger than the 10MB limit.",
+      "selectRecipientRequired": "Please select at least one recipient (To)",
+      "subjectRequired": "Please enter message subject",
+      "contentRequired": "Please enter message content",
+      "messageSentFallback": "Message sent successfully!",
+      "messageFailedFallback": "Failed to send message",
+      "messageErrorFallback": "An unexpected error occurred",
+      "noSentDesc": "Send updates, tasks, or meeting agendas directly to any team member.",
+      "noSentDescAlt": "Send updates, agendas, or announcements directly to team members.",
+      "teamDefault": "Team",
       "applyTemplate": "Apply Template"
     },
+    
     "admin": {
       "users": {
         "title": "Team & Users Management",
@@ -570,8 +580,23 @@ export const translations = {
         "confirmDeleteTitle": "Confirm Deleting / Archiving Task Type: {name}",
         "confirmDeleteDesc": "You are about to delete or archive task type ({name}). If referenced by existing tickets, it will be safely archived."
       },
-      "analytics": {
-        "title": "Operational Analytics & Insights",
+      
+      "approvalRequests": {
+        "title": "Approval Requests",
+        "subtitle": "Review school edit and delete requests allowed by your permissions.",
+        "tableSchool": "School",
+        "tableType": "Type",
+        "tableStatus": "Status",
+        "tableRequester": "Requester",
+        "tableRequested": "Requested",
+        "tableActions": "Actions",
+        "pendingApproval": "Pending Approval",
+        "noPendingRequests": "No pending requests.",
+        "editRequestPending": "Edit Request Pending Approval",
+        "deleteRequestPending": "Deletion Request Pending Approval",
+        "viewPendingRequest": "View Pending Request"
+      },
+      "analytics": {       "title": "Operational Analytics & Insights",
         "subtitle": "Real-time performance metrics across departments, task types, team members, and communication channels.",
         "ticketsByDept": "Tickets by Department",
         "assignedLoadByMember": "Assigned Workload by Member",
@@ -1039,7 +1064,9 @@ export const translations = {
       "commModalDesc": "تسجيل المكالمات الهاتفية، رسائل الواتساب، والزيارات. كل محاولة توثق بشكل دائم.",
       "commMethod": "طريقة التواصل",
       "commResult": "نتيجة التواصل",
-      "commNotesOutcome": "ملخص المخرجات والملاحظات",
+ 
+      "incorrectInformation": "معلومات غير صحيحة",
+     "commNotesOutcome": "ملخص المخرجات والملاحظات",
       "commNotesPlaceholder": "أهم النقاط التي تمت مناقشتها، موعد إعادة الاتصال، رد منسق المدرسة...",
       "saveContactRecord": "حفظ سجل التواصل",
       "totalTicketsCount": "الإجمالي: {count} تذكرة",
@@ -1081,26 +1108,10 @@ export const translations = {
       "closeConfirm": "إغلاق التذكرة",
       "closingReasonMinError": "يرجى كتابة سبب إغلاق التذكرة وموجز النتيجة (3 أحرف على الأقل)",
       "closingReasonPlaceholderDesc": "اكتب تفاصيل النتيجة النهائية، مثل: تم توقيع الاتفاقية، أو اعتذار المدرسة مع بيان الأسباب، أو استكمال المطلوب بنجاح...",
-      "confirmCloseAction": "تأكيد إغلاق التذكرة"
+      "confirmCloseAction": "تأكيد إغلاق التذكرة",
+
     },
-    
-      "directManager": "المسؤول المباشر",
-      "directManagerDesc": "سيتم إرسال التذكرة تلقائيًا إلى مسؤولك المباشر.",
-      "noDirectManager": "لم يتم تحديد مسؤول مباشر لحسابك.",
-      "noDirectManagerBlock": "لا يمكن إنشاء التذكرة لأن المسؤول المباشر غير محدد لحسابك. يرجى التواصل مع المسؤول لإضافة المسؤول المباشر.",
-      "managerDisabledBlock": "لا يمكن إنشاء التذكرة لأن المسؤول المباشر المحدد لحسابك غير مفعّل. يرجى التواصل مع المسؤول.",
-      "assignedByYou": "تم تكليفك بتذكرة جديدة بواسطة {name}.",
-      "initialAssignment": "التكليف الأولي",
-      "initialAssignmentDesc": "تم إنشاء التذكرة وتكليف المسؤول المباشر",
-      "createTicketAssign": "إنشاء التذكرة",
-      "schoolOptional": "المدرسة (اختياري)",
-      "taskTypeOptional": "نوع المهمة (اختياري)",
-      "subjectPlaceholder": "موضوع التذكرة / عنوان المهمة",
-      "initialNotePlaceholder": "أضف ملاحظة أولية (اختياري)...",
-      "ticketSubject": "الموضوع",
-      "initialNote": "ملاحظة أولية",
-      "validationRequired": "حقل مطلوب",
-      "notEligibleManager": "المسؤول المباشر المحدد غير مؤهل لاستلام التذاكر.","schools": {
+    "schools": {
       "title": "سجل المدارس",
       "subtitle": "إدارة وحفظ سجلات المدارس الشريكة، المنسقين، قنوات التواصل، والمواقع الجغرافية.",
       "addSchool": "إضافة مدرسة",
@@ -1232,7 +1243,13 @@ export const translations = {
       "activeNotesCount": "ملاحظات نشطة",
       "completedNotesCount": "ملاحظات مكتملة"
     },
-    "messages": {
+    
+      "downloadTemplate": "تحميل نموذج Excel",
+      "submitDeletionRequest": "إرسال طلب الحذف",
+      "requestSchoolDeletion": "طلب حذف المدرسة",
+      "deletingSubmittedMessage": "تم إرسال طلب حذف المدرسة وبانتظار موافقة المسؤول.",
+      "confirmDeletionRequest": "هل أنت متأكد dari طلب حذف هذه المدرسة؟ سيراجع المسؤول الطلب ويعتمده.",
+"messages": {
       "title": "الرسائل الداخلية",
       "subtitle": "نظام المراسلة والتواصل الداخلي بين أعضاء الفريق",
       "inbox": "الوارد",
@@ -1271,6 +1288,20 @@ export const translations = {
       "downloadAttachment": "تحميل",
       "templates": "النماذج الجاهزة",
       "selectTemplate": "اختر نموذجاً جاهزاً (اختياري)...",
+      
+      "subjectPlaceholder": "موضوع الرسالة...",
+      "contentPlaceholder": "اكتب نص الرسالة هنا...",
+      "systemEvent": "حدث نظام",
+      "fileTooLarge": "الملف \"{name}\" يتجاوز الحد الأقصى المسموح (10 ميغابايت).",
+      "selectRecipientRequired": "يرجى اختيار مستلم واحد على الأقل (إلى)",
+      "subjectRequired": "يرجى كتابة موضوع الرسالة",
+      "contentRequired": "يرجى كتابة محتوى الرسالة",
+      "messageSentFallback": "تم إرسال الرسالة بنجاح!",
+      "messageFailedFallback": "فشل إرسال الرسالة",
+      "messageErrorFallback": "حدث خطأ غير متوقع",
+      "noSentDesc": "أرسل التحديثات والمهام وأحدثفات الاجتماعات لأي عضو في الفريق.",
+      "noSentDescAlt": "يمكنك مراسلة أي فرد أو مجموعة في الفريق والإدارة.",
+      "teamDefault": "الفريق",
       "applyTemplate": "تطبيق النموذج"
     },
     "admin": {
@@ -1423,8 +1454,23 @@ export const translations = {
         "confirmDeleteTitle": "تأكيد حذف / أرشفة نوع المهمة: {name}",
         "confirmDeleteDesc": "أنت على وشك حذف أو أرشفة نوع المهمة ({name}). إذا كان هذا النوع مرتبطًا بتذاكر قائمة، سيتم تعطيله وأرشفته للحفاظ على سلامة البيانات التاريخية."
       },
-      "analytics": {
-        "title": "التحليلات والتقارير التشغيلية",
+      
+      "approvalRequests": {
+        "title": "طلبات الموافقة",
+        "subtitle": "مراجعة طلبات تعديل وحذف المدارس حسب صلاحياتك.",
+        "tableSchool": "المدرسة",
+        "tableType": "النوع",
+        "tableStatus": "الحالة",
+        "tableRequester": "مقدم الطلب",
+        "tableRequested": "تاريخ الطلب",
+        "tableActions": "الإجراءات",
+        "pendingApproval": "بانتظار الموافقة",
+        "noPendingRequests": "لا توجد طلبات معلقة.",
+        "editRequestPending": "طلب تعديل بانتظار الموافقة",
+        "deleteRequestPending": "طلب حذف بانتظار الموافقة",
+        "viewPendingRequest": "عرض الطلب المعلق"
+      },
+      "analytics": {       "title": "التحليلات والتقارير التشغيلية",
         "subtitle": "مؤشرات الأداء اللحظية عبر الأقسام، أنواع المهام، أعضاء الفريق، وقنوات التواصل.",
         "ticketsByDept": "التذاكر حسب القسم",
         "assignedLoadByMember": "عبء العمل المكلّف لكل موظف",
