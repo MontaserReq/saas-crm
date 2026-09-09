@@ -313,13 +313,13 @@ export function SchoolAssignmentWizard({
 
       {/* Step 3: Select Schools & Distribution */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
             <Building className="w-5 h-5 text-brand-600" />
             <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">{t('assignment.step3')}</h3>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {/* Quick count buttons */}
             <div className="flex items-center gap-1 text-xs">
               <span className="text-slate-400">{t('assignment.quickPick')}:</span>

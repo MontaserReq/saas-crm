@@ -403,15 +403,15 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
         </div>
 
         {/* Color Filter Palette */}
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-          <span className="text-slate-400 font-semibold flex items-center gap-1">
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs overflow-x-auto">
+          <span className="text-slate-400 font-semibold flex items-center gap-1 shrink-0">
             <Palette className="w-3.5 h-3.5" />
             <span>{t('todos.colorFilter')}</span>
           </span>
 
           <button
             onClick={() => setSelectedColorFilter('ALL')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+            className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
               selectedColorFilter === 'ALL'
                 ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
@@ -426,7 +426,7 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
               <button
                 key={colorKey}
                 onClick={() => setSelectedColorFilter(colorKey)}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-all ${
+                className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-all ${
                   selectedColorFilter === colorKey
                     ? 'ring-2 ring-brand-500 shadow-sm font-bold scale-105'
                     : 'opacity-80 hover:opacity-100'

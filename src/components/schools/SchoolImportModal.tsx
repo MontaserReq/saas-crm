@@ -203,13 +203,13 @@ export function SchoolImportModal({ isOpen, onClose, onSuccess }: SchoolImportMo
             {/* Preview items list */}
             <div className="border border-slate-200 dark:border-slate-800 rounded-xl max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 text-xs">
               {previewData.preview.map((row: any) => (
-                <div key={row.index} className="p-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 overflow-hidden">
+                <div key={row.index} className="p-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     {row.status === 'valid' && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
                     {row.status === 'duplicate' && <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />}
                     {row.status === 'invalid' && <XCircle className="w-4 h-4 text-rose-500 shrink-0" />}
-                    <div className="truncate">
-                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-slate-800 dark:text-slate-200 break-words">
                         #{row.index} {row.data.name || t('schools.unnamedSchool')}
                       </span>
                       <span className="hidden">
@@ -224,19 +224,19 @@ export function SchoolImportModal({ isOpen, onClose, onSuccess }: SchoolImportMo
                       </div>
                     </div>
                   </div>
-                  <div className="text-end shrink-0">
+                  <div className="text-end max-w-full sm:max-w-[40%]">
                     {row.status === 'valid' && (
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
+                      <span className="inline-block text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
                         {t('schools.readyStatus')}
                       </span>
                     )}
                     {row.status === 'duplicate' && (
-                      <span className="text-[10px] text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded">
+                      <span className="inline-block text-[10px] text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded break-words">
                         {row.duplicateReason || t('schools.duplicateStatus')}
                       </span>
                     )}
                     {row.status === 'invalid' && (
-                      <span className="text-[10px] text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded">
+                      <span className="inline-block text-[10px] text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded break-words">
                         {row.errors?.join(', ') || t('schools.invalidStatus')}
                       </span>
                     )}

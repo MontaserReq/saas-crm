@@ -282,9 +282,9 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-charcoal-950/60 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-charcoal-950/60 backdrop-blur-sm animate-fade-in">
       <div
-        className="relative w-full max-w-3xl bg-white dark:bg-charcoal-900 rounded-2xl shadow-2xl border border-charcoal-200 dark:border-charcoal-800 flex flex-col max-h-[90vh] overflow-hidden"
+        className="relative w-full max-w-3xl bg-white dark:bg-charcoal-900 rounded-t-2xl sm:rounded-2xl shadow-2xl border border-charcoal-200 dark:border-charcoal-800 flex flex-col max-h-[90dvh] overflow-hidden"
         dir={isRTL ? 'rtl' : 'ltr'}
       >
         {/* Header - Email Composer Style */}

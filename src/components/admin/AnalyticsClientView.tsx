@@ -6,6 +6,7 @@ import { BarChart3, Users, Building, PhoneCall, Clock, Activity } from 'lucide-r
 import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { formatDuration, formatNumber } from '@/lib/formatters';
 import { formatDate } from '@/lib/utils';
+import { MobileCardField } from '@/components/ui/MobileCard';
 
 interface UserTimeStat {
   userId: string;
@@ -109,7 +110,7 @@ export function AnalyticsClientView({ data }: AnalyticsClientViewProps) {
           <div className="overflow-x-auto">
             <table className="w-full text-start border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                <tr className="hidden md:table-row bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
                   <th className="py-2.5 px-3">{t('admin.analytics.employee')}</th>
                   <th className="py-2.5 px-3">{t('admin.analytics.department')}</th>
                   <th className="py-2.5 px-3">{t('admin.analytics.totalTime')}</th>
@@ -118,31 +119,51 @@ export function AnalyticsClientView({ data }: AnalyticsClientViewProps) {
                   <th className="py-2.5 px-3">{t('admin.analytics.lastActivity')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody>
                 {userTimeStats.map((u) => (
-                  <tr key={u.userId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3 px-3">
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-slate-100 block">{u.name}</span>
-                        <span className="text-[10px] text-slate-400 block">{u.email}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-slate-600 dark:text-slate-400 font-medium">
-                      {u.department}
-                    </td>
-                    <td className="py-3 px-3 font-bold text-brand-600 dark:text-brand-400">
-                      {formatDuration(u.totalMinutes, language)}
-                    </td>
-                    <td className="py-3 px-3 text-slate-700 dark:text-slate-300">
-                      {formatNumber(u.sessionsCount, language)}
-                    </td>
-                    <td className="py-3 px-3 text-slate-600 dark:text-slate-400">
-                      {formatDuration(u.avgSessionMinutes, language)}
-                    </td>
-                    <td className="py-3 px-3 text-slate-400">
-                      {formatDate(u.lastLogin, language)}
-                    </td>
-                  </tr>
+                  <React.Fragment key={u.userId}>
+                    {/* Desktop row */}
+                    <tr className="hidden md:table-row border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3 px-3">
+                        <div>
+                          <span className="font-bold text-slate-900 dark:text-slate-100 block">{u.name}</span>
+                          <span className="text-[10px] text-slate-400 block">{u.email}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-slate-600 dark:text-slate-400 font-medium">
+                        {u.department}
+                      </td>
+                      <td className="py-3 px-3 font-bold text-brand-600 dark:text-brand-400">
+                        {formatDuration(u.totalMinutes, language)}
+                      </td>
+                      <td className="py-3 px-3 text-slate-700 dark:text-slate-300">
+                        {formatNumber(u.sessionsCount, language)}
+                      </td>
+                      <td className="py-3 px-3 text-slate-600 dark:text-slate-400">
+                        {formatDuration(u.avgSessionMinutes, language)}
+                      </td>
+                      <td className="py-3 px-3 text-slate-400">
+                        {formatDate(u.lastLogin, language)}
+                      </td>
+                    </tr>
+
+                    {/* Mobile card */}
+                    <tr className="md:hidden border-b border-slate-100 dark:border-slate-800">
+                      <td colSpan={6} className="p-4 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-900 dark:text-slate-100 truncate">{u.name}</div>
+                            <div className="text-[10px] text-slate-400 truncate">{u.email}</div>
+                          </div>
+                          <span className="font-bold text-brand-600 dark:text-brand-400 shrink-0">{formatDuration(u.totalMinutes, language)}</span>
+                        </div>
+                        <MobileCardField label={t('admin.analytics.department')}>{u.department}</MobileCardField>
+                        <MobileCardField label={t('admin.analytics.sessions')}>{formatNumber(u.sessionsCount, language)}</MobileCardField>
+                        <MobileCardField label={t('admin.analytics.avgSession')}>{formatDuration(u.avgSessionMinutes, language)}</MobileCardField>
+                        <MobileCardField label={t('admin.analytics.lastActivity')}>{formatDate(u.lastLogin, language)}</MobileCardField>
+                      </td>
+                    </tr>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

@@ -93,7 +93,7 @@ export function ExportDropdown<T = any>({
       </button>
 
       {isOpen && isDataAvailable && (
-        <div className="absolute z-50 mt-2 w-52 rounded-2xl shadow-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="absolute top-full end-0 z-50 mt-2 w-[calc(100vw-1.5rem)] sm:w-52 rounded-2xl shadow-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
           <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               {title || filename}

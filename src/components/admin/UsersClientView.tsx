@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserModal } from './UserModal';
 import { OffboardingModal } from './OffboardingModal';
@@ -103,7 +103,7 @@ export function UsersClientView({ users, roles, departments, permissions }: User
         <div className="overflow-x-auto">
           <table className="w-full text-start border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+              <tr className="hidden md:table-row bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
                 <th className="py-3 px-4">{t('admin.users.tableUser')}</th>
                 <th className="py-3 px-4">{t('admin.users.tableRole')}</th>
                 <th className="py-3 px-4">{t('admin.users.tableDepartment')}</th>
@@ -113,105 +113,155 @@ export function UsersClientView({ users, roles, departments, permissions }: User
                 <th className="py-3 px-4 text-center">{t('admin.users.tableAction')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-brand-600 text-white font-bold text-xs flex items-center justify-center">
-                        {u.name.charAt(0)}
+            <tbody>
+              {users.map((u) => {
+                const statusBadge = u.isActive ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{t('admin.users.active')}</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600">
+                    <X className="w-3.5 h-3.5" />
+                    <span>{t('admin.users.disabled')}</span>
+                  </span>
+                );
+                const actionButtons = (
+                  <>
+                    {/* Offboarding / Transfer Work */}
+                    <button
+                      onClick={() => u.isActive ? setDisablingUser(u) : setEnablingUser(u)}
+                      title={language === 'ar' ? 'تعطيل الحساب' : 'Disable Account'}
+                      className={`inline-flex items-center gap-1 p-2 rounded-lg ${u.isActive ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 hover:bg-emerald-100'} transition-colors`}
+                    ><UserX className="w-3.5 h-3.5" /><span className="sr-only">{language === 'ar' ? 'تعطيل الحساب' : 'Disable Account'}</span></button>
+                    <button
+                      onClick={() => setSecurityUser(u)}
+                      title="Security & Access"
+                      className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 hover:bg-blue-100 transition-colors"
+                    ><Shield className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setPermissionsUser(u); setSelectedPermissions((u.userPermissions || []).map((p: any) => p.permissionId)); }} title="Permissions" className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 hover:bg-indigo-100 transition-colors"><Shield className="w-3.5 h-3.5" /></button>
+                    <button
+                      onClick={() => {
+                        setOffboardingUser(u);
+                        setIsOffboardingOpen(true);
+                      }}
+                      title={t('admin.users.transferWorkTooltip')}
+                      className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors"
+                    >
+                      <ArrowRightLeft className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Edit */}
+                    <button
+                      onClick={() => {
+                        setEditingUser(u);
+                        setIsOpen(true);
+                      }}
+                      title={t('common.edit')}
+                      className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Delete / Archive */}
+                    <button
+                      onClick={() => {
+                        setDeletingUser(u);
+                        setIsDeleteOpen(true);
+                      }}
+                      title={t('common.delete')}
+                      className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                );
+                return (
+                <React.Fragment key={u.id}>
+                  {/* Desktop row */}
+                  <tr className="hidden md:table-row border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-brand-600 text-white font-bold text-xs flex items-center justify-center">
+                          {u.name.charAt(0)}
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-900 dark:text-slate-100 block">{u.name}</span>
+                          <span className="text-[11px] text-slate-400 block">{u.email}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-slate-100 block">{u.name}</span>
-                        <span className="text-[11px] text-slate-400 block">{u.email}</span>
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <span className="px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 text-brand-700 dark:text-brand-300 font-bold text-[10px] border border-purple-200/50 dark:border-purple-800/40">
+                        {u.role.displayName || u.role.name}
+                      </span>
+                    </td>
+
+                    <td className="py-3.5 px-4 font-medium text-slate-700 dark:text-slate-300">
+                      {u.department?.name || '—'}
+                    </td>
+
+                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
+                      {u.phone || '—'}
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      {statusBadge}
+                    </td>
+
+                    <td className="py-3.5 px-4 text-slate-400">
+                      {formatDate(u.lastLoginAt, language)}
+                    </td>
+
+                    <td className="py-3.5 px-4 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {actionButtons}
                       </div>
-                    </div>
-                  </td>
+                    </td>
+                  </tr>
 
-                  <td className="py-3.5 px-4">
-                    <span className="px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 text-brand-700 dark:text-brand-300 font-bold text-[10px] border border-purple-200/50 dark:border-purple-800/40">
-                      {u.role.displayName || u.role.name}
-                    </span>
-                  </td>
-
-                  <td className="py-3.5 px-4 font-medium text-slate-700 dark:text-slate-300">
-                    {u.department?.name || '—'}
-                  </td>
-
-                  <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
-                    {u.phone || '—'}
-                  </td>
-
-                  <td className="py-3.5 px-4">
-                    {u.isActive ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                        <Check className="w-3.5 h-3.5" />
-                        <span>{t('admin.users.active')}</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600">
-                        <X className="w-3.5 h-3.5" />
-                        <span>{t('admin.users.disabled')}</span>
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="py-3.5 px-4 text-slate-400">
-                    {formatDate(u.lastLoginAt, language)}
-                  </td>
-
-                  <td className="py-3.5 px-4 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      {/* Offboarding / Transfer Work */}
-                      <button
-                        onClick={() => u.isActive ? setDisablingUser(u) : setEnablingUser(u)}
-                        title={language === 'ar' ? 'تعطيل الحساب' : 'Disable Account'}
-                        className={`inline-flex items-center gap-1 p-1.5 rounded-lg ${u.isActive ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 hover:bg-emerald-100'} transition-colors`}
-                      ><UserX className="w-3.5 h-3.5" /><span className="sr-only">{language === 'ar' ? 'تعطيل الحساب' : 'Disable Account'}</span></button>
-                      <button
-                        onClick={() => setSecurityUser(u)}
-                        title="Security & Access"
-                        className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 hover:bg-blue-100 transition-colors"
-                      ><Shield className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => { setPermissionsUser(u); setSelectedPermissions((u.userPermissions || []).map((p: any) => p.permissionId)); }} title="Permissions" className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 hover:bg-indigo-100 transition-colors"><Shield className="w-3.5 h-3.5" /></button>
-                      <button
-                        onClick={() => {
-                          setOffboardingUser(u);
-                          setIsOffboardingOpen(true);
-                        }}
-                        title={t('admin.users.transferWorkTooltip')}
-                        className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors"
-                      >
-                        <ArrowRightLeft className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Edit */}
-                      <button
-                        onClick={() => {
-                          setEditingUser(u);
-                          setIsOpen(true);
-                        }}
-                        title={t('common.edit')}
-                        className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 transition-colors"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Delete / Archive */}
-                      <button
-                        onClick={() => {
-                          setDeletingUser(u);
-                          setIsDeleteOpen(true);
-                        }}
-                        title={t('common.delete')}
-                        className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                  {/* Mobile card */}
+                  <tr className="md:hidden border-b border-slate-100 dark:border-slate-800">
+                    <td colSpan={7} className="p-4 space-y-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 shrink-0 rounded-full bg-brand-600 text-white font-bold text-xs flex items-center justify-center">
+                          {u.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-slate-900 dark:text-slate-100 truncate">{u.name}</div>
+                          <div className="text-[11px] text-slate-400 truncate">{u.email}</div>
+                        </div>
+                        {statusBadge}
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-slate-400 font-semibold shrink-0">{t('admin.users.tableRole')}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 text-brand-700 dark:text-brand-300 font-bold text-[10px] truncate">
+                            {u.role.displayName || u.role.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <span className="text-slate-400 font-semibold shrink-0">{t('admin.users.tableDepartment')}</span>
+                          <span className="truncate text-slate-700 dark:text-slate-300">{u.department?.name || '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <span className="text-slate-400 font-semibold shrink-0">{t('admin.users.tablePhone')}</span>
+                          <span className="truncate text-slate-700 dark:text-slate-300">{u.phone || '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <span className="text-slate-400 font-semibold shrink-0">{t('admin.users.tableLastLogin')}</span>
+                          <span className="truncate text-slate-700 dark:text-slate-300">{formatDate(u.lastLoginAt, language)}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        {actionButtons}
+                      </div>
+                    </td>
+                  </tr>
+                </React.Fragment>
+                );
+              })}
               {users.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-slate-400">

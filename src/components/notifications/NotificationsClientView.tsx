@@ -50,13 +50,13 @@ export function NotificationsClientView({ notifications }: NotificationsClientVi
                 !n.isRead ? 'bg-purple-50/40 dark:bg-purple-950/20' : ''
               }`}
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
                 <div className="w-8 h-8 rounded-full bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0 mt-0.5 border border-brand-200/50 dark:border-brand-800/50">
                   {n.entityType === 'message' ? <Mail className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
                 </div>
-                <div className="space-y-0.5">
-                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{n.title}</h4>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{n.message}</p>
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 break-words">{n.title}</h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed break-words">{n.message}</p>
                   <span className="text-[10px] text-slate-400 flex items-center gap-1 pt-1">
                     <Clock className="w-3 h-3" />
                     <span>{formatDate(n.createdAt, language)}</span>

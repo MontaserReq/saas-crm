@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get('codeline_session')?.value;
 
   const isAuthPage = pathname.startsWith('/login');
-  const isPublicPage = pathname.startsWith('/public-search');
+  const isPublicPage = pathname.startsWith('/public-search') || pathname.startsWith('/forgot-password') || pathname.startsWith('/reset-password');
   const isApiAuthOrAttachment = pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.includes('/favicon.ico');
 
   if (isApiAuthOrAttachment) {

@@ -231,10 +231,10 @@ export function TaskTypeModal({ isOpen, onClose, taskType, departments }: TaskTy
               return (
                 <div
                   key={member.userId}
-                  className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800"
+                  className="flex items-center flex-wrap gap-2 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800"
                 >
                   <span
-                    className="w-32 shrink-0 text-xs font-semibold text-slate-700 dark:text-slate-300 truncate"
+                    className="w-full sm:w-32 shrink-0 text-xs font-semibold text-slate-700 dark:text-slate-300 truncate"
                     title={employee?.name}
                   >
                     {employee?.name || member.userId}
@@ -244,7 +244,7 @@ export function TaskTypeModal({ isOpen, onClose, taskType, departments }: TaskTy
                     value={member.responsibility}
                     onChange={(event) => updateMember(member.userId, event.target.value)}
                     placeholder={t('admin.taskTypes.responsibility')}
-                    className="flex-1 p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:border-brand-500 focus:outline-none"
+                    className="flex-1 min-w-0 p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:border-brand-500 focus:outline-none"
                   />
                   <button
                     type="button"

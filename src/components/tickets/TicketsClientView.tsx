@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge';
@@ -172,7 +172,7 @@ export function TicketsClientView({
           <div className="overflow-x-auto">
             <table className="w-full text-left rtl:text-right border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                <tr className="hidden md:table-row bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
                   <th className="py-3 px-4">{t('tickets.ticketNumber')}</th>
                   <th className="py-3 px-4">{t('tickets.school')}</th>
                   <th className="py-3 px-4">{t('tickets.taskType')}</th>
@@ -183,75 +183,129 @@ export function TicketsClientView({
                   <th className="py-3 px-4 text-center">{t('tickets.actions')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody>
                 {ticketsData.data.map((tItem) => {
                   const currentAssignee = tItem.assignees?.[0]?.user;
+                  const rowProps = {
+                    onClick: () => router.push(`/tickets/${tItem.id}`),
+                    onKeyDown: (event: React.KeyboardEvent) => { if (event.key === 'Enter' || event.key === ' ') router.push(`/tickets/${tItem.id}`); },
+                    tabIndex: 0,
+                  };
                   return (
-                    <tr
-                      key={tItem.id}
-                      onClick={() => router.push(`/tickets/${tItem.id}`)}
-                      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') router.push(`/tickets/${tItem.id}`); }}
-                      tabIndex={0}
-                      className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 focus:bg-brand-50/50 dark:focus:bg-brand-950/30 focus:outline-none transition-colors group"
-                    >
-                      <td className="py-3.5 px-4 font-bold text-brand-600 dark:text-brand-400 whitespace-nowrap">
-                        <Link href={`/tickets/${tItem.id}`} className="hover:underline">
-                          {tItem.ticketNumber}
-                        </Link>
-                      </td>
+                    <React.Fragment key={tItem.id}>
+                      {/* Desktop row */}
+                      <tr
+                        {...rowProps}
+                        className="hidden md:table-row cursor-pointer border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 focus:bg-brand-50/50 dark:focus:bg-brand-950/30 focus:outline-none transition-colors group"
+                      >
+                        <td className="py-3.5 px-4 font-bold text-brand-600 dark:text-brand-400 whitespace-nowrap">
+                          <Link href={`/tickets/${tItem.id}`} className="hover:underline">
+                            {tItem.ticketNumber}
+                          </Link>
+                        </td>
 
-                      <td className="py-3.5 px-4">
-                        <span className="font-bold text-slate-900 dark:text-slate-100 block truncate max-w-[200px]">
-                          {tItem.school?.name || 'General Ticket'}
-                        </span>
-                        <span className="text-[11px] text-slate-400 block">
-                          {tItem.school ? `${tItem.school.city} ${tItem.school.contactPerson ? `• ${tItem.school.contactPerson}` : ''}` : 'No school linked'}
-                        </span>
-                      </td>
+                        <td className="py-3.5 px-4">
+                          <span className="font-bold text-slate-900 dark:text-slate-100 block truncate max-w-[200px]">
+                            {tItem.school?.name || 'General Ticket'}
+                          </span>
+                          <span className="text-[11px] text-slate-400 block">
+                            {tItem.school ? `${tItem.school.city} ${tItem.school.contactPerson ? `• ${tItem.school.contactPerson}` : ''}` : 'No school linked'}
+                          </span>
+                        </td>
 
-                      <td className="py-3.5 px-4">
-                        <span className="font-medium text-slate-700 dark:text-slate-300">
-                          {tItem.taskType?.name || 'General'}
-                        </span>
-                      </td>
+                        <td className="py-3.5 px-4">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">
+                            {tItem.taskType?.name || 'General'}
+                          </span>
+                        </td>
 
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <TicketStatusBadge status={tItem.status} />
-                      </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <TicketStatusBadge status={tItem.status} />
+                        </td>
 
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <PriorityBadge priority={tItem.priority} />
-                      </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <PriorityBadge priority={tItem.priority} />
+                        </td>
 
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        {currentAssignee ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900/50 text-brand-700 dark:text-brand-300 font-bold text-[10px] flex items-center justify-center">
-                              {currentAssignee.name.charAt(0)}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {currentAssignee ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-900/50 text-brand-700 dark:text-brand-300 font-bold text-[10px] flex items-center justify-center">
+                                {currentAssignee.name.charAt(0)}
+                              </div>
+                              <span className="text-slate-800 dark:text-slate-200 font-medium">
+                                {currentAssignee.name}
+                              </span>
                             </div>
-                            <span className="text-slate-800 dark:text-slate-200 font-medium">
-                              {currentAssignee.name}
-                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic">—</span>
+                          )}
+                        </td>
+
+                        <td className="py-3.5 px-4 text-slate-400 whitespace-nowrap">
+                          {formatDate(tItem.createdAt, language)}
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center">
+                          <Link
+                            href={`/tickets/${tItem.id}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
+                          >
+                            <span>{t('tickets.open')}</span>
+                            <ArrowRight className="w-3 h-3 rtl:rotate-180" />
+                          </Link>
+                        </td>
+                      </tr>
+
+                      {/* Mobile card */}
+                      <tr className="md:hidden border-b border-slate-100 dark:border-slate-800">
+                        <td colSpan={8} className="p-0">
+                          <div
+                            {...rowProps}
+                            className="cursor-pointer p-4 space-y-2.5 active:bg-slate-50 dark:active:bg-slate-800/40"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <Link href={`/tickets/${tItem.id}`} className="font-bold text-brand-600 dark:text-brand-400 text-sm hover:underline">
+                                {tItem.ticketNumber}
+                              </Link>
+                              <TicketStatusBadge status={tItem.status} />
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">
+                                {tItem.school?.name || 'General Ticket'}
+                              </div>
+                              <div className="text-[11px] text-slate-400 truncate">
+                                {tItem.taskType?.name || 'General'}
+                                {tItem.school ? ` • ${tItem.school.city}${tItem.school.contactPerson ? ` • ${tItem.school.contactPerson}` : ''}` : ''}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <PriorityBadge priority={tItem.priority} />
+                              <span className="text-slate-400">{formatDate(tItem.createdAt, language)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                              {currentAssignee ? (
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="w-6 h-6 shrink-0 rounded-full bg-brand-100 dark:bg-brand-900/50 text-brand-700 dark:text-brand-300 font-bold text-[10px] flex items-center justify-center">
+                                    {currentAssignee.name.charAt(0)}
+                                  </div>
+                                  <span className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">{currentAssignee.name}</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic">—</span>
+                              )}
+                              <Link
+                                href={`/tickets/${tItem.id}`}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold shrink-0"
+                              >
+                                <span>{t('tickets.open')}</span>
+                                <ArrowRight className="w-3 h-3 rtl:rotate-180" />
+                              </Link>
+                            </div>
                           </div>
-                        ) : (
-                          <span className="text-slate-400 italic">—</span>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-slate-400 whitespace-nowrap">
-                        {formatDate(tItem.createdAt, language)}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-center">
-                        <Link
-                          href={`/tickets/${tItem.id}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
-                        >
-                          <span>{t('tickets.open')}</span>
-                          <ArrowRight className="w-3 h-3 rtl:rotate-180" />
-                        </Link>
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -260,7 +314,7 @@ export function TicketsClientView({
         )}
 
         {ticketsData.totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
             <span>
               {t('common.page')} {ticketsData.page} {t('common.of')} {ticketsData.totalPages}
             </span>

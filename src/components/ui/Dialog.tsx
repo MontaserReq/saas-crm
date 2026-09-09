@@ -124,7 +124,7 @@ export function Dialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto" dir={direction}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6" dir={direction}>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-charcoal-950/60 backdrop-blur-xs transition-opacity"
@@ -132,9 +132,9 @@ export function Dialog({
       />
 
       {/* Dialog Box */}
-      <div className="relative w-full max-w-md bg-white dark:bg-charcoal-900 rounded-2xl shadow-2xl border border-charcoal-200 dark:border-charcoal-800 z-10 overflow-hidden my-8 animate-fade-in font-sans">
+      <div className="relative flex flex-col w-full max-w-md max-h-[88dvh] sm:max-h-[calc(100vh-4rem)] bg-white dark:bg-charcoal-900 rounded-t-2xl sm:rounded-2xl shadow-2xl border border-charcoal-200 dark:border-charcoal-800 z-10 overflow-hidden sm:my-8 animate-fade-in font-sans">
         {/* Top bar with close button */}
-        <div className="p-6 pb-4 flex items-start justify-between gap-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 pb-4 flex items-start justify-between gap-4">
           <div className="flex items-start gap-3.5">
             <div
               className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${variantConfig.iconBg}`}
@@ -155,7 +155,7 @@ export function Dialog({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors focus:outline-none"
+              className="p-2.5 shrink-0 rounded-lg text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors focus:outline-none"
             >
               <X className="w-4 h-4" />
             </button>
@@ -163,7 +163,7 @@ export function Dialog({
         </div>
 
         {/* Action Buttons Footer */}
-        <div className="px-6 py-4 bg-charcoal-50/80 dark:bg-charcoal-800/60 border-t border-charcoal-200/80 dark:border-charcoal-800 flex items-center justify-end gap-2.5">
+        <div className="shrink-0 px-6 py-4 bg-charcoal-50/80 dark:bg-charcoal-800/60 border-t border-charcoal-200/80 dark:border-charcoal-800 flex items-center justify-end gap-2.5">
           {variantConfig.showCancel && (
             <button
               type="button"

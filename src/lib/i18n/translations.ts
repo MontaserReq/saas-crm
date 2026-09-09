@@ -30,7 +30,12 @@ export const translations = {
       "administration": "Administration",
       "calendar": "Calendar",
       "profile": "Profile",
-      "newTicket": "+ New Ticket"
+      
+      
+      "logoutConfirm": "Are you sure you want to log out?","openMenu": "Open Menu",
+      "closeMenu": "Close Menu",
+      "navigation": "Navigation",
+      "search": "Search","newTicket": "+ New Ticket"
     },
     "auth": {
       "welcomeBack": "Welcome Back",
@@ -53,10 +58,12 @@ export const translations = {
       "resetPassword": "Reset Password",
       "newPassword": "New Password",
       "confirmPassword": "Confirm New Password",
-      "passwordResetSuccess": "Your password has been reset successfully. Please sign in again.",
+      "passwordResetSuccess": "Password reset successfully. Redirecting to login...",
       "expiredResetLink": "This password reset link has expired. Please request a new one.",
       "invalidResetLink": "This password reset link is invalid.",
+      "alreadyUsedResetLink": "This password reset link has already been used. Please request a new password reset link.",
       "requestNewResetLink": "Request a new reset link",
+      "resetFailed": "Password reset failed. Please try again.",
       "sessionExpired": "Your session has expired. Please sign in again."
     },
     "dashboard": {
@@ -914,7 +921,12 @@ export const translations = {
       "administration": "الإدارة والنظام",
       "calendar": "التقويم والمواعيد",
       "profile": "الملف الشخصي",
-      "newTicket": "+ تذكرة جديدة"
+      
+      
+      "logoutConfirm": "هل أنت متأكد أنك تريد تسجيل الخروج؟","openMenu": "فتح القائمة",
+      "closeMenu": "إغلاق القائمة",
+      "navigation": "القائمة",
+      "search": "بحث","newTicket": "+ تذكرة جديدة"
     },
     "auth": {
       "welcomeBack": "مرحباً بك مجدداً",
@@ -937,10 +949,12 @@ export const translations = {
       "resetPassword": "إعادة تعيين كلمة المرور",
       "newPassword": "كلمة المرور الجديدة",
       "confirmPassword": "تأكيد كلمة المرور الجديدة",
-      "passwordResetSuccess": "تمت إعادة تعيين كلمة المرور بنجاح. يرجى تسجيل الدخول مرة أخرى.",
+      "passwordResetSuccess": "تم تغيير كلمة المرور بنجاح. جارٍ تحويلك إلى تسجيل الدخول...",
       "expiredResetLink": "انتهت صلاحية رابط إعادة تعيين كلمة المرور. يرجى طلب رابط جديد.",
       "invalidResetLink": "رابط إعادة تعيين كلمة المرور غير صالح.",
+      "alreadyUsedResetLink": "تم استخدام رابط إعادة تعيين كلمة المرور مسبقًا. يرجى طلب رابط جديد.",
       "requestNewResetLink": "طلب رابط إعادة تعيين جديد",
+      "resetFailed": "فشلت إعادة تعيين كلمة المرور. حاول مرة أخرى.",
       "sessionExpired": "انتهت جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى."
     },
     "dashboard": {
@@ -1072,7 +1086,7 @@ export const translations = {
       "totalTicketsCount": "الإجمالي: {count} تذكرة",
       "rejectionReasonPrefix": "سبب الرفض:",
       "newTicket": "تذكرة جديدة",
-      "createTicket": "+ إنشاء تذكرة",
+      "createTicket": "إنشاء تذكرة",
       "classification": "التصنيف",
       "classificationA": "تصنيف أ",
       "classificationB": "تصنيف ب",
@@ -1109,6 +1123,13 @@ export const translations = {
       "closingReasonMinError": "يرجى كتابة سبب إغلاق التذكرة وموجز النتيجة (3 أحرف على الأقل)",
       "closingReasonPlaceholderDesc": "اكتب تفاصيل النتيجة النهائية، مثل: تم توقيع الاتفاقية، أو اعتذار المدرسة مع بيان الأسباب، أو استكمال المطلوب بنجاح...",
       "confirmCloseAction": "تأكيد إغلاق التذكرة",
+
+      "directManager": "المسؤول المباشر",
+      "directManagerDesc": "سيتم إرسال التذكرة تلقائيًا إلى مسؤولك المباشر.",
+      "noDirectManager": "لم يتم تحديد مسؤول مباشر لحسابك.",
+      "noDirectManagerBlock": "لا يمكن إنشاء التذكرة لأن المسؤول المباشر غير محدد لحسابك. يرجى التواصل مع المسؤول لإضافة المسؤول المباشر.",
+      "managerDisabledBlock": "لا يمكن إنشاء التذكرة لأن المسؤول المباشر المحدد لحسابك غير مفعّل. يرجى التواصل مع المسؤول.",
+      "assignedByYou": "تم تكليفك بتذكرة جديدة بواسطة {name}.",
 
     },
     "schools": {

@@ -294,7 +294,7 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
                     setEditingDept(dept);
                     setIsOpen(true);
                   }}
-                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                  className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
                   title={t('common.edit')}
                 >
                   <Edit2 className="w-3.5 h-3.5" />
@@ -307,7 +307,7 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
                     setIsDeleteOpen(true);
                   }}
                   disabled={actionLoading === dept.id}
-                  className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 transition-colors"
+                  className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 transition-colors"
                   title={t('common.delete')}
                 >
                   <Trash2 className="w-3.5 h-3.5" />

@@ -183,7 +183,7 @@ export function NoteStream({
               </div>
 
               {/* Note Content */}
-              <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+              <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words leading-relaxed">
                 {note.content}
               </p>
 

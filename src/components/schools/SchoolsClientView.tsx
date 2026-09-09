@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useI18n } from '@/lib/i18n/context';
 import { SchoolFormModal } from './SchoolFormModal';
 import { PhoneNumber } from '@/components/ui/PhoneNumber';
@@ -316,7 +316,7 @@ export function SchoolsClientView({
           <div className="overflow-x-auto">
             <table className="w-full text-left rtl:text-right border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                <tr className="hidden md:table-row bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
                   <th className="py-3 px-4">{t('schools.schoolName')}</th>
                   <th className="py-3 px-4">{t('schools.classification')}</th>
                   <th className="py-3 px-4">{t('schools.responsibleEmployee')}</th>
@@ -328,105 +328,162 @@ export function SchoolsClientView({
                   <th className="py-3 px-4 text-center">{t('common.actions')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {initialSchools.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-100">
-                      <div>{s.name}</div>
-                      {s.pendingApprovalRequests?.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {s.pendingApprovalRequests.map((request: any) => (
-                            <span key={request.type} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${request.type === 'DELETE' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800' : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800'}`}>
-                              🟡 {request.type === 'DELETE' ? (language === 'ar' ? 'طلب حذف بانتظار الموافقة' : 'Deletion Request Pending Approval') : (language === 'ar' ? 'طلب تعديل بانتظار الموافقة' : 'Edit Request Pending Approval')}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {s._count?.tickets > 0 && (
-                        <span className="text-[10px] text-slate-400 font-normal">
-                          {formatNumber(s._count.tickets, language)} {t('tickets.title')}
+              <tbody>
+                {initialSchools.map((s) => {
+                  const pendingBadges = s.pendingApprovalRequests?.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {s.pendingApprovalRequests.map((request: any) => (
+                        <span key={request.type} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${request.type === 'DELETE' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800' : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800'}`}>
+                          🟡 {request.type === 'DELETE' ? (language === 'ar' ? 'طلب حذف بانتظار الموافقة' : 'Deletion Request Pending Approval') : (language === 'ar' ? 'طلب تعديل بانتظار الموافقة' : 'Edit Request Pending Approval')}
                         </span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4">{getClassificationBadge(s.classification)}</td>
-
-                    <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
-                      {s.responsibleEmployee ? (
-                        <div className="flex items-center gap-1.5 font-medium text-purple-700 dark:text-purple-300">
-                          <User className="w-3.5 h-3.5 text-brand-600" />
-                          <span>{s.responsibleEmployee.name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 italic text-[11px]">
-                          {t('schools.unassignedEmployee')}
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
-                      {s.contactPerson || '—'}
-                    </td>
-
-                    <td className="py-3.5 px-4 space-y-0.5">
-                      {s.phone && (
-                        <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
-                          <Phone className="w-3 h-3 text-brand-600" />
-                          <PhoneNumber value={s.phone} href={`tel:${s.phone}`} />
-                        </div>
-                      )}
-                      {s.whatsapp && (
-                        <div className="flex items-center gap-1 text-emerald-600 font-medium">
-                          <MessageCircle className="w-3 h-3" />
-                          <PhoneNumber value={s.whatsapp} href={`https://wa.me/${s.whatsapp.replace(/[^0-9]/g, '')}`} />
-                        </div>
-                      )}
-                      {!s.phone && !s.whatsapp && <span className="text-slate-400">—</span>}
-                    </td>
-
-                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-slate-400" />
-                        <span>
-                          {s.city} {s.area ? `(${s.area})` : ''}
-                        </span>
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          disabled={s.pendingApprovalRequests?.some((request: any) => request.type === 'EDIT')}
-                          onClick={() => {
-                            setEditingSchool(s);
-                            setIsAddOpen(true);
-                          }}
-                          className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
-                          title={s.pendingApprovalRequests?.some((request: any) => request.type === 'EDIT') ? 'View Pending Request' : t('common.edit')}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        {canDelete && (
-                          <button
-                            disabled={s.pendingApprovalRequests?.some((request: any) => request.type === 'DELETE')}
-                            onClick={() => setDeletingSchool(s)}
-                            className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 dark:text-rose-400 text-xs font-semibold transition-colors"
-                            title={s.pendingApprovalRequests?.some((request: any) => request.type === 'DELETE') ? 'Deletion Request Pending Approval' : t('common.delete')}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                      ))}
+                    </div>
+                  );
+                  const editButton = (
+                    <button
+                      disabled={s.pendingApprovalRequests?.some((request: any) => request.type === 'EDIT')}
+                      onClick={() => {
+                        setEditingSchool(s);
+                        setIsAddOpen(true);
+                      }}
+                      className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
+                      title={s.pendingApprovalRequests?.some((request: any) => request.type === 'EDIT') ? 'View Pending Request' : t('common.edit')}
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                  );
+                  const deleteButton = canDelete && (
+                    <button
+                      disabled={s.pendingApprovalRequests?.some((request: any) => request.type === 'DELETE')}
+                      onClick={() => setDeletingSchool(s)}
+                      className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 dark:text-rose-400 text-xs font-semibold transition-colors"
+                      title={s.pendingApprovalRequests?.some((request: any) => request.type === 'DELETE') ? 'Deletion Request Pending Approval' : t('common.delete')}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  );
+                  return (
+                  <React.Fragment key={s.id}>
+                    {/* Desktop row */}
+                    <tr className="hidden md:table-row border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-100">
+                        <div>{s.name}</div>
+                        {pendingBadges}
+                        {s._count?.tickets > 0 && (
+                          <span className="text-[10px] text-slate-400 font-normal">
+                            {formatNumber(s._count.tickets, language)} {t('tickets.title')}
+                          </span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+
+                      <td className="py-3.5 px-4">{getClassificationBadge(s.classification)}</td>
+
+                      <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
+                        {s.responsibleEmployee ? (
+                          <div className="flex items-center gap-1.5 font-medium text-purple-700 dark:text-purple-300">
+                            <User className="w-3.5 h-3.5 text-brand-600" />
+                            <span>{s.responsibleEmployee.name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic text-[11px]">
+                            {t('schools.unassignedEmployee')}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
+                        {s.contactPerson || '—'}
+                      </td>
+
+                      <td className="py-3.5 px-4 space-y-0.5">
+                        {s.phone && (
+                          <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
+                            <Phone className="w-3 h-3 text-brand-600" />
+                            <PhoneNumber value={s.phone} href={`tel:${s.phone}`} />
+                          </div>
+                        )}
+                        {s.whatsapp && (
+                          <div className="flex items-center gap-1 text-emerald-600 font-medium">
+                            <MessageCircle className="w-3 h-3" />
+                            <PhoneNumber value={s.whatsapp} href={`https://wa.me/${s.whatsapp.replace(/[^0-9]/g, '')}`} />
+                          </div>
+                        )}
+                        {!s.phone && !s.whatsapp && <span className="text-slate-400">—</span>}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-slate-400" />
+                          <span>
+                            {s.city} {s.area ? `(${s.area})` : ''}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {editButton}
+                          {deleteButton}
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Mobile card */}
+                    <tr className="md:hidden border-b border-slate-100 dark:border-slate-800">
+                      <td colSpan={7} className="p-4 space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">{s.name}</div>
+                            {s._count?.tickets > 0 && (
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                {formatNumber(s._count.tickets, language)} {t('tickets.title')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="shrink-0">{getClassificationBadge(s.classification)}</div>
+                        </div>
+                        {pendingBadges}
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-slate-700 dark:text-slate-300">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <User className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+                            <span className="truncate">{s.responsibleEmployee?.name || t('schools.unassignedEmployee')}</span>
+                          </div>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{s.city} {s.area ? `(${s.area})` : ''}</span>
+                          </div>
+                          {s.phone && (
+                            <div className="flex items-center gap-1 min-w-0">
+                              <Phone className="w-3 h-3 text-brand-600 shrink-0" />
+                              <PhoneNumber value={s.phone} href={`tel:${s.phone}`} />
+                            </div>
+                          )}
+                          {s.whatsapp && (
+                            <div className="flex items-center gap-1 min-w-0 text-emerald-600 font-medium">
+                              <MessageCircle className="w-3 h-3 shrink-0" />
+                              <PhoneNumber value={s.whatsapp} href={`https://wa.me/${s.whatsapp.replace(/[^0-9]/g, '')}`} />
+                            </div>
+                          )}
+                          {s.contactPerson && (
+                            <div className="min-w-0 truncate col-span-2">{s.contactPerson}</div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          {editButton}
+                          {deleteButton}
+                        </div>
+                      </td>
+                    </tr>
+                  </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
         {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
             <span>
               {t('common.page')} {page} {t('common.of')} {totalPages}
             </span>

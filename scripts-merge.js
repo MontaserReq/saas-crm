@@ -280,7 +280,7 @@ const ticketExtAr = {
   selectPriority: 'اختر الأولوية',
   selectAssignee: 'اختر الموظف المكلف',
   newTicket: 'تذكرة جديدة',
-  createTicket: '+ إنشاء تذكرة',
+  createTicket: 'إنشاء تذكرة',
   ticketCreatedSuccess: 'تم إنشاء التذكرة بنجاح!',
   closingReason: 'سبب وملاحظة الإغلاق',
   closingReasonPlaceholder: 'وضح النتيجة وسبب إغلاق هذه التذكرة (إلزامي)...',
