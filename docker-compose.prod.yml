@@ -84,6 +84,25 @@ services:
     networks:
       - codeline_internal
 
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+
+    container_name: codeline-migrator
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+
+    networks:
+      - codeline_internal
+
 volumes:
   postgres_data:
 
