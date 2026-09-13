@@ -38,7 +38,10 @@ export const schoolImportRowSchema = z.object({
       if (['A', 'B', 'C'].includes(s)) return s;
       return '';
     },
-    z.string().optional().nullable().default('')
+    // The importer normalizes missing values to an empty string above. Keep
+    // the output non-null so it can be used safely in preview rows and Prisma
+    // create data, whose classification field is a required string.
+    z.string().default('')
   ),
   responsibleEmployeeId: z.string().optional().nullable(),
 });
