@@ -26,6 +26,9 @@ This document describes the current authorization contract. It is documentation 
 | Search | `search.view` | Global search over authorized records | Authenticated roles | Yes; object scoped |
 | Analytics | `analytics.view`, `analytics.view_users`, `analytics.view_tickets`, `analytics.view_schools`, `analytics.view_time_spent` | Operational reporting | Admin, Super Admin | Yes |
 | Reports | `reports.view`, `reports.generate`, `reports.export_pdf` | Report generation and export | Role-dependent | Yes |
+| AI School Research | `ai_research.view`, `ai_research.create`, `ai_research.run`, `ai_research.reject`, `ai_research.enrich` | Discovery workspace: create/run research jobs, reject or request enrichment of candidates | Admin, School Manager, Super Admin | Yes |
+| AI School Research | `ai_research.approve` | Approve a candidate into the School Registry (also requires `schools.create`) | Admin, Super Admin | Yes |
+| AI Knowledge Assistant | `ai_assistant.view` | Read-only CRM chatbot — every tool it calls re-checks the same permission that gates the underlying data (e.g. `schools.view` for school lookups); no tool can create/update/delete anything | All operational roles | Yes |
 
 ## Authorization rules
 
@@ -35,3 +38,4 @@ This document describes the current authorization contract. It is documentation 
 - Reporting hierarchy (`reportsToUserId`) is data ownership/flow, not a permission. Server-side validation rejects self-reference and cycles.
 - Disabling a user marks the account inactive and closes active login sessions without deleting historical records.
 - Login restrictions are checked server-side and denied attempts are stored in the login/session audit records.
+- AI-discovered school candidates are never treated as official School records. Approving a candidate requires both `ai_research.approve` and `schools.create`; the import path re-validates against the same School creation rules as manual entry.

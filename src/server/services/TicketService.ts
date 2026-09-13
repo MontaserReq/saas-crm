@@ -13,6 +13,7 @@ import {
   createNoteSchema,
   communicationAttemptSchema,
   rejectedTicketUpdateSchema,
+  createMeetingTicketSchema,
 } from '@/lib/validation';
 import { AuditService } from './AuditService';
 import { NotificationService } from './NotificationService';
@@ -20,6 +21,8 @@ import { getStorageProvider } from '@/lib/storage';
 
 export interface TicketFilters extends PaginationParams {
   myTicketsOnly?: boolean;
+  /** Only tickets created as Meeting Minutes (i.e. carrying a MeetingDetails row). */
+  meetingsOnly?: boolean;
 }
 
 export class TicketService {
@@ -64,6 +67,10 @@ export class TicketService {
 
     if (filters.taskTypeId && filters.taskTypeId !== 'ALL') {
       where.taskTypeId = filters.taskTypeId;
+    }
+
+    if (filters.meetingsOnly) {
+      where.meetingDetails = { isNot: null };
     }
 
     if (canViewAll && !filters.myTicketsOnly && filters.assigneeId && filters.assigneeId !== 'ALL') {
@@ -113,6 +120,7 @@ export class TicketService {
               user: { select: { id: true, name: true, email: true, avatar: true } },
             },
           },
+          meetingDetails: { select: { id: true, meetingDate: true, meetingTime: true } },
           _count: {
             select: {
               notes: true,
@@ -185,6 +193,7 @@ export class TicketService {
             actor: { select: { id: true, name: true } },
           },
         },
+        meetingDetails: true,
       },
     });
 
@@ -693,6 +702,36 @@ export class TicketService {
    * (User.reportsToUserId). Any client-supplied assignee identifier
    * is intentionally ignored to prevent privilege escalation.
    */
+  /**
+   * Resolves and validates the server-side ticket assignee from the current
+   * user's direct manager (User.reportsToUserId). Shared by createTicket and
+   * createMeetingTicket — no client-supplied assignee is ever trusted.
+   */
+  private static async resolveDirectManagerAssignee(user: UserSession) {
+    if (!user.reportsToUserId) {
+      throw new Error('You cannot create a ticket because your direct manager is not assigned. Please contact an administrator to assign your direct manager.');
+    }
+    const targetAssigneeId = user.reportsToUserId;
+    const targetAssignee = await prisma.user.findUnique({
+      where: { id: targetAssigneeId },
+      select: {
+        id: true,
+        name: true,
+        isActive: true,
+        role: { select: { rolePermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } } } },
+        userPermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } },
+      },
+    });
+    if (!targetAssignee) throw new Error('Your direct manager account could not be found.');
+    if (!targetAssignee.isActive) {
+      throw new Error('You cannot create a ticket because your assigned direct manager is disabled. Please contact an administrator.');
+    }
+    if (targetAssignee.role.rolePermissions.length === 0 && targetAssignee.userPermissions.length === 0) {
+      throw new Error('The assigned direct manager is not eligible to receive tickets.');
+    }
+    return { targetAssigneeId, targetAssignee };
+  }
+
   static async createTicket(
     user: UserSession,
     input: {
@@ -718,27 +757,7 @@ export class TicketService {
 
     // SERVER-SIDE ASSIGNMENT SOURCE OF TRUTH:
     // The assignee is derived from User.reportsToUserId. No client value is trusted.
-    if (!user.reportsToUserId) {
-      throw new Error('You cannot create a ticket because your direct manager is not assigned. Please contact an administrator to assign your direct manager.');
-    }
-    const targetAssigneeId = user.reportsToUserId;
-    const targetAssignee = await prisma.user.findUnique({
-      where: { id: targetAssigneeId },
-      select: {
-        id: true,
-        name: true,
-        isActive: true,
-        role: { select: { rolePermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } } } },
-        userPermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } },
-      },
-    });
-    if (!targetAssignee) throw new Error('Your direct manager account could not be found.');
-    if (!targetAssignee.isActive) {
-      throw new Error('You cannot create a ticket because your assigned direct manager is disabled. Please contact an administrator.');
-    }
-    if (targetAssignee.role.rolePermissions.length === 0 && targetAssignee.userPermissions.length === 0) {
-      throw new Error('The assigned direct manager is not eligible to receive tickets.');
-    }
+    const { targetAssigneeId, targetAssignee } = await this.resolveDirectManagerAssignee(user);
 
     const count = await prisma.ticket.count();
     const ticketNumber = `CL-${String(count + 101).padStart(5, '0')}`;
@@ -819,6 +838,146 @@ export class TicketService {
           entityType: 'Ticket',
           entityId: ticket.id,
           metadata: JSON.stringify({ ticketNumber, schoolId: input.schoolId, assigneeId: targetAssigneeId, assignmentSource: 'reportsToUserId' }),
+        },
+      });
+
+      return ticket;
+    });
+  }
+
+  /**
+   * Creates a new Ticket that also carries structured Meeting Minutes data
+   * (date, time, participants, action items). Reuses the exact same Ticket
+   * lifecycle, assignment, attachment, and notification architecture as a
+   * regular ticket — a ticket "is a meeting" purely because it has an
+   * attached MeetingDetails row, not via any special TaskType/enum.
+   */
+  static async createMeetingTicket(
+    user: UserSession,
+    input: {
+      schoolId?: string | null;
+      taskTypeId?: string | null;
+      departmentId?: string;
+      subject: string;
+      priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+      dueDate?: string | null;
+      meetingDate: string;
+      meetingTime: string;
+      participants: Array<{ name: string; userId?: string | null }>;
+      actionItems?: Array<{ text: string; assigneeId?: string | null; done?: boolean }>;
+      initialNote?: string | null;
+    }
+  ) {
+    const canCreate = hasPermission(user, PERMISSIONS.TICKETS_CREATE) || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    if (!canCreate) {
+      throw new Error('Forbidden: You do not have permission to create tickets');
+    }
+
+    const validated = createMeetingTicketSchema.parse({
+      schoolId: input.schoolId,
+      taskTypeId: input.taskTypeId,
+      departmentId: input.departmentId,
+      subject: input.subject,
+      priority: input.priority,
+      dueDate: input.dueDate,
+      meetingDate: input.meetingDate,
+      meetingTime: input.meetingTime,
+      participants: input.participants,
+      actionItems: input.actionItems || [],
+      initialNote: input.initialNote,
+    });
+
+    const departmentId = validated.departmentId || user.departmentId;
+
+    // SERVER-SIDE ASSIGNMENT SOURCE OF TRUTH (same rule as regular tickets).
+    const { targetAssigneeId, targetAssignee } = await this.resolveDirectManagerAssignee(user);
+
+    const count = await prisma.ticket.count();
+    const ticketNumber = `CL-${String(count + 101).padStart(5, '0')}`;
+
+    return await prisma.$transaction(async (tx) => {
+      const ticket = await tx.ticket.create({
+        data: {
+          ticketNumber,
+          schoolId: validated.schoolId,
+          taskTypeId: validated.taskTypeId,
+          departmentId,
+          subject: validated.subject,
+          priority: validated.priority,
+          status: 'PENDING',
+          createdById: user.id,
+          dueDate: validated.dueDate ? new Date(validated.dueDate) : null,
+        },
+      });
+
+      await tx.meetingDetails.create({
+        data: {
+          ticketId: ticket.id,
+          meetingDate: new Date(validated.meetingDate),
+          meetingTime: validated.meetingTime,
+          participants: JSON.stringify(validated.participants),
+          actionItems: JSON.stringify(validated.actionItems),
+          createdById: user.id,
+        },
+      });
+
+      await tx.ticketAssignee.create({
+        data: {
+          ticketId: ticket.id,
+          userId: targetAssigneeId,
+          isCurrent: true,
+          role: 'ASSIGNEE',
+        },
+      });
+
+      await tx.assignmentHistory.create({
+        data: {
+          ticketId: ticket.id,
+          toUserId: targetAssigneeId,
+          performedById: user.id,
+          action: 'INITIAL_ASSIGNMENT',
+          reason: 'Initial assignment via direct manager (User.reportsToUserId)',
+        },
+      });
+
+      if (validated.initialNote && validated.initialNote.trim()) {
+        await tx.note.create({
+          data: {
+            ticketId: ticket.id,
+            authorId: user.id,
+            content: validated.initialNote.trim(),
+          },
+        });
+      }
+
+      await tx.activityEvent.create({
+        data: {
+          ticketId: ticket.id,
+          actorId: user.id,
+          type: 'CREATED',
+          title: 'Meeting Ticket Created and Assigned',
+          description: `Created by ${user.name} and assigned to ${targetAssignee.name}: "${validated.subject}"`,
+        },
+      });
+
+      await tx.notification.create({
+        data: {
+          userId: targetAssigneeId,
+          type: 'TICKET_ASSIGNED',
+          title: 'New meeting assigned to you',
+          message: `You have been assigned a new meeting by ${user.name}: ${ticket.ticketNumber}.`,
+          entityType: 'ticket',
+          entityId: ticket.id,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'MEETING_TICKET_CREATED',
+          entityType: 'Ticket',
+          entityId: ticket.id,
+          metadata: JSON.stringify({ ticketNumber, schoolId: validated.schoolId, assigneeId: targetAssigneeId, assignmentSource: 'reportsToUserId' }),
         },
       });
 

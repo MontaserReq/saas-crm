@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Navbar } from "@/components/layout/Navbar";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { ChatWidget } from "@/components/chat/ChatWidget";
+import { AiAssistantWidget } from "@/components/chat/AiAssistantWidget";
 import { NotificationService } from "@/server/services/NotificationService";
 import prisma from "@/lib/db/prisma";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
@@ -49,6 +51,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </main>
         </div>
       </div>
+      {/* Always-accessible chat launcher — mounted once so it survives route
+          changes and never requires opening the mobile nav drawer. */}
+      {hasPermission(user, PERMISSIONS.CHAT_VIEW) && <ChatWidget currentUserId={user.id} />}
+      {/* Read-only AI Knowledge Assistant — opposite corner from Live Chat. */}
+      {hasPermission(user, PERMISSIONS.AI_ASSISTANT_VIEW) && <AiAssistantWidget />}
     </MobileLayout>
   );
 }

@@ -281,7 +281,7 @@ export class SchoolService {
     if (rawRows.length > 5000) throw new Error('The maximum allowed import size is 5,000 rows');
     const headerResolution = resolveImportHeaders(Object.keys(rawRows[0] || {}));
     if (headerResolution.missingRequired.length) {
-      const labels = headerResolution.missingRequired.map((field) => field === 'name' ? 'School Name / اسم المدرسة' : 'School Classification / فئة المدرسة');
+      const labels = headerResolution.missingRequired.map((field) => field === 'name' ? 'School Name / اسم المدرسة' : field);
       throw new Error(`Required column is missing: ${labels.join(', ')}.`);
     }
     if (headerResolution.duplicates.length) {
@@ -314,20 +314,19 @@ export class SchoolService {
       const row = rawRows[i] as Record<string, unknown>;
       const mappedRow = mapSchoolImportRow(row, headerResolution);
       const employee = matchImportEmployee(mappedRow.contactPerson, employees);
-      const employeeError = mappedRow.contactPerson && !employee ? ['responsibleEmployee: Responsible employee was not found'] : [];
       // The Excel "اسم المتابع" value identifies the school's responsible employee.
       // It must not be copied into School.contactPerson, which represents the
-      // external contact at the school.
+      // external contact at the school. If unassigned or not matched, it remains null without failing import.
       const parsed = schoolImportRowSchema.safeParse({ ...mappedRow, contactPerson: null, responsibleEmployeeId: employee?.id ?? null });
 
-      if (!parsed.success || employeeError.length) {
-        const errorMessages = [...(parsed.success ? [] : parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`)), ...employeeError];
+      if (!parsed.success) {
+        const errorMessages = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
         preview.push({
           index: i + 1,
           data: {
             ...mappedRow,
             contactPerson: null,
-            responsibleEmployee: employee?.name ?? mappedRow.contactPerson,
+            responsibleEmployee: employee?.name ?? null,
             city: mappedRow.city || '',
           },
           status: 'invalid',
@@ -337,7 +336,7 @@ export class SchoolService {
         continue;
       }
 
-      const schoolData = { ...parsed.data, contactPerson: null, responsibleEmployee: employee?.name ?? mappedRow.contactPerson, city: parsed.data.city || 'Amman' };
+      const schoolData = { ...parsed.data, contactPerson: null, responsibleEmployee: employee?.name ?? null, city: parsed.data.city || 'Amman' };
       const normalizedName = schoolData.name.trim().replace(/\s+/g, ' ').toLowerCase();
       const rawPhone = schoolData.phone ? normalizeImportPhone(schoolData.phone) : null;
 

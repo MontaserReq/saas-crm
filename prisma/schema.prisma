@@ -57,6 +57,10 @@ model User {
   assignedCalendarEvents  CalendarEvent[]         @relation("CalendarAssignedUser")
   createdCalendarEvents   CalendarEvent[]         @relation("CalendarCreator")
   taskTypeMemberships     TaskTypeMember[]
+  schoolResearchJobs      SchoolResearchJob[]       @relation("SchoolResearchJobCreator")
+  schoolResearchDecisions SchoolResearchCandidate[] @relation("SchoolResearchCandidateDecider")
+  createdMeetingDetails   MeetingDetails[]
+  presence                UserPresence?
 
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -179,6 +183,7 @@ model School {
   tickets          Ticket[]
   calendarEvents   CalendarEvent[]
   approvalRequests SchoolApprovalRequest[]
+  researchCandidateMatches SchoolResearchCandidate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -189,6 +194,141 @@ model School {
   @@index([classification])
   @@index([responsibleEmployeeId])
   @@index([isDeleted])
+}
+
+// AI School Research: research/discovery workspace. Candidates here are
+// unverified AI-discovered leads and are never treated as official School
+// records until a human explicitly approves one (see SchoolResearchCandidate.status).
+model SchoolResearchJob {
+  id          String @id @default(cuid())
+  createdById String
+  createdBy   User   @relation("SchoolResearchJobCreator", fields: [createdById], references: [id])
+
+  mode           String @default("FIND_NEW") // FIND_NEW | ENRICH_EXISTING | VERIFY_EXISTING
+  status         String @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED | CANCELLED
+  location       String
+  area           String?
+  schoolType     String?
+  requestedCount Int
+  requiredFields String // JSON array, e.g. ["phone","email","website"]
+  error          String?
+  aiCallCount    Int    @default(0)
+  sourceCount    Int    @default(0)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  candidates SchoolResearchCandidate[]
+  attempts   SchoolResearchAttempt[]
+
+  @@index([createdById, createdAt])
+  @@index([status])
+}
+
+model SchoolResearchCandidate {
+  id            String            @id @default(cuid())
+  researchJobId String
+  researchJob   SchoolResearchJob @relation(fields: [researchJobId], references: [id], onDelete: Cascade)
+
+  name           String
+  normalizedName String
+  city           String?
+  area           String?
+  phone          String?
+  email          String?
+  website        String?
+  contactPerson  String?
+  schoolType     String?
+  address        String?
+  confidence     Int    @default(0)
+  status         String @default("NEW") // NEW | NEEDS_REVIEW | DUPLICATE | APPROVED | REJECTED | IMPORTED
+
+  matchedSchoolId String?
+  matchedSchool   School? @relation(fields: [matchedSchoolId], references: [id])
+
+  rejectionReason  String?
+  researchNotes    String?
+  importedSchoolId String? @unique
+
+  decidedById String?
+  decidedBy   User?     @relation("SchoolResearchCandidateDecider", fields: [decidedById], references: [id])
+  decidedAt   DateTime?
+
+  sources SchoolResearchSource[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([researchJobId, status])
+  @@index([normalizedName])
+  @@index([matchedSchoolId])
+}
+
+model SchoolResearchSource {
+  id          String                  @id @default(cuid())
+  candidateId String
+  candidate   SchoolResearchCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  field       String // "name" | "phone" | "email" | "website" | "address" | "schoolType" | "contactPerson"
+  sourceType  String // "OFFICIAL_WEBSITE" | "SEARCH_GROUNDING" | "OTHER"
+  sourceUrl   String?
+  collectedAt DateTime @default(now())
+
+  @@index([candidateId])
+}
+
+// Per-API-request usage tracking for AI School Research.
+// One row per individual HTTP request to a provider (Groq or Gemini).
+// A single research job may produce multiple rows (batches, retries, fallbacks).
+// Web searches are tracked separately from API requests — a single Groq compound
+// request may internally execute multiple web searches (see executedTools).
+model SchoolResearchAttempt {
+  id    String            @id @default(cuid())
+  jobId String
+  job   SchoolResearchJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // Provider identity
+  provider String // "groq" | "gemini"
+  model    String
+
+  // Attempt numbering within this job (1-based, sequential across all providers)
+  attemptNumber Int
+
+  // Outcome
+  status     String // "SUCCESS" | "FAILED" | "RATE_LIMITED"
+  httpStatus Int?   // HTTP status code, null on network errors
+
+  // Timing (actual wall-clock, never estimated)
+  durationMs  Int
+  startedAt   DateTime
+  completedAt DateTime
+
+  // Token usage (null when the provider did not return them — never guessed)
+  inputTokens  Int?
+  outputTokens Int?
+  totalTokens  Int?
+
+  // Tool executions within this API request
+  // webSearches: count of search-type tools executed (NOT equal to apiRequests)
+  webSearches   Int     @default(0)
+  // executedTools: JSON array of raw tool metadata from Groq compound response
+  executedTools String?
+
+  // Classification flags
+  isRetry    Boolean @default(false) // came after a RATE_LIMITED attempt
+  isFallback Boolean @default(false) // Gemini attempt invoked after Groq failure
+
+  // Error details (sanitized — no API keys or secrets)
+  errorCode    String?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([jobId])
+  @@index([provider])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model SchoolApprovalRequest {
@@ -246,6 +386,21 @@ model ChatMessage {
 
   @@index([conversationId, createdAt])
   @@index([senderId])
+}
+
+// Real online/offline/away presence, driven by a client heartbeat (see
+// PresenceService). Kept as its own single-row-per-user table rather than
+// fields on User so frequent heartbeat writes never touch/lock the User row.
+// Status itself is never stored — it's always derived from lastSeenAt at
+// read time (PresenceService.deriveStatus), so a browser closed without a
+// clean disconnect self-corrects to "offline" once the heartbeat stops,
+// instead of getting stuck showing "online" forever.
+model UserPresence {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastSeenAt DateTime
+
+  @@index([lastSeenAt])
 }
 
 model LoginSession {
@@ -365,6 +520,7 @@ model Ticket {
   assignmentHistory     AssignmentHistory[]
   activityEvents        ActivityEvent[]
   calendarEvents        CalendarEvent[]
+  meetingDetails        MeetingDetails?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -375,6 +531,30 @@ model Ticket {
   @@index([taskTypeId])
   @@index([priority])
   @@index([createdAt])
+}
+
+// Meeting-specific fields for a Ticket used as a "Meeting Minutes" record.
+// Kept 1:1 with Ticket so meeting tickets reuse the normal Ticket lifecycle,
+// notes, attachments, assignment, and notifications untouched.
+model MeetingDetails {
+  id          String @id @default(cuid())
+  ticketId    String @unique
+  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  meetingDate DateTime
+  meetingTime String // "HH:mm" (24h)
+  // JSON array of { name: string, userId?: string }
+  participants String
+  // JSON array of { text: string, assigneeId?: string, done: boolean }
+  actionItems String?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([meetingDate])
 }
 
 model TicketAssignee {

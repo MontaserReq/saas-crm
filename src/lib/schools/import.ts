@@ -3,7 +3,7 @@ export type ResolvedImportColumn = { header: string; index: number };
 export type IgnoredImportColumn = ResolvedImportColumn & { ignored: true };
 
 export const SCHOOL_IMPORT_FIELDS: SchoolImportField[] = ['name', 'contactPerson', 'city', 'classification', 'phone', 'email'];
-export const REQUIRED_SCHOOL_IMPORT_FIELDS: SchoolImportField[] = ['name', 'classification'];
+export const REQUIRED_SCHOOL_IMPORT_FIELDS: SchoolImportField[] = ['name'];
 export const IGNORED_SCHOOL_IMPORT_ALIASES = ['نتيجة آخر تواصل / تفاصيل المكالمات', 'نتيجة آخر تواصل', 'تفاصيل المكالمات', 'Last Contact Result / Call Details', 'Last Contact Result', 'Last Contact Details', 'Call Details', 'Contact Result', 'Contact Details', 'حالة المدرسة', 'الحالة', 'School Status', 'Status'];
 export const SCHOOL_IMPORT_ALIASES: Record<SchoolImportField, string[]> = {
   name: ['اسم المدرسة', 'اسم المدرسة الرسمي', 'School Name', 'School'],
@@ -48,10 +48,13 @@ export function normalizeImportPhone(value: unknown): string {
   return raw.split(/\/+/).map((part) => canonicalizeJordanPhone(part)).find((part) => /^\d{7,12}$/.test(part)) || '';
 }
 
+const UNASSIGNED_PLACEHOLDERS = new Set(['', '-', '—', 'لا يوجد', 'بدون', 'غير محدد', 'لايوجد', 'none', 'n/a', 'na', 'null', 'undefined']);
+
 export function matchImportEmployee<T extends { name: string; email?: string | null }>(input: string | null, employees: T[]) {
   if (!input) return undefined;
   const normalize = (value: string) => value.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
   const normalizedInput = normalize(input);
+  if (UNASSIGNED_PLACEHOLDERS.has(normalizedInput)) return undefined;
   const exact = employees.filter((candidate) => normalize(candidate.name) === normalizedInput || (candidate.email ? normalize(candidate.email) === normalizedInput : false));
   if (exact.length === 1) return exact[0];
   if (exact.length > 1) return undefined;
@@ -64,5 +67,28 @@ export function matchImportEmployee<T extends { name: string; email?: string | n
 export function mapSchoolImportRow(row: Record<string, unknown>, resolved = resolveImportHeaders(Object.keys(row))) {
   const value = (field: SchoolImportField) => { const column = resolved.mapped.get(field); return column ? row[column.header] : undefined; };
   const text = (field: SchoolImportField) => { const item = value(field); return item === undefined || item === null ? '' : String(item).replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/gu, ' ').trim(); };
-  return { name: text('name'), contactPerson: text('contactPerson') || null, city: text('city') || null, classification: text('classification').toLocaleUpperCase().replace(/^(?:CLASS|الفئة|فئة)\s*/u, '').trim(), phone: normalizeImportPhone(value('phone')) || null, email: text('email') || null };
+
+  const rawClassification = text('classification').toLocaleUpperCase().replace(/^(?:CLASS|الفئة|فئة)\s*/u, '').trim();
+  let normalizedClassification = '';
+  if (['A', 'B', 'C'].includes(rawClassification)) {
+    normalizedClassification = rawClassification;
+  } else if (rawClassification === 'أ') {
+    normalizedClassification = 'A';
+  } else if (rawClassification === 'ب') {
+    normalizedClassification = 'B';
+  } else if (rawClassification === 'ج') {
+    normalizedClassification = 'C';
+  }
+
+  const rawContact = text('contactPerson');
+  const normalizedContact = (rawContact && !UNASSIGNED_PLACEHOLDERS.has(rawContact.trim().toLowerCase())) ? rawContact : null;
+
+  return {
+    name: text('name'),
+    contactPerson: normalizedContact,
+    city: text('city') || null,
+    classification: normalizedClassification,
+    phone: normalizeImportPhone(value('phone')) || null,
+    email: text('email') || null,
+  };
 }

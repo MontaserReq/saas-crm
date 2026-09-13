@@ -54,9 +54,12 @@ describe('Ticket creation: Direct Manager assignment contract', () => {
   });
 
   it('TicketService.createTicket ignores any input.assigneeId (signature removed)', () => {
-    // The service signature must no longer include assigneeId / assignedToUserId.
-    expect(serviceSource).not.toMatch(/assigneeId\?:\s*string/);
-    expect(serviceSource).not.toMatch(/assignedToUserId\?:\s*string/);
+    // Scoped to createTicket's own input type — other methods (e.g. createMeetingTicket's
+    // per-action-item assigneeId, an unrelated "who owns this follow-up" field) are out of scope.
+    const createTicketMatch = serviceSource.match(/static async createTicket\(\s*user: UserSession,\s*input: \{[\s\S]*?\}\s*\)/);
+    expect(createTicketMatch).toBeTruthy();
+    expect(createTicketMatch![0]).not.toMatch(/assigneeId\?:\s*string/);
+    expect(createTicketMatch![0]).not.toMatch(/assignedToUserId\?:\s*string/);
   });
 
   it('TicketService.createTicket uses user.reportsToUserId as the only assignment source', () => {

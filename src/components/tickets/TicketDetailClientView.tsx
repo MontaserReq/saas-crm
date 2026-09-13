@@ -6,6 +6,7 @@ import { TicketActionButtons } from '@/components/tickets/TicketActionButtons';
 import { RejectedTicketCorrection } from '@/components/tickets/RejectedTicketCorrection';
 import { NoteStream } from '@/components/tickets/NoteStream';
 import { TimelineView } from '@/components/tickets/TimelineView';
+import { MeetingDetailsCard } from '@/components/tickets/MeetingDetailsCard';
 import { formatDate } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n/context';
 import Link from 'next/link';
@@ -91,6 +92,9 @@ export function TicketDetailClientView({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column (2 spans): School Info, Notes, Communication Attempts */}
         <div className="lg:col-span-2 space-y-8">
+          {/* Meeting Details Card (only for tickets created as Meeting Minutes) */}
+          {ticket.meetingDetails && <MeetingDetailsCard meetingDetails={ticket.meetingDetails} />}
+
           {/* School Contact Card */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">

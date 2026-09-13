@@ -1,0 +1,435 @@
+import prisma from '@/lib/db/prisma';
+import { UserSession, PaginatedResult } from '@/types';
+import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { schoolResearchJobSchema } from '@/lib/validation';
+import { AuditService } from './AuditService';
+import { NotificationService } from './NotificationService';
+import { getAiProvider, getAiResearchConfig, AiNotConfiguredError, AiExtractionError, SchoolExtractionItem } from '@/lib/ai';
+import { ResearchUsage, JobUsageSummary } from '@/lib/ai/usage';
+import { normalizeSchoolName, normalizeResearchPhone, normalizeResearchEmail, extractWebsiteDomain } from '@/lib/ai-school-research/normalize';
+import { computeConfidence, determineInitialCandidateStatus } from '@/lib/ai-school-research/confidence';
+import { isLikelyDuplicate } from '@/lib/ai-school-research/duplicate';
+import { isValidJobTransition, ResearchJobStatus } from '@/lib/ai-school-research/stateMachine';
+
+const STALE_RUNNING_JOB_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_EXTRACTION_ROUNDS = 3;
+
+export interface CreateResearchJobInput {
+  location: string;
+  area?: string | null;
+  schoolType?: string | null;
+  requestedCount: number;
+  requiredFields: string[];
+}
+
+export class SchoolResearchService {
+  /**
+   * A user with ai_research.approve (admin-tier) can see every job, matching
+   * the existing pattern where a broader permission implies broader
+   * oversight (see canAccessTicket's TICKETS_VIEW_ALL override). There is no
+   * separate ai_research.view_all permission to avoid inventing scope beyond
+   * what was approved.
+   */
+  private static canViewAllJobs(user: UserSession): boolean {
+    return hasPermission(user, PERMISSIONS.AI_RESEARCH_APPROVE);
+  }
+
+  static async createJob(input: CreateResearchJobInput, actorId: string) {
+    const validated = schoolResearchJobSchema.parse({ mode: 'FIND_NEW', ...input });
+    const config = getAiResearchConfig();
+
+    const requestedCount = Math.min(validated.requestedCount, config.maxSchoolsPerJob);
+
+    const job = await prisma.schoolResearchJob.create({
+      data: {
+        createdById: actorId,
+        mode: validated.mode,
+        location: validated.location,
+        area: validated.area || null,
+        schoolType: validated.schoolType || null,
+        requestedCount,
+        requiredFields: JSON.stringify(validated.requiredFields),
+      },
+    });
+
+    await AuditService.logAudit({
+      actorId,
+      action: 'AI_RESEARCH_JOB_CREATED',
+      entityType: 'SchoolResearchJob',
+      entityId: job.id,
+      metadata: { location: job.location, area: job.area, requestedCount: job.requestedCount },
+    });
+
+    // Fire-and-forget: this process is a long-running container (not
+    // serverless), so the async job keeps running after the action returns.
+    // The UI polls getJobStatus for progress (see JobProgress component).
+    void this.runJob(job.id).catch((err) => {
+      console.error(`AI School Research job ${job.id} crashed unexpectedly:`, err);
+    });
+
+    return job;
+  }
+
+  static async runJob(jobId: string) {
+    const job = await prisma.schoolResearchJob.findUnique({ where: { id: jobId } });
+    if (!job || !isValidJobTransition(job.status as ResearchJobStatus, 'RUNNING')) return;
+
+    await prisma.schoolResearchJob.update({ where: { id: jobId }, data: { status: 'RUNNING', startedAt: new Date() } });
+    await AuditService.logAudit({ actorId: job.createdById, action: 'AI_RESEARCH_JOB_STARTED', entityType: 'SchoolResearchJob', entityId: jobId });
+
+    const requiredFields: string[] = JSON.parse(job.requiredFields || '[]');
+
+    // Usage tracking: install the onAttempt callback.
+    // Each callback invocation is fire-and-forget: a DB logging failure must
+    // never cause a successful research result to be discarded.
+    const onAttempt = (usage: ResearchUsage) => {
+      prisma.schoolResearchAttempt
+        .create({
+          data: {
+            jobId,
+            provider: usage.provider,
+            model: usage.model,
+            attemptNumber: usage.attemptNumber,
+            status: usage.status,
+            httpStatus: usage.httpStatus ?? null,
+            durationMs: usage.durationMs,
+            startedAt: usage.startedAt,
+            completedAt: usage.completedAt,
+            inputTokens: usage.inputTokens ?? null,
+            outputTokens: usage.outputTokens ?? null,
+            totalTokens: usage.totalTokens ?? null,
+            webSearches: usage.webSearches,
+            executedTools: usage.executedTools ? JSON.stringify(usage.executedTools) : null,
+            isRetry: usage.retry,
+            isFallback: usage.fallback,
+            errorCode: usage.errorCode ?? null,
+            errorMessage: usage.errorMessage ?? null,
+          },
+        })
+        .catch((err) => {
+          console.warn(`[SchoolResearchService] usage tracking write failed for job ${jobId}:`, err?.message ?? err);
+        });
+    };
+
+    const provider = getAiProvider(onAttempt);
+    let aiCallCount = 0;
+    let sourceCount = 0;
+    const collected: SchoolExtractionItem[] = [];
+
+    try {
+      for (let round = 0; round < MAX_EXTRACTION_ROUNDS && collected.length < job.requestedCount; round++) {
+        try {
+          const result = await provider.extractSchools({
+            location: job.location,
+            area: job.area,
+            schoolType: job.schoolType,
+            requestedCount: job.requestedCount - collected.length,
+            requiredFields,
+            excludeNames: collected.map((item) => item.name),
+          });
+          aiCallCount++;
+          if (!result.schools.length) break;
+          collected.push(...result.schools);
+        } catch (err) {
+          if (round === 0) throw err; // first-round failure fails the whole job
+          break; // a later round failing still keeps whatever was already found (section 52)
+        }
+      }
+
+      const existingSchools = await prisma.school.findMany({
+        where: { isDeleted: false },
+        select: { id: true, name: true, city: true, phone: true },
+      });
+
+      const createdInThisJob: { id: string; name: string; city: string | null; phone: string | null; website: string | null }[] = [];
+
+      for (const raw of collected.slice(0, job.requestedCount)) {
+        const name = raw.name.trim();
+        if (!name) continue;
+        const normalizedName = normalizeSchoolName(name);
+        const phone = raw.phone ? normalizeResearchPhone(raw.phone) : '';
+        const email = normalizeResearchEmail(raw.email);
+        const website = raw.website?.trim() || null;
+        const city = raw.city?.trim() || null;
+        const area = raw.area?.trim() || null;
+        const address = raw.address?.trim() || null;
+        const contactPerson = raw.contactPerson?.trim() || null;
+        const schoolType = raw.schoolType?.trim() || null;
+        const evidence = raw.evidence || [];
+        sourceCount += evidence.length;
+
+        const matchedSchool = existingSchools.find((school) =>
+          isLikelyDuplicate({ name, city, phone, website: null }, { name: school.name, city: school.city, phone: school.phone, website: null })
+        );
+        const matchedCandidate = createdInThisJob.find((candidate) =>
+          isLikelyDuplicate({ name, city, phone, website }, { name: candidate.name, city: candidate.city, phone: candidate.phone, website: candidate.website })
+        );
+
+        const hostSet = new Set(evidence.map((e) => (e.sourceUrl ? extractWebsiteDomain(e.sourceUrl) : null)).filter(Boolean));
+        const hasOfficialWebsiteSource = evidence.some((e) => /official website/i.test(e.source));
+        const confidence = computeConfidence({
+          hasWebsite: Boolean(website),
+          hasPhone: Boolean(phone && phone.length > 5),
+          hasEmail: Boolean(email),
+          hasAddress: Boolean(address),
+          hasOfficialWebsiteSource,
+          distinctSourceHostCount: hostSet.size,
+        });
+
+        let status: 'NEW' | 'NEEDS_REVIEW' | 'DUPLICATE' = determineInitialCandidateStatus({
+          hasCity: Boolean(city),
+          hasAnyContactMethod: Boolean((phone && phone.length > 5) || email || website),
+          hasEvidence: evidence.length > 0,
+        });
+        if (matchedSchool || matchedCandidate) status = 'DUPLICATE';
+
+        const candidate = await prisma.schoolResearchCandidate.create({
+          data: {
+            researchJobId: jobId,
+            name,
+            normalizedName,
+            city,
+            area,
+            phone: phone || null,
+            email,
+            website,
+            address,
+            contactPerson,
+            schoolType,
+            confidence,
+            status,
+            matchedSchoolId: matchedSchool?.id || null,
+            sources: {
+              create: evidence.map((e) => ({
+                field: e.field,
+                sourceType: /official website/i.test(e.source) ? 'OFFICIAL_WEBSITE' : 'SEARCH_GROUNDING',
+                sourceUrl: e.sourceUrl || null,
+              })),
+            },
+          },
+        });
+
+        createdInThisJob.push({ id: candidate.id, name, city, phone: phone || null, website });
+      }
+
+      await prisma.schoolResearchJob.update({
+        where: { id: jobId },
+        data: { status: 'COMPLETED', completedAt: new Date(), aiCallCount, sourceCount },
+      });
+
+      const counts = await prisma.schoolResearchCandidate.groupBy({ by: ['status'], where: { researchJobId: jobId }, _count: true });
+      const summary = Object.fromEntries(counts.map((c) => [c.status, c._count]));
+
+      await AuditService.logAudit({ actorId: job.createdById, action: 'AI_RESEARCH_JOB_COMPLETED', entityType: 'SchoolResearchJob', entityId: jobId, metadata: { found: createdInThisJob.length, ...summary } });
+      await NotificationService.create({
+        userId: job.createdById,
+        type: 'AI_RESEARCH_JOB_COMPLETED',
+        title: 'AI School Research completed',
+        message: `${createdInThisJob.length} schools found for ${job.location}${job.area ? ` / ${job.area}` : ''}.`,
+        entityType: 'schoolResearchJob',
+        entityId: jobId,
+      });
+    } catch (err: any) {
+      const message = err instanceof AiNotConfiguredError
+        ? err.message
+        : err instanceof AiExtractionError
+          ? `AI extraction failed: ${err.message}`
+          : 'Research could not be completed. Please try again.';
+
+      await prisma.schoolResearchJob.update({ where: { id: jobId }, data: { status: 'FAILED', completedAt: new Date(), error: message, aiCallCount } });
+      await AuditService.logAudit({ actorId: job.createdById, action: 'AI_RESEARCH_JOB_FAILED', entityType: 'SchoolResearchJob', entityId: jobId, metadata: { error: message } });
+      await NotificationService.create({
+        userId: job.createdById,
+        type: 'AI_RESEARCH_JOB_FAILED',
+        title: 'AI School Research failed',
+        message,
+        entityType: 'schoolResearchJob',
+        entityId: jobId,
+      });
+    }
+  }
+
+  /** Self-heals a job stuck in RUNNING (e.g. the app container restarted mid-job). */
+  private static async reconcileStaleJob(job: { id: string; status: string; startedAt: Date | null }) {
+    if (job.status !== 'RUNNING' || !job.startedAt) return job;
+    if (Date.now() - job.startedAt.getTime() < STALE_RUNNING_JOB_MS) return job;
+    return prisma.schoolResearchJob.update({
+      where: { id: job.id },
+      data: { status: 'FAILED', completedAt: new Date(), error: 'Research job did not complete (the server may have restarted). Please start a new job.' },
+    });
+  }
+
+  static async getJobForUser(user: UserSession, jobId: string) {
+    const job = await prisma.schoolResearchJob.findUnique({
+      where: { id: jobId },
+      include: { createdBy: { select: { id: true, name: true } } },
+    });
+    if (!job) return null;
+    if (job.createdById !== user.id && !this.canViewAllJobs(user)) return null;
+    return this.reconcileStaleJob(job);
+  }
+
+  static async listJobs(user: UserSession, page = 1, pageSize = 15) {
+    const where = this.canViewAllJobs(user) ? {} : { createdById: user.id };
+    const skip = (page - 1) * pageSize;
+    const [total, data] = await Promise.all([
+      prisma.schoolResearchJob.count({ where }),
+      prisma.schoolResearchJob.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        include: { createdBy: { select: { id: true, name: true } }, _count: { select: { candidates: true } } },
+      }),
+    ]);
+    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) } satisfies PaginatedResult<any>;
+  }
+
+  static async listCandidates(user: UserSession, jobId: string, filters: { status?: string; page?: number; pageSize?: number } = {}) {
+    const job = await this.getJobForUser(user, jobId);
+    if (!job) throw new Error('Research job not found');
+
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    const pageSize = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 20;
+    const where: any = { researchJobId: jobId };
+    if (filters.status && filters.status !== 'ALL') where.status = filters.status;
+
+    const [total, data, statusCounts] = await Promise.all([
+      prisma.schoolResearchCandidate.count({ where }),
+      prisma.schoolResearchCandidate.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: [{ confidence: 'desc' }, { createdAt: 'asc' }],
+        include: {
+          matchedSchool: { select: { id: true, name: true, city: true } },
+          sources: { take: 1, orderBy: { collectedAt: 'asc' } },
+        },
+      }),
+      prisma.schoolResearchCandidate.groupBy({ by: ['status'], where: { researchJobId: jobId }, _count: true }),
+    ]);
+
+    return {
+      job,
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+      summary: Object.fromEntries(statusCounts.map((c) => [c.status, c._count])),
+    };
+  }
+
+  static async getCandidateDetail(user: UserSession, candidateId: string) {
+    const candidate = await prisma.schoolResearchCandidate.findUnique({
+      where: { id: candidateId },
+      include: {
+        sources: true,
+        matchedSchool: { select: { id: true, name: true, city: true, phone: true, email: true } },
+        researchJob: { select: { id: true, createdById: true, location: true, area: true } },
+        decidedBy: { select: { id: true, name: true } },
+      },
+    });
+    if (!candidate) return null;
+    if (candidate.researchJob.createdById !== user.id && !this.canViewAllJobs(user)) return null;
+    return candidate;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Usage Tracking Methods
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns raw per-attempt rows for a job. The job ownership check is the
+   * caller's responsibility (see getJobForUser).
+   */
+  static async getJobAttempts(jobId: string) {
+    return prisma.schoolResearchAttempt.findMany({
+      where: { jobId },
+      orderBy: { attemptNumber: 'asc' },
+    });
+  }
+
+  /**
+   * Aggregates all SchoolResearchAttempt rows for a job into a JobUsageSummary.
+   * Returns null if no attempts have been recorded yet.
+   */
+  static async getJobUsageSummary(jobId: string): Promise<JobUsageSummary | null> {
+    const attempts = await prisma.schoolResearchAttempt.findMany({
+      where: { jobId },
+      select: {
+        provider: true,
+        status: true,
+        httpStatus: true,
+        durationMs: true,
+        inputTokens: true,
+        outputTokens: true,
+        totalTokens: true,
+        webSearches: true,
+        isRetry: true,
+        isFallback: true,
+      },
+    });
+
+    if (attempts.length === 0) return null;
+
+    let groqRequests = 0;
+    let geminiRequests = 0;
+    let retryCount = 0;
+    let fallbackCount = 0;
+    let totalWebSearches = 0;
+    let rateLimitErrors = 0;
+    let otherErrors = 0;
+    let sumInputTokens = 0;
+    let sumOutputTokens = 0;
+    let sumTotalTokens = 0;
+    let hasTokenData = false;
+    let sumDurationMs = 0;
+    let minDurationMs = Infinity;
+    let maxDurationMs = -Infinity;
+
+    for (const a of attempts) {
+      if (a.provider === 'groq') groqRequests++;
+      else if (a.provider === 'gemini') geminiRequests++;
+
+      if (a.isRetry) retryCount++;
+      if (a.isFallback) fallbackCount++;
+
+      totalWebSearches += a.webSearches;
+
+      if (a.status === 'RATE_LIMITED' || a.httpStatus === 429) {
+        rateLimitErrors++;
+      } else if (a.status === 'FAILED') {
+        otherErrors++;
+      }
+
+      // Only count tokens from successful attempts
+      if (a.status === 'SUCCESS') {
+        if (a.inputTokens !== null) { sumInputTokens += a.inputTokens; hasTokenData = true; }
+        if (a.outputTokens !== null) { sumOutputTokens += a.outputTokens; hasTokenData = true; }
+        if (a.totalTokens !== null) { sumTotalTokens += a.totalTokens; hasTokenData = true; }
+      }
+
+      sumDurationMs += a.durationMs;
+      if (a.durationMs < minDurationMs) minDurationMs = a.durationMs;
+      if (a.durationMs > maxDurationMs) maxDurationMs = a.durationMs;
+    }
+
+    return {
+      totalApiRequests: attempts.length,
+      totalWebSearches,
+      groqRequests,
+      geminiRequests,
+      retryCount,
+      fallbackCount,
+      inputTokens: hasTokenData ? sumInputTokens : null,
+      outputTokens: hasTokenData ? sumOutputTokens : null,
+      totalTokens: hasTokenData ? sumTotalTokens : null,
+      rateLimitErrors,
+      otherErrors,
+      avgDurationMs: attempts.length > 0 ? Math.round(sumDurationMs / attempts.length) : null,
+      minDurationMs: minDurationMs !== Infinity ? minDurationMs : null,
+      maxDurationMs: maxDurationMs !== -Infinity ? maxDurationMs : null,
+    };
+  }
+}

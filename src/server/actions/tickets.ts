@@ -6,6 +6,7 @@ import { TicketService } from '@/server/services/TicketService';
 import { TicketStatus } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
 
 function ticketPermission(user: Awaited<ReturnType<typeof requireAuth>>, permission: string) {
   if (!hasPermission(user, permission)) throw new Error(`Forbidden: missing ${permission}`);
@@ -68,6 +69,8 @@ export async function addNoteAction(formData: FormData) {
 
     for (const f of files) {
       if (f && f.size > 0 && f.name) {
+        const validationError = validateAttachmentFile(f);
+        if (validationError) throw new Error(validationError);
         const arrayBuf = await f.arrayBuffer();
         attachmentBuffers.push({
           originalName: f.name,
@@ -207,6 +210,33 @@ export async function createTicketAction(input: {
     return { success: true, ticketId: ticket.id, ticketNumber: ticket.ticketNumber };
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to create ticket' };
+  }
+}
+
+export async function createMeetingTicketAction(input: {
+  schoolId?: string | null;
+  taskTypeId?: string | null;
+  departmentId?: string;
+  subject: string;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  dueDate?: string | null;
+  meetingDate: string;
+  meetingTime: string;
+  participants: Array<{ name: string; userId?: string | null }>;
+  actionItems?: Array<{ text: string; assigneeId?: string | null; done?: boolean }>;
+  initialNote?: string | null;
+}) {
+  try {
+    const user = await requireAuth();
+    ticketPermission(user, PERMISSIONS.TICKETS_CREATE);
+
+    const ticket = await TicketService.createMeetingTicket(user, input);
+
+    revalidatePath('/tickets');
+    revalidatePath('/');
+    return { success: true, ticketId: ticket.id, ticketNumber: ticket.ticketNumber };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to create meeting' };
   }
 }
 

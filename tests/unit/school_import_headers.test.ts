@@ -20,13 +20,45 @@ describe('school Excel import', () => {
     ['+962780728761', '0780728761'], ['962790203683', '0790203683'], ['هاتف 065343991', '065343991'], ['962795311464//065058666', '0795311464'],
   ])('normalizes phone %s', (input, expected) => expect(normalizeImportPhone(input)).toBe(expected));
 
-  it.each(['A', 'b', ' C '])('normalizes classification %s', (value) => expect(mapSchoolImportRow({ 'School Name': 'School', 'School Classification': value }).classification).toBe(value.trim().toUpperCase()));
+  it.each([
+    ['A', 'A'],
+    ['b', 'B'],
+    [' C ', 'C'],
+    ['أ', 'A'],
+    ['ب', 'B'],
+    ['ج', 'C'],
+    ['فئة أ', 'A'],
+    ['فئة ب', 'B'],
+    ['فئة ج', 'C'],
+    ['Class A', 'A'],
+    ['', ''],
+    ['غير محدد', ''],
+  ])('normalizes classification %s to %s', (value, expected) => {
+    expect(mapSchoolImportRow({ 'School Name': 'School', 'School Classification': value }).classification).toBe(expected);
+  });
+
+  it('handles placeholders for responsible employee as null', () => {
+    expect(mapSchoolImportRow({ 'School Name': 'School', 'Responsible Employee': 'لا يوجد' }).contactPerson).toBeNull();
+    expect(mapSchoolImportRow({ 'School Name': 'School', 'Responsible Employee': '-' }).contactPerson).toBeNull();
+    expect(mapSchoolImportRow({ 'School Name': 'School', 'Responsible Employee': '—' }).contactPerson).toBeNull();
+    expect(mapSchoolImportRow({ 'School Name': 'School', 'Responsible Employee': 'بدون' }).contactPerson).toBeNull();
+    expect(mapSchoolImportRow({ 'School Name': 'School', 'Responsible Employee': '  ' }).contactPerson).toBeNull();
+  });
+
+  it('only requires name header and makes classification optional', () => {
+    const resolved = resolveImportHeaders(['School Name', 'Phone']);
+    expect(resolved.missingRequired).toEqual([]);
+    expect(resolved.missingOptional).toContain('classification');
+    expect(resolved.missingOptional).toContain('contactPerson');
+  });
 
   it('matches unique employee short names without guessing ambiguous matches', () => {
     const employees = [{ id: '1', name: 'حلا عبدالله', email: 'hala@example.com' }, { id: '2', name: 'حمزة النجار', email: 'hamza@example.com' }];
     expect(matchImportEmployee('حلا', employees)?.name).toBe('حلا عبدالله');
     expect(matchImportEmployee('حمزة', employees)?.name).toBe('حمزة النجار');
     expect(matchImportEmployee('غير موجود', employees)).toBeUndefined();
+    expect(matchImportEmployee('لا يوجد', employees)).toBeUndefined();
+    expect(matchImportEmployee('-', employees)).toBeUndefined();
   });
 
   it('does not assign a responsible employee when a short name is ambiguous', () => {

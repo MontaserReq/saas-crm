@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
 import { useI18n } from '@/lib/i18n/context';
@@ -36,6 +36,7 @@ interface SchoolsClientViewProps {
   totalAssignedSchools?: number;
   totalClassA?: number;
   page: number;
+  pageSize?: number | string;
   totalPages: number;
   canCreate?: boolean;
   canImport?: boolean;
@@ -54,6 +55,7 @@ export function SchoolsClientView({
   totalAssignedSchools = 0,
   totalClassA = 0,
   page,
+  pageSize = 15,
   totalPages,
   canCreate = true,
   canImport = true,
@@ -74,6 +76,51 @@ export function SchoolsClientView({
   const { t, language } = useI18n();
   const router = useRouter();
   const grandTotal = totalAllSchools !== undefined ? totalAllSchools : total;
+  const isAll = pageSize === 'all' || (typeof pageSize === 'number' && pageSize >= 10000);
+  const numericPageSize = isAll ? (total || 15) : (typeof pageSize === 'number' ? pageSize : parseInt(String(pageSize), 10) || 15);
+  const startRecord = total === 0 ? 0 : (page - 1) * numericPageSize + 1;
+  const endRecord = total === 0 ? 0 : Math.min(startRecord + initialSchools.length - 1, total);
+
+  const buildUrl = (targetPage: number, targetPageSize?: string | number) => {
+    const params = new URLSearchParams();
+    if (targetPage > 1) params.set('page', String(targetPage));
+    const effectiveSize = targetPageSize !== undefined ? targetPageSize : pageSize;
+    if (effectiveSize && effectiveSize !== 15 && effectiveSize !== '15') {
+      params.set('pageSize', String(effectiveSize));
+    }
+    if (initialSearch) params.set('search', initialSearch);
+    if (initialClassification) params.set('classification', initialClassification);
+    if (initialCity) params.set('city', initialCity);
+    const qs = params.toString();
+    return `/schools${qs ? `?${qs}` : ''}`;
+  };
+
+  const handlePageSizeChange = (newSize: string) => {
+    if (newSize === 'custom') {
+      const input = prompt(language === 'ar' ? 'أدخل عدد المدارس المطلوب عرضها بالصفحة (مثال: 50):' : 'Enter number of schools per page:');
+      if (input) {
+        const parsed = parseInt(input.trim(), 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          router.push(buildUrl(1, Math.min(parsed, 10000)));
+        }
+      }
+      return;
+    }
+    router.push(buildUrl(1, newSize));
+  };
+
+  const getPaginationRange = (current: number, totalCount: number) => {
+    if (totalCount <= 7) {
+      return Array.from({ length: totalCount }, (_, i) => i + 1);
+    }
+    if (current <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalCount];
+    }
+    if (current >= totalCount - 3) {
+      return [1, '...', totalCount - 4, totalCount - 3, totalCount - 2, totalCount - 1, totalCount];
+    }
+    return [1, '...', current - 1, current, current + 1, '...', totalCount];
+  };
 
   const downloadTemplate = () => {
     const headers = ['School Name', 'Contact Person', 'Area / City', 'School Classification', 'Phone Number', 'Email', 'Last Contact Result / Call Details', 'School Status'];
@@ -119,9 +166,12 @@ export function SchoolsClientView({
           </span>
         );
       default:
+        if (!cls || cls.trim() === '') {
+          return <span className="text-slate-400 italic text-[11px]">—</span>;
+        }
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-bold">
-            <span>{cls || 'B'}</span>
+            <span>{cls}</span>
           </span>
         );
     }
@@ -129,7 +179,7 @@ export function SchoolsClientView({
 
   const exportColumns = [
     { header: t('schools.schoolName'), accessor: (s: any) => s.name },
-    { header: t('schools.classification'), accessor: (s: any) => `Class ${s.classification || 'B'}` },
+    { header: t('schools.classification'), accessor: (s: any) => s.classification ? `Class ${s.classification}` : '—' },
     { header: t('schools.responsibleEmployee'), accessor: (s: any) => s.responsibleEmployee?.name || '—' },
     { header: t('schools.contactPerson'), accessor: (s: any) => s.contactPerson || '—' },
     { header: t('schools.phone'), accessor: (s: any) => s.phone || '—' },
@@ -263,7 +313,7 @@ export function SchoolsClientView({
 
       {/* Filter Bar */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-        <form method="GET" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <form method="GET" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2" />
             <input
@@ -288,6 +338,24 @@ export function SchoolsClientView({
             </select>
           </div>
 
+          <div>
+            <select
+              name="pageSize"
+              defaultValue={String(pageSize)}
+              className="w-full py-2 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500 font-medium"
+            >
+              <option value="10">10 {language === 'ar' ? 'مدارس بالصفحة' : 'per page'}</option>
+              <option value="15">15 {language === 'ar' ? 'مدرسة بالصفحة (افتراضي)' : 'per page (default)'}</option>
+              <option value="25">25 {language === 'ar' ? 'مدرسة بالصفحة' : 'per page'}</option>
+              <option value="36">36 {language === 'ar' ? 'مدرسة بالصفحة' : 'per page'}</option>
+              <option value="50">50 {language === 'ar' ? 'مدرسة بالصفحة' : 'per page'}</option>
+              <option value="100">100 {language === 'ar' ? 'مدرسة بالصفحة' : 'per page'}</option>
+              <option value="250">250 {language === 'ar' ? 'مدرسة بالصفحة' : 'per page'}</option>
+              <option value="500">500 {language === 'ar' ? 'مدرسة بالصفحة' : 'per page'}</option>
+              <option value="all">{language === 'ar' ? 'عرض جميع المدارس (الكل)' : 'Show All Schools'}</option>
+            </select>
+          </div>
+
           <div className="flex items-center gap-2">
             <button
               type="submit"
@@ -297,7 +365,7 @@ export function SchoolsClientView({
             </button>
             <Link
               href="/schools"
-              className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
             >
               {t('schools.reset')}
             </Link>
@@ -482,33 +550,75 @@ export function SchoolsClientView({
           </div>
         )}
 
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-            <span>
-              {t('common.page')} {page} {t('common.of')} {totalPages}
-            </span>
-            <div className="flex items-center gap-2">
-              {page > 1 && (
-                <Link
-                  href={`/schools?page=${page - 1}&search=${encodeURIComponent(
-                    initialSearch
-                  )}&classification=${initialClassification}`}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 font-semibold"
+        {/* Pagination & Count Control Bar */}
+        {initialSchools.length > 0 && (
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span>
+                {language === 'ar'
+                  ? `عرض ${formatNumber(startRecord, language)} إلى ${formatNumber(endRecord, language)} من أصل ${formatNumber(total, language)} مدرسة`
+                  : `Showing ${startRecord} to ${endRecord} of ${total} schools`}
+              </span>
+              <div className="flex items-center gap-1.5 border-l rtl:border-l-0 rtl:border-r border-slate-200 dark:border-slate-700 pl-3 rtl:pl-0 rtl:pr-3">
+                <span className="text-[11px] text-slate-400">{language === 'ar' ? 'عرض:' : 'Show:'}</span>
+                <select
+                  value={String(pageSize)}
+                  onChange={(e) => handlePageSizeChange(e.target.value)}
+                  className="py-1 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs focus:outline-none focus:border-brand-500 font-semibold"
                 >
-                  {t('common.previous')}
-                </Link>
-              )}
-              {page < totalPages && (
-                <Link
-                  href={`/schools?page=${page + 1}&search=${encodeURIComponent(
-                    initialSearch
-                  )}&classification=${initialClassification}`}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 font-semibold"
-                >
-                  {t('common.next')}
-                </Link>
-              )}
+                  <option value="10">10</option>
+                  <option value="15">15</option>
+                  <option value="25">25</option>
+                  <option value="36">36</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="250">250</option>
+                  <option value="500">500</option>
+                  <option value="all">{language === 'ar' ? 'الكل' : 'All'}</option>
+                  <option value="custom">{language === 'ar' ? 'مخصص...' : 'Custom...'}</option>
+                </select>
+              </div>
             </div>
+
+            {totalPages > 1 && !isAll && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {page > 1 && (
+                  <Link
+                    href={buildUrl(page - 1)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold transition-colors"
+                  >
+                    {t('common.previous')}
+                  </Link>
+                )}
+                {getPaginationRange(page, totalPages).map((p, idx) =>
+                  typeof p === 'number' ? (
+                    <Link
+                      key={idx}
+                      href={buildUrl(p)}
+                      className={`min-w-[32px] h-8 px-2 flex items-center justify-center rounded-lg border text-xs font-bold transition-colors ${
+                        p === page
+                          ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      {formatNumber(p, language)}
+                    </Link>
+                  ) : (
+                    <span key={idx} className="px-1 text-slate-400 select-none">
+                      ...
+                    </span>
+                  )
+                )}
+                {page < totalPages && (
+                  <Link
+                    href={buildUrl(page + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold transition-colors"
+                  >
+                    {t('common.next')}
+                  </Link>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

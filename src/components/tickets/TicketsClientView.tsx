@@ -10,7 +10,8 @@ import { formatNumber } from '@/lib/formatters';
 import { useI18n } from '@/lib/i18n/context';
 import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { TicketFormModal } from '@/components/tickets/TicketFormModal';
-import { Search, Ticket, ArrowRight, Plus } from 'lucide-react';
+import { MeetingFormModal } from '@/components/tickets/MeetingFormModal';
+import { Search, Ticket, ArrowRight, Plus, Calendar } from 'lucide-react';
 
 interface TicketsClientViewProps {
   user: any;
@@ -46,6 +47,7 @@ export function TicketsClientView({
   const router = useRouter();
   const { t, language, getStatusLabel, getPriorityLabel } = useI18n();
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
+  const [isNewMeetingOpen, setIsNewMeetingOpen] = useState(false);
 
   const isSuperOrAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
 
@@ -82,6 +84,14 @@ export function TicketsClientView({
             filename="tickets_list"
             title={t('tickets.title')}
           />
+
+          <button
+            onClick={() => setIsNewMeetingOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-brand-700 dark:text-brand-300 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-950/60 transition-all"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>{t('tickets.newMeeting')}</span>
+          </button>
 
           <button
             onClick={() => setIsNewTicketOpen(true)}
@@ -202,6 +212,12 @@ export function TicketsClientView({
                           <Link href={`/tickets/${tItem.id}`} className="hover:underline">
                             {tItem.ticketNumber}
                           </Link>
+                          {tItem.meetingDetails && (
+                            <span className="ms-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-brand-700 dark:text-brand-300 text-[10px] font-bold align-middle">
+                              <Calendar className="w-2.5 h-2.5" />
+                              <span>{t('tickets.meetingBadge')}</span>
+                            </span>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4">
@@ -265,9 +281,17 @@ export function TicketsClientView({
                             className="cursor-pointer p-4 space-y-2.5 active:bg-slate-50 dark:active:bg-slate-800/40"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <Link href={`/tickets/${tItem.id}`} className="font-bold text-brand-600 dark:text-brand-400 text-sm hover:underline">
-                                {tItem.ticketNumber}
-                              </Link>
+                              <span className="flex items-center gap-1.5">
+                                <Link href={`/tickets/${tItem.id}`} className="font-bold text-brand-600 dark:text-brand-400 text-sm hover:underline">
+                                  {tItem.ticketNumber}
+                                </Link>
+                                {tItem.meetingDetails && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-brand-700 dark:text-brand-300 text-[10px] font-bold">
+                                    <Calendar className="w-2.5 h-2.5" />
+                                    <span>{t('tickets.meetingBadge')}</span>
+                                  </span>
+                                )}
+                              </span>
                               <TicketStatusBadge status={tItem.status} />
                             </div>
                             <div>
@@ -349,6 +373,20 @@ export function TicketsClientView({
         <TicketFormModal
           isOpen={isNewTicketOpen}
           onClose={() => setIsNewTicketOpen(false)}
+          schools={schools}
+          taskTypes={taskTypes}
+          directManager={directManager}
+        />
+      )}
+
+      {/* Global New Meeting Modal */}
+      {isNewMeetingOpen && (
+        <MeetingFormModal
+          isOpen={isNewMeetingOpen}
+          onClose={() => setIsNewMeetingOpen(false)}
+          schools={schools}
+          taskTypes={taskTypes}
+          users={users}
           directManager={directManager}
         />
       )}

@@ -5,23 +5,7 @@ import { MessageService, SendMessageAttachmentInput } from '@/server/services/Me
 import prisma from '@/lib/db/prisma';
 import { revalidatePath } from 'next/cache';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_MIME_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'text/plain',
-  'text/csv',
-];
+import { validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
 
 export async function sendMessageAction(formData: FormData) {
   try {
@@ -75,23 +59,9 @@ export async function sendMessageAction(formData: FormData) {
     for (const file of files) {
       if (!file || !(file instanceof File) || file.size === 0) continue;
 
-      if (file.size > MAX_FILE_SIZE) {
-        return {
-          success: false,
-          error: `File "${file.name}" exceeds maximum allowed size of 10MB`,
-        };
-      }
-
-      if (file.type && !ALLOWED_MIME_TYPES.includes(file.type)) {
-        // Some browsers or system configurations may leave mime-type blank or generic, check extension as fallback
-        const ext = file.name.split('.').pop()?.toLowerCase();
-        const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'];
-        if (!ext || !allowedExtensions.includes(ext)) {
-          return {
-            success: false,
-            error: `File type "${file.type || ext}" is not allowed. Supported formats: Images, PDF, Word, Excel, PowerPoint, Text`,
-          };
-        }
+      const validationError = validateAttachmentFile(file);
+      if (validationError) {
+        return { success: false, error: validationError };
       }
 
       const arrayBuffer = await file.arrayBuffer();

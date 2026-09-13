@@ -108,6 +108,17 @@ export const PERMISSIONS = {
   REPORTS_VIEW: 'reports.view',
   REPORTS_GENERATE: 'reports.generate',
   REPORTS_EXPORT_PDF: 'reports.export_pdf',
+
+  // AI School Research
+  AI_RESEARCH_VIEW: 'ai_research.view',
+  AI_RESEARCH_CREATE: 'ai_research.create',
+  AI_RESEARCH_RUN: 'ai_research.run',
+  AI_RESEARCH_APPROVE: 'ai_research.approve',
+  AI_RESEARCH_REJECT: 'ai_research.reject',
+  AI_RESEARCH_ENRICH: 'ai_research.enrich',
+
+  // AI Knowledge Assistant (read-only chatbot)
+  AI_ASSISTANT_VIEW: 'ai_assistant.view',
 } as const;
 
 export function hasPermission(user: UserSession | null | undefined, permissionCode: string): boolean {

@@ -1,4 +1,4 @@
-﻿import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUser } from '@/lib/auth/session';
 import { SchoolService } from '@/server/services/SchoolService';
 import { SchoolsClientView } from '@/components/schools/SchoolsClientView';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -13,6 +13,17 @@ export default async function SchoolsPage({
   if (!hasPermission(user, PERMISSIONS.SCHOOLS_VIEW)) return null;
 
   const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
+  const rawPageSize = searchParams.pageSize;
+  let pageSize = 15;
+  if (rawPageSize === 'all') {
+    pageSize = 10000;
+  } else if (rawPageSize) {
+    const parsed = parseInt(rawPageSize, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      pageSize = Math.min(parsed, 10000);
+    }
+  }
+
   const search = searchParams.search || '';
   const classification = searchParams.classification || '';
   const city = searchParams.city || '';
@@ -23,7 +34,7 @@ export default async function SchoolsPage({
   const [result, totalAllSchools, totalAssignedSchools, totalClassA, users, pendingRequests] = await Promise.all([
     SchoolService.listSchools({
       page,
-      pageSize: 15,
+      pageSize,
       search,
       classification: classification || undefined,
       city: city || undefined,
@@ -60,6 +71,7 @@ export default async function SchoolsPage({
       totalAssignedSchools={totalAssignedSchools}
       totalClassA={totalClassA}
       page={result.page}
+      pageSize={rawPageSize === 'all' ? 'all' : pageSize}
       totalPages={result.totalPages}
       canCreate={canCreate}
       canImport={canImport}

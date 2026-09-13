@@ -28,7 +28,18 @@ export const schoolImportRowSchema = z.object({
   email: z.string().email('Invalid email address').optional().nullable().or(z.literal('')),
   city: z.string().optional().nullable(),
   area: z.string().optional().nullable(),
-  classification: z.enum(['A', 'B', 'C'], { required_error: 'Classification must be A, B, or C' }),
+  classification: z.preprocess(
+    (val) => {
+      if (val === undefined || val === null) return '';
+      const s = String(val).trim().toUpperCase().replace(/^(?:CLASS|الفئة|فئة)\s*/u, '').trim();
+      if (s === 'أ') return 'A';
+      if (s === 'ب') return 'B';
+      if (s === 'ج') return 'C';
+      if (['A', 'B', 'C'].includes(s)) return s;
+      return '';
+    },
+    z.string().optional().nullable().default('')
+  ),
   responsibleEmployeeId: z.string().optional().nullable(),
 });
 
@@ -127,6 +138,52 @@ export const taskTypeSchema = z.object({
   })).default([]),
   description: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
+});
+
+export const schoolResearchRequiredFields = ['phone', 'email', 'website', 'address', 'contactPerson', 'schoolType'] as const;
+
+export const schoolResearchJobSchema = z.object({
+  // ENRICH_EXISTING / VERIFY_EXISTING are reserved for a future iteration (see AI School Research plan) — only FIND_NEW ships in v1.
+  mode: z.enum(['FIND_NEW']).default('FIND_NEW'),
+  location: z.string().trim().min(2, 'Location is required'),
+  area: z.string().trim().optional().nullable(),
+  schoolType: z.string().trim().optional().nullable(),
+  requestedCount: z.coerce.number().int().min(1, 'Must request at least 1 school').max(500, 'Requested count is too large'),
+  requiredFields: z.array(z.enum(schoolResearchRequiredFields)).min(1, 'Select at least one required field'),
+});
+
+export const schoolResearchCandidateRejectSchema = z.object({
+  candidateId: z.string().min(1, 'Candidate ID is required'),
+  reason: z.string().trim().max(500).optional().nullable(),
+});
+
+export const schoolResearchCandidateBulkApproveSchema = z.object({
+  candidateIds: z.array(z.string().min(1)).min(1, 'Select at least one candidate').max(200, 'Too many candidates selected at once'),
+});
+
+export const meetingParticipantSchema = z.object({
+  name: z.string().trim().min(1, 'Participant name is required'),
+  userId: z.string().optional().nullable(),
+});
+
+export const meetingActionItemSchema = z.object({
+  text: z.string().trim().min(1, 'Action item text is required'),
+  assigneeId: z.string().optional().nullable(),
+  done: z.boolean().default(false),
+});
+
+export const createMeetingTicketSchema = z.object({
+  schoolId: z.string().optional().nullable(),
+  taskTypeId: z.string().optional().nullable(),
+  departmentId: z.string().optional(),
+  subject: z.string().trim().min(3, 'Meeting title must be at least 3 characters').max(200),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
+  dueDate: z.string().optional().nullable(),
+  meetingDate: z.string().min(1, 'Meeting date is required'),
+  meetingTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Meeting time must be in HH:mm format'),
+  participants: z.array(meetingParticipantSchema).min(1, 'At least one participant is required'),
+  actionItems: z.array(meetingActionItemSchema).default([]),
+  initialNote: z.string().optional().nullable(),
 });
 
 export const createMessageSchema = z.object({

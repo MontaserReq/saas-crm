@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Ticket,
   GraduationCap,
+  Sparkles,
   Share2,
   Mail,
   StickyNote,
@@ -16,17 +17,14 @@ import {
   ListTodo,
   BarChart3,
   FileSpreadsheet,
-  MessageCircle,
   CalendarDays,
   Plus,
-  X,
 } from "lucide-react";
 import { UserSession } from "@/types";
 import { useI18n } from "@/lib/i18n/context";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import { useState } from "react";
 import { TicketFormModal } from "@/components/tickets/TicketFormModal";
-import { ChatClient } from "@/components/chat/ChatClient";
 import { useMobileLayout } from "@/components/layout/MobileLayout";
 
 interface SidebarProps {
@@ -42,7 +40,6 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
   const pathname = usePathname();
   const { t } = useI18n();
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const mainNav = [
     { label: t("nav.dashboard"), href: "/", icon: LayoutDashboard, exact: true },
@@ -53,6 +50,12 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       href: "/schools",
       icon: GraduationCap,
       show: hasPermission(user, PERMISSIONS.SCHOOLS_VIEW),
+    },
+    {
+      label: t("nav.aiSchoolResearch"),
+      href: "/ai-school-research",
+      icon: Sparkles,
+      show: hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW),
     },
     {
       label: t("nav.schoolAssignments"),
@@ -206,17 +209,6 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
           </div>
         </div>
 
-        {/* Live Chat */}
-        <div className="p-3 border-t border-slate-200 dark:border-slate-800">
-          <button
-            onClick={() => setIsChatOpen(true)}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-100 dark:hover:bg-brand-900/50 transition-colors"
-          >
-            <MessageCircle className="w-4 h-4 shrink-0" />
-            <span className="truncate">Live Chat / المحادثة المباشرة</span>
-          </button>
-        </div>
-
         {/* New Ticket Modal */}
         {isNewTicketOpen && (
           <TicketFormModal
@@ -226,20 +218,6 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
           />
         )}
       </aside>
-      {isChatOpen && (
-        <div className="fixed inset-0 z-50 pointer-events-none">
-          <div className="pointer-events-auto absolute end-3 bottom-3 w-[min(42rem,calc(100vw-1.5rem))] max-h-[calc(100vh-1.5rem)]">
-            <button
-              onClick={() => setIsChatOpen(false)}
-              aria-label="Close chat"
-              className="absolute top-2 end-2 z-10 p-2.5 rounded-lg bg-white/90 dark:bg-slate-800/90 shadow text-slate-600 dark:text-slate-200"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <ChatClient currentUserId={user.id} compact />
-          </div>
-        </div>
-      )}
     </>
   );
 }
