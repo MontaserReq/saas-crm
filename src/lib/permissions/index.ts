@@ -39,6 +39,10 @@ export const PERMISSIONS = {
   SCHOOLS_DELETE: 'schools.delete',
   SCHOOLS_VIEW_ALL: 'schools.view_all',
 
+  // Approval Requests
+  APPROVAL_REQUESTS_VIEW: 'approval_requests.view',
+  APPROVAL_REQUESTS_DECIDE: 'approval_requests.decide',
+
   // Tickets
   TICKETS_VIEW_ASSIGNED: 'tickets.view_assigned',
   TICKETS_VIEW_ALL: 'tickets.view_all',
@@ -50,6 +54,7 @@ export const PERMISSIONS = {
   TICKETS_TRANSFER: 'tickets.transfer',
   TICKETS_COMPLETE: 'tickets.complete',
   TICKETS_CLOSE: 'tickets.close',
+  TICKETS_DELETE: 'tickets.delete',
   TICKETS_CONTACT_ATTEMPT: 'tickets.contact_attempt',
   TICKETS_RESUBMIT: 'tickets.resubmit',
   TICKETS_VIEW_HISTORY: 'tickets.view_history',

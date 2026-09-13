@@ -204,6 +204,47 @@ export class TicketService {
     return ticket;
   }
 
+  /** Permanently deletes a ticket and its related records. Super Admin only. */
+  static async deleteTicket(user: UserSession, ticketId: string) {
+    if (user.role !== 'SUPER_ADMIN' || !hasPermission(user, PERMISSIONS.TICKETS_DELETE)) {
+      throw new Error('Forbidden: Only Super Admin can delete tickets');
+    }
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        id: true,
+        ticketNumber: true,
+        subject: true,
+        attachments: { select: { storageKey: true } },
+        notes: { select: { attachments: { select: { storageKey: true } } } },
+      },
+    });
+    if (!ticket) throw new Error('Ticket not found');
+
+    const storageKeys = [
+      ...ticket.attachments.map((attachment) => attachment.storageKey),
+      ...ticket.notes.flatMap((note) => note.attachments.map((attachment) => attachment.storageKey)),
+    ];
+
+    await prisma.ticket.delete({ where: { id: ticketId } });
+
+    if (storageKeys.length) {
+      const storage = getStorageProvider();
+      await Promise.all(storageKeys.map((key) => storage.delete(key).catch(() => false)));
+    }
+
+    await AuditService.logAudit({
+      actorId: user.id,
+      action: 'TICKET_DELETED',
+      entityType: 'Ticket',
+      entityId: ticket.id,
+      metadata: { ticketNumber: ticket.ticketNumber, subject: ticket.subject },
+    });
+
+    return { success: true };
+  }
+
   /**
    * Marks a ticket as SEEN (acknowledges receipt without accepting task yet).
    */

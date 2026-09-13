@@ -29,6 +29,7 @@ interface SchoolItem {
   city: string;
   schoolType: string;
   status: string;
+  responsibleEmployee?: { name: string } | null;
 }
 
 interface SchoolAssignmentWizardProps {
@@ -379,6 +380,11 @@ export function SchoolAssignmentWizard({
                     <span className="text-[10px] text-slate-400">
                       {school.city} • {getStatusLabel(school.schoolType)}
                     </span>
+                    {school.responsibleEmployee && (
+                      <span className="text-[10px] text-brand-600 dark:text-brand-400 block">
+                        Responsible: {school.responsibleEmployee.name}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">

@@ -31,13 +31,17 @@ export default async function AssignmentsPage() {
       orderBy: { name: 'asc' },
     }),
     prisma.school.findMany({
-      where: { status: { in: ['ACTIVE', 'ASSIGNED'] } },
+      // A responsible employee on the school record does not mean that the
+      // school cannot receive a new outreach assignment. Only archived or
+      // explicitly inactive schools should be hidden from this workflow.
+      where: { isDeleted: false, status: { not: 'INACTIVE' } },
       select: {
         id: true,
         name: true,
         city: true,
         schoolType: true,
         status: true,
+        responsibleEmployee: { select: { name: true } },
       },
       orderBy: { name: 'asc' },
     }),

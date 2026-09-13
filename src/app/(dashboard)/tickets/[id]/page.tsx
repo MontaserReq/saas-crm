@@ -5,6 +5,7 @@ import { TicketDetailClientView } from '@/components/tickets/TicketDetailClientV
 import prisma from '@/lib/db/prisma';
 import Link from 'next/link';
 import { ShieldCheck } from 'lucide-react';
+import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 
 export default async function TicketDetailsPage({ params }: { params: { id: string } }) {
   const user = (await getCurrentUser())!;
@@ -73,6 +74,7 @@ export default async function TicketDetailsPage({ params }: { params: { id: stri
       teamMembers={teamMembers}
       departmentsWithUsers={departmentsWithUsers}
       currentUser={user}
+      canDelete={user.role === 'SUPER_ADMIN' && hasPermission(user, PERMISSIONS.TICKETS_DELETE)}
     />
   );
 }

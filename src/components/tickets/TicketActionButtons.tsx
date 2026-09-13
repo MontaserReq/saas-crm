@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { TicketStatus } from '@/types';
 import { useI18n } from '@/lib/i18n/context';
-import { acceptTicketAction } from '@/server/actions/tickets';
+import { acceptTicketAction, deleteTicketAction } from '@/server/actions/tickets';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { RejectionModal } from './RejectionModal';
 import { TransferModal } from './TransferModal';
 import { CommunicationAttemptModal } from './CommunicationAttemptModal';
@@ -14,6 +16,7 @@ import {
   PhoneCall,
   Archive,
   ArrowRightLeft,
+  Trash2,
 } from 'lucide-react';
 
 interface TicketActionButtonsProps {
@@ -25,6 +28,7 @@ interface TicketActionButtonsProps {
   teamMembers: Array<{ id: string; name: string; email: string; department?: { name: string } }>;
   canAcceptReject?: boolean;
   canTransfer?: boolean;
+  canDelete?: boolean;
 }
 
 export function TicketActionButtons({
@@ -32,18 +36,16 @@ export function TicketActionButtons({
   teamMembers,
   canAcceptReject = true,
   canTransfer = false,
+  canDelete = false,
 }: TicketActionButtonsProps) {
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isAttemptOpen, setIsAttemptOpen] = useState(false);
   const [isCloseOpen, setIsCloseOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const { t, language } = useI18n();
-
-  // If ticket is closed or rejected, no action buttons should be available
-  if (ticket.status === 'CLOSED' || ticket.status === 'REJECTED') {
-    return null;
-  }
+  const router = useRouter();
 
   const handleAccept = async () => {
     setLoading(true);
@@ -53,9 +55,24 @@ export function TicketActionButtons({
 
   const isPendingState = ticket.status === 'PENDING' || ticket.status === 'SEEN' || ticket.status === 'TRANSFERRED';
   const isAcceptedOrActive = ['ACCEPTED', 'IN_PROGRESS', 'UNREACHABLE', 'COMPLETED'].includes(ticket.status);
+  const isTerminal = ticket.status === 'CLOSED' || ticket.status === 'REJECTED';
 
   return (
+    <>
     <div className="flex flex-wrap items-center gap-2">
+      {canDelete && (
+        <button
+          type="button"
+          onClick={() => setIsDeleteOpen(true)}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition-colors disabled:opacity-50"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>{language === 'ar' ? 'حذف التذكرة' : 'Delete Ticket'}</span>
+        </button>
+      )}
+
+      {!isTerminal && <>
       {/* Log Contact Attempt button (available while active) */}
       <button
         type="button"
@@ -116,6 +133,7 @@ export function TicketActionButtons({
           <span>{t('tickets.transfer')}</span>
         </button>
       )}
+      </>}
 
       {/* Modals */}
       <RejectionModal
@@ -147,5 +165,23 @@ export function TicketActionButtons({
         ticketNumber={ticket.ticketNumber}
       />
     </div>
+    <ConfirmDialog
+      isOpen={isDeleteOpen}
+      onClose={() => setIsDeleteOpen(false)}
+      onConfirm={async () => {
+        setLoading(true);
+        const result = await deleteTicketAction(ticket.id);
+        setLoading(false);
+        if (result.success) {
+          router.push('/tickets');
+        }
+      }}
+      title={language === 'ar' ? 'حذف التذكرة' : 'Delete ticket'}
+      description={language === 'ar' ? 'سيتم حذف التذكرة وجميع ملاحظاتها ومرفقاتها نهائيًا. هل أنت متأكد؟' : 'This permanently deletes the ticket, its notes, and attachments. Are you sure?'}
+      confirmText={language === 'ar' ? 'حذف نهائي' : 'Delete permanently'}
+      cancelText={language === 'ar' ? 'إلغاء' : 'Cancel'}
+      loading={loading}
+    />
+    </>
   );
 }

@@ -43,7 +43,13 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
 
   const mainNav = [
     { label: t("nav.dashboard"), href: "/", icon: LayoutDashboard, exact: true },
-    { label: t("nav.myTickets"), href: "/tickets", icon: Ticket },
+    { label: t("nav.myTickets"), href: "/tickets", icon: Ticket, exact: true },
+    {
+      label: t("nav.allTickets"),
+      href: "/tickets?view=all",
+      icon: Ticket,
+      show: hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL),
+    },
     { label: t("nav.calendar"), href: "/calendar", icon: CalendarDays },
     {
       label: t("nav.schools"),
@@ -109,7 +115,10 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       label: "Approval Requests / طلبات الموافقة",
       href: "/admin/approval-requests",
       icon: ShieldCheck,
-      show: hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_EDIT) || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_DELETE),
+      show: hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_VIEW)
+        || hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_DECIDE)
+        || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_EDIT)
+        || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_DELETE),
     },
   ];
 
@@ -157,7 +166,8 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
               </div>
               <nav className="space-y-1">
                 {filteredMainNav.map((item) => {
-                  const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+                  const itemPath = item.href.split('?')[0];
+                  const isActive = item.exact ? pathname === itemPath : pathname.startsWith(itemPath);
                   const Icon = item.icon;
                   return (
                     <Link

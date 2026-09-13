@@ -48,11 +48,17 @@ export class AssignmentService {
     const validated = schoolAssignmentSchema.parse(input);
 
     const schools = await prisma.school.findMany({
-      where: { id: { in: validated.schoolIds } },
+      // Responsible ownership is independent from outreach-ticket assignment.
+      // Allow active/working schools to be reassigned while rejecting deleted
+      // or explicitly inactive records submitted directly to the action.
+      where: { id: { in: validated.schoolIds }, isDeleted: false, status: { not: 'INACTIVE' } },
     });
 
     if (schools.length === 0) {
       throw new Error('No eligible schools found for assignment');
+    }
+    if (schools.length !== validated.schoolIds.length) {
+      throw new Error('One or more selected schools are deleted or inactive');
     }
 
     const assignees = await prisma.user.findMany({

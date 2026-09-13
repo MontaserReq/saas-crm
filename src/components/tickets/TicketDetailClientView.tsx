@@ -26,6 +26,7 @@ interface TicketDetailClientViewProps {
   teamMembers: any[];
   departmentsWithUsers: any[];
   currentUser?: any;
+  canDelete?: boolean;
 }
 
 export function TicketDetailClientView({
@@ -33,6 +34,7 @@ export function TicketDetailClientView({
   teamMembers,
   departmentsWithUsers,
   currentUser,
+  canDelete = false,
 }: TicketDetailClientViewProps) {
   const { t, language, getStatusLabel } = useI18n();
   const currentAssignee = ticket.assignees.find((a: any) => a.isCurrent)?.user;
@@ -75,7 +77,7 @@ export function TicketDetailClientView({
           </div>
 
           {/* Action Buttons */}
-          <TicketActionButtons ticket={ticket} teamMembers={teamMembers} />
+          <TicketActionButtons ticket={ticket} teamMembers={teamMembers} canDelete={canDelete} />
         </div>
 
         {/* Rejection notice if status is REJECTED */}

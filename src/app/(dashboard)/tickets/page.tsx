@@ -16,15 +16,23 @@ export default async function TicketsPage({
   const status = searchParams.status || 'ALL';
   const priority = searchParams.priority || 'ALL';
   const taskTypeId = searchParams.taskTypeId || 'ALL';
+  const departmentId = searchParams.departmentId || 'ALL';
+  const assigneeId = searchParams.assigneeId || 'ALL';
   const search = searchParams.search || '';
+  const isAllTicketsView = searchParams.view === 'all';
 
-  const [ticketsData, taskTypes, schools, users, manager] = await Promise.all([
+  if (isAllTicketsView && !hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) return null;
+
+  const [ticketsData, taskTypes, schools, users, departments, manager] = await Promise.all([
     TicketService.listTickets(user, {
       page,
       pageSize: 15,
+      myTicketsOnly: !isAllTicketsView,
       status,
       priority,
+      departmentId,
       taskTypeId,
+      assigneeId,
       search,
     }),
     prisma.taskType.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
@@ -44,6 +52,7 @@ export default async function TicketsPage({
       select: { id: true, name: true, email: true, department: { select: { name: true } } },
       orderBy: { name: 'asc' },
     }),
+    prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     user.reportsToUserId ? prisma.user.findUnique({ where: { id: user.reportsToUserId }, select: { id: true, name: true, isActive: true } }) : Promise.resolve(null),
   ]);
 
@@ -54,10 +63,14 @@ export default async function TicketsPage({
       taskTypes={taskTypes}
       schools={schools}
       users={users}
+      departments={departments}
       initialSearch={search}
       initialStatus={status}
       initialPriority={priority}
       initialTaskTypeId={taskTypeId}
+      initialDepartmentId={departmentId}
+      initialAssigneeId={assigneeId}
+      isAllTicketsView={isAllTicketsView}
       directManager={manager ?? null}
     />
   );

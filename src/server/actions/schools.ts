@@ -72,10 +72,15 @@ export async function deleteSchoolAction(id: string) {
 
 export async function listSchoolApprovalRequestsAction(status = 'PENDING') {
   const user = await requireAuth();
-  const canEdit = hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_EDIT);
-  const canDelete = hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_DELETE);
-  if (!canEdit && !canDelete) return [];
-  const requests = await prisma.schoolApprovalRequest.findMany({ where: { status, ...(canEdit && canDelete ? {} : { type: canEdit ? 'EDIT' : 'DELETE' }) }, orderBy: { createdAt: 'desc' }, include: { school: { select: { id: true, name: true } }, requester: { select: { name: true } } } });
+  const canView = hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_VIEW)
+    || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_EDIT)
+    || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_DELETE);
+  if (!canView) return [];
+  const canDecide = hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_DECIDE);
+  const canEdit = canDecide || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_EDIT);
+  const canDelete = canDecide || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_DELETE);
+  const typeFilter = canEdit && canDelete ? {} : canEdit ? { type: 'EDIT' } : canDelete ? { type: 'DELETE' } : {};
+  const requests = await prisma.schoolApprovalRequest.findMany({ where: { status, ...typeFilter }, orderBy: { createdAt: 'desc' }, include: { school: { select: { id: true, name: true } }, requester: { select: { name: true } } } });
   return requests;
 }
 
@@ -85,7 +90,7 @@ export async function decideSchoolApprovalAction(requestId: string, approve: boo
     const request = await prisma.schoolApprovalRequest.findUnique({ where: { id: requestId }, select: { type: true } });
     if (!request) return { success: false, error: 'Request not found' };
     const permission = request.type === 'EDIT' ? PERMISSIONS.SCHOOLS_APPROVE_EDIT : PERMISSIONS.SCHOOLS_APPROVE_DELETE;
-    if (!hasPermission(user, permission)) return { success: false, error: 'Forbidden' };
+    if (!hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_DECIDE) && !hasPermission(user, permission)) return { success: false, error: 'Forbidden' };
     const result = await SchoolService.decideApproval(requestId, user.id, approve, rejectionReason);
     revalidatePath('/schools'); revalidatePath('/admin/approval-requests');
     return { success: true, request: result };

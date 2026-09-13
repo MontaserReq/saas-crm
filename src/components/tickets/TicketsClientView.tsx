@@ -25,11 +25,15 @@ interface TicketsClientViewProps {
   taskTypes: any[];
   schools?: Array<{ id: string; name: string }>;
   users?: Array<{ id: string; name: string; email: string; reportsToUserId?: string | null; department?: { name: string } | null }>;
+  departments?: Array<{ id: string; name: string }>;
   directManager?: { id: string; name: string; isActive: boolean } | null;
   initialSearch?: string;
   initialStatus?: string;
   initialPriority?: string;
   initialTaskTypeId?: string;
+  initialDepartmentId?: string;
+  initialAssigneeId?: string;
+  isAllTicketsView?: boolean;
 }
 
 export function TicketsClientView({
@@ -38,18 +42,20 @@ export function TicketsClientView({
   taskTypes,
   schools = [],
   users = [],
+  departments = [],
   directManager,
   initialSearch = '',
   initialStatus = 'ALL',
   initialPriority = 'ALL',
   initialTaskTypeId = 'ALL',
+  initialDepartmentId = 'ALL',
+  initialAssigneeId = 'ALL',
+  isAllTicketsView = false,
 }: TicketsClientViewProps) {
   const router = useRouter();
   const { t, language, getStatusLabel, getPriorityLabel } = useI18n();
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
   const [isNewMeetingOpen, setIsNewMeetingOpen] = useState(false);
-
-  const isSuperOrAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
 
   const exportColumns = [
     { header: t('tickets.ticketNumber'), accessor: (item: any) => item.ticketNumber },
@@ -70,10 +76,10 @@ export function TicketsClientView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-            {isSuperOrAdmin ? t('tickets.allTicketsTitle') : t('tickets.myTicketsTitle')}
+            {isAllTicketsView ? t('tickets.allTicketsTitle') : t('tickets.myTicketsTitle')}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {isSuperOrAdmin ? t('tickets.allTicketsSubtitle') : t('tickets.myTicketsSubtitle')}
+            {isAllTicketsView ? t('tickets.allTicketsSubtitle') : t('tickets.myTicketsSubtitle')}
           </p>
         </div>
 
@@ -110,6 +116,7 @@ export function TicketsClientView({
       {/* Filter Bar */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
         <form method="GET" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          {isAllTicketsView && <input type="hidden" name="view" value="all" />}
           {/* Search input */}
           <div className="relative md:col-span-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2" />
@@ -131,12 +138,33 @@ export function TicketsClientView({
             >
               <option value="ALL">{t('tickets.allStatuses')}</option>
               <option value="PENDING">{getStatusLabel('PENDING')}</option>
+              <option value="SEEN">{getStatusLabel('SEEN')}</option>
               <option value="ACCEPTED">{getStatusLabel('ACCEPTED')}</option>
+              <option value="IN_PROGRESS">{getStatusLabel('IN_PROGRESS')}</option>
               <option value="TRANSFERRED">{getStatusLabel('TRANSFERRED')}</option>
+              <option value="UNREACHABLE">{getStatusLabel('UNREACHABLE')}</option>
+              <option value="COMPLETED">{getStatusLabel('COMPLETED')}</option>
               <option value="REJECTED">{getStatusLabel('REJECTED')}</option>
               <option value="CLOSED">{getStatusLabel('CLOSED')}</option>
             </select>
           </div>
+
+          {isAllTicketsView && (
+            <>
+              <div>
+                <select name="assigneeId" defaultValue={initialAssigneeId} className="w-full py-2 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500">
+                  <option value="ALL">Assigned person: All</option>
+                  {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <select name="departmentId" defaultValue={initialDepartmentId} className="w-full py-2 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500">
+                  <option value="ALL">Department: All</option>
+                  {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                </select>
+              </div>
+            </>
+          )}
 
           {/* Priority Filter */}
           <div>
@@ -153,6 +181,13 @@ export function TicketsClientView({
             </select>
           </div>
 
+          <div>
+            <select name="taskTypeId" defaultValue={initialTaskTypeId} className="w-full py-2 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500">
+              <option value="ALL">Task type: All</option>
+              {taskTypes.map((taskType) => <option key={taskType.id} value={taskType.id}>{taskType.name}</option>)}
+            </select>
+          </div>
+
           {/* Action button */}
           <div className="flex items-center gap-2">
             <button
@@ -162,7 +197,7 @@ export function TicketsClientView({
               {t('common.filter')}
             </button>
             <Link
-              href="/tickets"
+              href={isAllTicketsView ? '/tickets?view=all' : '/tickets'}
               className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               {t('common.reset')}
@@ -347,7 +382,7 @@ export function TicketsClientView({
                 <Link
                   href={`/tickets?page=${ticketsData.page - 1}&search=${encodeURIComponent(
                     initialSearch
-                  )}&status=${initialStatus}&priority=${initialPriority}`}
+                  )}&status=${initialStatus}&priority=${initialPriority}&taskTypeId=${initialTaskTypeId}&departmentId=${initialDepartmentId}&assigneeId=${initialAssigneeId}${isAllTicketsView ? '&view=all' : ''}`}
                   className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 font-semibold"
                 >
                   {t('common.previous')}
@@ -357,7 +392,7 @@ export function TicketsClientView({
                 <Link
                   href={`/tickets?page=${ticketsData.page + 1}&search=${encodeURIComponent(
                     initialSearch
-                  )}&status=${initialStatus}&priority=${initialPriority}`}
+                  )}&status=${initialStatus}&priority=${initialPriority}&taskTypeId=${initialTaskTypeId}&departmentId=${initialDepartmentId}&assigneeId=${initialAssigneeId}${isAllTicketsView ? '&view=all' : ''}`}
                   className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 font-semibold"
                 >
                   {t('common.next')}

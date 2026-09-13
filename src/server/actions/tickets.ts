@@ -252,3 +252,17 @@ export async function updateTicketStatusAction(ticketId: string, newStatus: Tick
     return { success: false, error: err.message || 'Failed to update ticket status' };
   }
 }
+
+export async function deleteTicketAction(ticketId: string) {
+  try {
+    const user = await requireAuth();
+    ticketPermission(user, PERMISSIONS.TICKETS_DELETE);
+    if (user.role !== 'SUPER_ADMIN') throw new Error('Forbidden: Only Super Admin can delete tickets');
+    await TicketService.deleteTicket(user, ticketId);
+    revalidatePath('/tickets');
+    revalidatePath('/');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to delete ticket' };
+  }
+}
