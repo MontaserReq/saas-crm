@@ -197,8 +197,10 @@ export function SchoolFormModal({
               type="text"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder={t('schools.phoneHint')}
               className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:border-brand-500 focus:outline-none"
             />
+            <p className="mt-1 text-[11px] text-slate-400">{t('schools.phoneHint')}</p>
           </div>
 
           <div>

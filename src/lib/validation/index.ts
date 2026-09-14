@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+const schoolPhone = z.preprocess(
+  (value) => value === undefined || value === null || value === '' ? value : String(value).trim(),
+  z.string().refine(
+    (value) => value.split(/[,;/\n]+/).every((part) => /^\+?[0-9][0-9\s()\-]{5,20}$/.test(part.trim())),
+    'Invalid phone number. Separate multiple numbers with commas.'
+  ).optional().nullable()
+);
+
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -8,7 +16,7 @@ export const loginSchema = z.object({
 export const schoolSchema = z.object({
   name: z.string().min(2, 'School name is required'),
   contactPerson: z.string().optional().nullable(),
-  phone: z.preprocess((value) => value === undefined || value === null || value === '' ? value : String(value).trim(), z.string().regex(/^\d{7,12}$/, 'Invalid phone number').optional().nullable()),
+  phone: schoolPhone,
   whatsapp: z.string().optional().nullable(),
   email: z.string().email('Invalid email address').optional().nullable().or(z.literal('')),
   city: z.string().min(2, 'City is required'),
@@ -23,7 +31,7 @@ export const schoolSchema = z.object({
 export const schoolImportRowSchema = z.object({
   name: z.string().min(2, 'School name is required'),
   contactPerson: z.string().optional().nullable(),
-  phone: z.preprocess((value) => value === undefined || value === null || value === '' ? value : String(value).trim(), z.string().regex(/^\+?[0-9][0-9\s()\-]{5,20}$/, 'Invalid phone number').optional().nullable()),
+  phone: schoolPhone,
   whatsapp: z.string().optional().nullable(),
   email: z.string().email('Invalid email address').optional().nullable().or(z.literal('')),
   city: z.string().optional().nullable(),

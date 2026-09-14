@@ -24,7 +24,7 @@ export interface ImportPreviewRow {
     email?: string | null;
     city: string;
     area?: string | null;
-    classification?: string;
+    classification?: string | null;
     schoolType?: string;
     notes?: string | null;
   };
@@ -180,11 +180,17 @@ export class SchoolService {
   static async createSchool(data: any, actorId: string) {
     const validated = schoolSchema.parse(data);
 
-    const school = await prisma.school.create({
-      data: {
-        ...validated,
-        createdById: actorId,
-      },
+    const school = await prisma.$transaction(async (tx) => {
+      const createdSchool = await tx.school.create({
+        data: {
+          ...validated,
+          createdById: actorId,
+        },
+      });
+      if (createdSchool.responsibleEmployeeId) {
+        await this.createResponsibleEmployeeTicket(tx, createdSchool, createdSchool.responsibleEmployeeId, actorId);
+      }
+      return createdSchool;
     });
 
     await AuditService.logAudit({
@@ -201,11 +207,17 @@ export class SchoolService {
   static async updateSchool(id: string, data: any, actorId: string) {
     const validated = schoolSchema.parse(data);
 
-    const school = await prisma.school.update({
-      where: { id },
-      data: {
-        ...validated,
-      },
+    const school = await prisma.$transaction(async (tx) => {
+      const updatedSchool = await tx.school.update({
+        where: { id },
+        data: {
+          ...validated,
+        },
+      });
+      if (updatedSchool.responsibleEmployeeId) {
+        await this.createResponsibleEmployeeTicket(tx, updatedSchool, updatedSchool.responsibleEmployeeId, actorId);
+      }
+      return updatedSchool;
     });
 
     await AuditService.logAudit({
@@ -217,6 +229,74 @@ export class SchoolService {
     });
 
     return school;
+  }
+
+  /** Creates the first active ticket when a school receives a responsible employee. */
+  private static async createResponsibleEmployeeTicket(tx: any, school: { id: string; name: string }, employeeId: string, actorId: string) {
+    const existingTicket = await tx.ticket.findFirst({
+      where: {
+        schoolId: school.id,
+        assignees: { some: { userId: employeeId, isCurrent: true } },
+      },
+      select: { id: true },
+    });
+    if (existingTicket) return existingTicket;
+
+    const employee = await tx.user.findUnique({
+      where: { id: employeeId },
+      select: { id: true, name: true, isActive: true, departmentId: true },
+    });
+    if (!employee || !employee.isActive) throw new Error('The selected responsible employee is inactive or could not be found.');
+
+    let sequence = 1000;
+    const lastTicket = await tx.ticket.findFirst({ orderBy: { createdAt: 'desc' }, select: { ticketNumber: true } });
+    if (lastTicket?.ticketNumber.startsWith('CL-')) {
+      const parsed = parseInt(lastTicket.ticketNumber.slice(3), 10);
+      if (!Number.isNaN(parsed)) sequence = parsed;
+    }
+
+    const ticket = await tx.ticket.create({
+      data: {
+        ticketNumber: `CL-${sequence + 1}`,
+        schoolId: school.id,
+        departmentId: employee.departmentId,
+        subject: `School follow-up: ${school.name}`,
+        priority: 'MEDIUM',
+        status: 'PENDING',
+        createdById: actorId,
+      },
+    });
+    await tx.ticketAssignee.create({ data: { ticketId: ticket.id, userId: employee.id, isCurrent: true, role: 'ASSIGNEE' } });
+    await tx.assignmentHistory.create({
+      data: {
+        ticketId: ticket.id,
+        toUserId: employee.id,
+        performedById: actorId,
+        action: 'INITIAL_ASSIGNMENT',
+        reason: 'Automatically created when a responsible employee was selected for the school',
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        ticketId: ticket.id,
+        actorId,
+        type: 'CREATED',
+        title: 'Ticket Created & Assigned',
+        description: `Automatically created for ${employee.name} because they are responsible for ${school.name}.`,
+      },
+    });
+    await tx.notification.create({
+      data: {
+        userId: employee.id,
+        type: 'TICKET_ASSIGNED',
+        title: 'New school ticket assigned',
+        message: `A new ticket for ${school.name} has been assigned to you.`,
+        entityType: 'ticket',
+        entityId: ticket.id,
+      },
+    });
+    await tx.school.update({ where: { id: school.id }, data: { status: 'ASSIGNED' } });
+    return ticket;
   }
 
   /**
