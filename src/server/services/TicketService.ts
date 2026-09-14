@@ -748,7 +748,23 @@ export class TicketService {
    * user's direct manager (User.reportsToUserId). Shared by createTicket and
    * createMeetingTicket — no client-supplied assignee is ever trusted.
    */
-  private static async resolveDirectManagerAssignee(user: UserSession) {
+  private static async resolveTicketAssignee(user: UserSession, requestedAssigneeId?: string | null) {
+    if (requestedAssigneeId) {
+      const canAssign = hasPermission(user, PERMISSIONS.TICKETS_ASSIGN) || hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL) || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+      if (!canAssign) throw new Error('Forbidden: you do not have permission to choose a ticket assignee');
+      const targetAssignee = await prisma.user.findUnique({
+        where: { id: requestedAssigneeId },
+        select: {
+          id: true, name: true, isActive: true,
+          role: { select: { rolePermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } } } },
+          userPermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } },
+        },
+      });
+      if (!targetAssignee || !targetAssignee.isActive) throw new Error('The selected assignee is not active or could not be found.');
+      if (targetAssignee.role.rolePermissions.length === 0 && targetAssignee.userPermissions.length === 0) throw new Error('The selected user is not eligible to receive tickets.');
+      return { targetAssigneeId: targetAssignee.id, targetAssignee };
+    }
+
     if (!user.reportsToUserId) {
       throw new Error('You cannot create a ticket because your direct manager is not assigned. Please contact an administrator to assign your direct manager.');
     }
@@ -783,6 +799,7 @@ export class TicketService {
       priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
       dueDate?: string | null;
       initialNote?: string | null;
+      assignedToUserId?: string | null;
     }
   ) {
     const canCreate = hasPermission(user, PERMISSIONS.TICKETS_CREATE) || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
@@ -798,7 +815,7 @@ export class TicketService {
 
     // SERVER-SIDE ASSIGNMENT SOURCE OF TRUTH:
     // The assignee is derived from User.reportsToUserId. No client value is trusted.
-    const { targetAssigneeId, targetAssignee } = await this.resolveDirectManagerAssignee(user);
+    const { targetAssigneeId, targetAssignee } = await this.resolveTicketAssignee(user, input.assignedToUserId);
 
     const count = await prisma.ticket.count();
     const ticketNumber = `CL-${String(count + 101).padStart(5, '0')}`;
@@ -931,7 +948,7 @@ export class TicketService {
     const departmentId = validated.departmentId || user.departmentId;
 
     // SERVER-SIDE ASSIGNMENT SOURCE OF TRUTH (same rule as regular tickets).
-    const { targetAssigneeId, targetAssignee } = await this.resolveDirectManagerAssignee(user);
+    const { targetAssigneeId, targetAssignee } = await this.resolveTicketAssignee(user);
 
     const count = await prisma.ticket.count();
     const ticketNumber = `CL-${String(count + 101).padStart(5, '0')}`;

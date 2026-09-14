@@ -16,7 +16,9 @@ export async function POST(request: Request) {
     if (!body || !Array.isArray(body.rows)) return NextResponse.json({ success: false, error: { code: 'INVALID_PAYLOAD', message: 'Invalid import payload' } }, { status: 400 });
     const result = await SchoolService.executeBulkImport(body.rows, user.id, body.metadata);
     revalidatePath('/schools');
-    return NextResponse.json({ success: true, importedCount: result.importedCount });
+    revalidatePath('/tickets');
+    revalidatePath('/');
+    return NextResponse.json({ success: true, importedCount: result.importedCount, ticketsCreated: result.ticketsCreated });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Bulk import failed';
     return NextResponse.json({ success: false, error: { code: 'IMPORT_FAILED', message } }, { status: 400 });

@@ -153,13 +153,13 @@ export function TicketsClientView({
             <>
               <div>
                 <select name="assigneeId" defaultValue={initialAssigneeId} className="w-full py-2 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500">
-                  <option value="ALL">Assigned person: All</option>
+                  <option value="ALL">{t('tickets.filterAssignee')}: {t('tickets.all')}</option>
                   {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
               <div>
                 <select name="departmentId" defaultValue={initialDepartmentId} className="w-full py-2 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500">
-                  <option value="ALL">Department: All</option>
+                  <option value="ALL">{t('tickets.filterDepartment')}: {t('tickets.all')}</option>
                   {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
                 </select>
               </div>
@@ -183,7 +183,7 @@ export function TicketsClientView({
 
           <div>
             <select name="taskTypeId" defaultValue={initialTaskTypeId} className="w-full py-2 px-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500">
-              <option value="ALL">Task type: All</option>
+              <option value="ALL">{t('tickets.filterTaskType')}: {t('tickets.all')}</option>
               {taskTypes.map((taskType) => <option key={taskType.id} value={taskType.id}>{taskType.name}</option>)}
             </select>
           </div>
@@ -410,6 +410,8 @@ export function TicketsClientView({
           onClose={() => setIsNewTicketOpen(false)}
           schools={schools}
           taskTypes={taskTypes}
+          users={users}
+          canAssign={user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'SCHOOL_MANAGER'}
           directManager={directManager}
         />
       )}

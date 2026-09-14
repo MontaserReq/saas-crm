@@ -23,6 +23,8 @@ interface TicketFormModalProps {
    * The user MUST NOT be able to select a different assignee from the UI.
    */
   directManager?: DirectManagerOption | null;
+  users?: { id: string; name: string; email?: string }[];
+  canAssign?: boolean;
 }
 
 type FormStatus =
@@ -36,6 +38,8 @@ export function TicketFormModal({
   schools = [],
   taskTypes = [],
   directManager = null,
+  users = [],
+  canAssign = false,
 }: TicketFormModalProps) {
   const { t } = useI18n();
   const router = useRouter();
@@ -46,6 +50,7 @@ export function TicketFormModal({
   const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
   const [dueDate, setDueDate] = useState("");
   const [initialNote, setInitialNote] = useState("");
+  const [assignedToUserId, setAssignedToUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -68,7 +73,7 @@ export function TicketFormModal({
     setError(null);
   }, [isOpen]);
 
-  const blocked = status.kind !== "ready";
+  const blocked = !canAssign && status.kind !== "ready";
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -79,8 +84,6 @@ export function TicketFormModal({
     }
     setLoading(true);
     setError(null);
-    // IMPORTANT: assignedToUserId is intentionally NOT sent.
-    // The server derives the assignee from currentUser.reportsToUserId.
     const result = await createTicketAction({
       schoolId: schoolId || null,
       taskTypeId: taskTypeId || null,
@@ -88,6 +91,7 @@ export function TicketFormModal({
       priority,
       dueDate: dueDate || null,
       initialNote: initialNote || null,
+      assignedToUserId: canAssign ? assignedToUserId || null : null,
     });
     setLoading(false);
     if (!result.success) {
@@ -122,25 +126,32 @@ export function TicketFormModal({
           <div className="flex items-center gap-2">
             <UserCheck className="w-4 h-4 text-brand-600" />
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              {t("tickets.directManager")}
+              {canAssign ? t("tickets.assignTicketTo") : t("tickets.directManager")}
             </h3>
           </div>
 
-          {status.kind === "no_manager" && (
+          {canAssign && (
+            <select value={assignedToUserId} onChange={(e) => setAssignedToUserId(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+              <option value="">{t("tickets.selectAssigneePrompt")}</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.name}{u.email ? ` (${u.email})` : ""}</option>)}
+            </select>
+          )}
+
+          {!canAssign && status.kind === "no_manager" && (
             <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
               <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{t("tickets.noDirectManagerBlock")}</span>
             </div>
           )}
 
-          {status.kind === "manager_disabled" && (
+          {!canAssign && status.kind === "manager_disabled" && (
             <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
               <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{t("tickets.managerDisabledBlock")}</span>
             </div>
           )}
 
-          {status.kind === "ready" && (
+          {!canAssign && status.kind === "ready" && (
             <>
               <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
                 <div className="w-9 h-9 rounded-full bg-brand-100 dark:bg-brand-950/60 text-brand-700 dark:text-brand-300 flex items-center justify-center font-bold text-sm">

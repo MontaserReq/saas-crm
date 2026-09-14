@@ -177,8 +177,7 @@ export async function createTicketAction(input: {
   schoolId?: string | null;
   taskTypeId?: string | null;
   departmentId?: string;
-  // NOTE: assignedToUserId is intentionally removed from the public API.
-  // The assignee is always computed from currentUser.reportsToUserId server-side.
+  assignedToUserId?: string | null;
   subject?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate?: string | null;
@@ -203,6 +202,7 @@ export async function createTicketAction(input: {
       priority: input.priority,
       dueDate: input.dueDate,
       initialNote: input.initialNote,
+      assignedToUserId: input.assignedToUserId || null,
     });
 
     revalidatePath('/tickets');

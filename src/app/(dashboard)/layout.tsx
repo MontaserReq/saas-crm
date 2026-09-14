@@ -28,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }) : Promise.resolve([]),
-    hasPermission(user, PERMISSIONS.CHAT_VIEW) || hasPermission(user, PERMISSIONS.MESSAGES_SEND) ? prisma.user.findMany({
+    hasPermission(user, PERMISSIONS.CHAT_VIEW) || hasPermission(user, PERMISSIONS.MESSAGES_SEND) || hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL) ? prisma.user.findMany({
       where: { isActive: true },
       select: { id: true, name: true, email: true, reportsToUserId: true, department: { select: { name: true } } },
       orderBy: { name: "asc" },
@@ -37,7 +37,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ]);
 
   return (
-    <MobileLayout user={user} directManager={manager ?? null}>
+    <MobileLayout user={user} users={users} directManager={manager ?? null}>
       <div className="min-h-screen flex bg-background dark:bg-slate-950">
         {/* Desktop Sidebar - hidden on mobile */}
         <div className="hidden lg:block shrink-0">

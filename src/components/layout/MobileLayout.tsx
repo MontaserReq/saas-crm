@@ -27,6 +27,7 @@ interface MobileLayoutProps {
   children: ReactNode;
   user: UserSession;
   directManager: { id: string; name: string; isActive: boolean } | null;
+  users?: Array<{ id: string; name: string; email: string; reportsToUserId?: string | null; department?: { name: string } | null }>;
 }
 
 /**
@@ -40,7 +41,7 @@ interface MobileLayoutProps {
  * 1. Inside MobileLayout's drawer (mobile only, lg:hidden)
  * 2. In the layout's normal flow (desktop only, hidden lg:block)
  */
-export function MobileLayout({ children, user, directManager }: MobileLayoutProps) {
+export function MobileLayout({ children, user, directManager, users = [] }: MobileLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { t, direction } = useI18n();
 
@@ -138,6 +139,7 @@ export function MobileLayout({ children, user, directManager }: MobileLayoutProp
               <div className="flex-1 overflow-y-auto">
                 <Sidebar
                   user={user}
+                  users={users}
                   directManager={directManager}
                   onNavigate={closeMobileMenu}
                 />

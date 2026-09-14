@@ -3,6 +3,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/db/prisma';
 import { SchoolAssignmentWizard } from '@/components/assignments/SchoolAssignmentWizard';
+import { AssignmentsPageHeader } from '@/components/assignments/AssignmentsPageHeader';
 
 export default async function AssignmentsPage() {
   const user = (await getCurrentUser())!;
@@ -31,10 +32,9 @@ export default async function AssignmentsPage() {
       orderBy: { name: 'asc' },
     }),
     prisma.school.findMany({
-      // A responsible employee on the school record does not mean that the
-      // school cannot receive a new outreach assignment. Only archived or
-      // explicitly inactive schools should be hidden from this workflow.
-      where: { isDeleted: false, status: { not: 'INACTIVE' } },
+      // A responsible employee means the school was already distributed and
+      // received its initial ticket during import. It must not be offered again.
+      where: { isDeleted: false, status: { not: 'INACTIVE' }, responsibleEmployeeId: null },
       select: {
         id: true,
         name: true,
@@ -49,12 +49,7 @@ export default async function AssignmentsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">School Assignment Engine</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          Select target schools and distribute them across PR team members. Exactly 1 individual ticket is generated per school with complete audit tracing.
-        </p>
-      </div>
+      <AssignmentsPageHeader />
 
       <SchoolAssignmentWizard
         taskTypes={taskTypes}

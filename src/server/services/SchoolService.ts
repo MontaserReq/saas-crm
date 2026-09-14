@@ -394,7 +394,19 @@ export class SchoolService {
       throw new Error('No valid records to import');
     }
     if (validRows.length > 5000) throw new Error('The maximum allowed import size is 5,000 rows');
-    const parsedRows = validRows.map((row) => schoolImportRowSchema.safeParse(row));
+    // The preview is client-visible and may contain the employee display name
+    // instead of the internal id. Resolve both forms again at commit time.
+    const activeEmployeesForMatching = await prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, email: true, departmentId: true },
+    });
+    const enrichedRows = validRows.map((row) => {
+      if (row.responsibleEmployeeId) return row;
+      const employeeName = row.responsibleEmployee || row.contactPerson || null;
+      const employee = matchImportEmployee(employeeName, activeEmployeesForMatching);
+      return { ...row, responsibleEmployeeId: employee?.id ?? null };
+    });
+    const parsedRows = enrichedRows.map((row) => schoolImportRowSchema.safeParse(row));
     const invalidRow = parsedRows.find((result) => !result.success);
     if (invalidRow && !invalidRow.success) throw new Error('Import validation failed. Please review the file preview and try again.');
 
@@ -408,12 +420,7 @@ export class SchoolService {
         .map((result) => result.data.responsibleEmployeeId)
         .filter((id): id is string => Boolean(id))
     ));
-    const activeEmployees = responsibleEmployeeIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: responsibleEmployeeIds }, isActive: true },
-          select: { id: true },
-        })
-      : [];
+    const activeEmployees = activeEmployeesForMatching.filter((employee) => responsibleEmployeeIds.includes(employee.id));
     const activeEmployeeIds = new Set(activeEmployees.map((employee) => employee.id));
     if (responsibleEmployeeIds.some((id) => !activeEmployeeIds.has(id))) {
       throw new Error('One or more responsible employees are no longer active. Please re-run the import preview.');
@@ -436,35 +443,104 @@ export class SchoolService {
         batchNames.add(name);
         if (phone) batchPhones.add(phone);
       }
-      return Promise.all(
-        parsedRows.map((result) => {
-          if (!result.success) throw new Error('Import validation failed.');
-          const row = result.data;
-          return tx.school.create({
-            data: {
-              name: row.name,
-              contactPerson: row.contactPerson || null,
-              phone: row.phone || null,
-              email: row.email || null,
-              city: row.city || 'Amman',
-              classification: row.classification,
-              responsibleEmployeeId: row.responsibleEmployeeId || null,
-              createdById: actorId,
-            },
-          });
-        })
-      );
+      const employeeMap = new Map(activeEmployees.map((employee) => [employee.id, employee]));
+      const createdSchools = [];
+      for (const result of parsedRows) {
+        if (!result.success) throw new Error('Import validation failed.');
+        const row = result.data;
+        const school = await tx.school.create({
+          data: {
+            name: row.name,
+            contactPerson: row.contactPerson || null,
+            phone: row.phone || null,
+            email: row.email || null,
+            city: row.city || 'Amman',
+            classification: row.classification,
+            responsibleEmployeeId: row.responsibleEmployeeId || null,
+            createdById: actorId,
+          },
+        });
+        createdSchools.push(school);
+      }
+
+      // A school responsible employee is also the initial owner of the
+      // outreach ticket created by this import.
+      let ticketSequence = 1000;
+      const lastTicket = await tx.ticket.findFirst({
+        orderBy: { createdAt: 'desc' },
+        select: { ticketNumber: true },
+      });
+      if (lastTicket?.ticketNumber.startsWith('CL-')) {
+        const parsedSequence = parseInt(lastTicket.ticketNumber.slice(3), 10);
+        if (!Number.isNaN(parsedSequence)) ticketSequence = parsedSequence;
+      }
+
+      let createdTickets = 0;
+      for (const school of createdSchools) {
+        if (!school.responsibleEmployeeId) continue;
+        const employee = employeeMap.get(school.responsibleEmployeeId);
+        if (!employee) throw new Error('One or more responsible employees are no longer active. Please re-run the import preview.');
+
+        ticketSequence += 1;
+        const ticket = await tx.ticket.create({
+          data: {
+            ticketNumber: `CL-${ticketSequence}`,
+            schoolId: school.id,
+            departmentId: employee.departmentId,
+            subject: `School follow-up: ${school.name}`,
+            priority: 'MEDIUM',
+            status: 'PENDING',
+            createdById: actorId,
+          },
+        });
+        await tx.ticketAssignee.create({
+          data: { ticketId: ticket.id, userId: employee.id, isCurrent: true, role: 'ASSIGNEE' },
+        });
+        await tx.assignmentHistory.create({
+          data: {
+            ticketId: ticket.id,
+            toUserId: employee.id,
+            performedById: actorId,
+            action: 'INITIAL_ASSIGNMENT',
+            reason: 'Automatically created from school import',
+          },
+        });
+        await tx.activityEvent.create({
+          data: {
+            ticketId: ticket.id,
+            actorId,
+            type: 'CREATED',
+            title: 'Ticket Created & Assigned',
+            description: `Automatically created for ${employee.name} from the school import.`,
+          },
+        });
+        await tx.notification.create({
+          data: {
+            userId: employee.id,
+            type: 'TICKET_ASSIGNED',
+            title: 'New school ticket assigned',
+            message: `A new ticket for ${school.name} has been assigned to you.`,
+            entityType: 'ticket',
+            entityId: ticket.id,
+          },
+        });
+        await tx.school.update({ where: { id: school.id }, data: { status: 'ASSIGNED' } });
+        createdTickets += 1;
+      }
+
+      return { schools: createdSchools, ticketsCount: createdTickets };
     });
     await AuditService.logAudit({
       actorId,
       action: 'SCHOOL_BULK_IMPORTED',
       entityType: 'School',
-      metadata: { importedCount: createdSchools.length, fileName: metadata?.fileName, skippedCount: metadata?.skippedCount || 0, failedCount: metadata?.failedCount || 0, duplicateCount: metadata?.duplicateCount || 0 },
+      metadata: { importedCount: createdSchools.schools.length, ticketsCreated: createdSchools.ticketsCount, fileName: metadata?.fileName, skippedCount: metadata?.skippedCount || 0, failedCount: metadata?.failedCount || 0, duplicateCount: metadata?.duplicateCount || 0 },
     });
 
     return {
       success: true,
-      importedCount: createdSchools.length,
+      importedCount: createdSchools.schools.length,
+      ticketsCreated: createdSchools.ticketsCount,
     };
   }
 }

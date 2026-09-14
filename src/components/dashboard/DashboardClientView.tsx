@@ -264,6 +264,8 @@ export function DashboardClientView({
         <TicketFormModal
           isOpen={isNewTicketOpen}
           onClose={() => setIsNewTicketOpen(false)}
+          users={users}
+          canAssign={user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'SCHOOL_MANAGER'}
           directManager={directManager}
         />
       )}
