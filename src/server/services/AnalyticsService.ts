@@ -1,6 +1,5 @@
 import prisma from '@/lib/db/prisma';
 import { UserSession } from '@/types';
-import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 
 export class AnalyticsService {
   static async getDashboardMetrics(user?: UserSession | null) {
@@ -25,10 +24,10 @@ export class AnalyticsService {
       };
     }
 
-    const isFullView = hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL);
-
-    // Member ticket filter vs Global ticket filter
-    const ticketFilter: any = isFullView
+    // Admins get a global operational overview; other accounts see only their
+    // currently assigned tickets.
+    const isGlobalOverview = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    const ticketFilter: any = isGlobalOverview
       ? {}
       : {
           assignees: {
@@ -82,12 +81,12 @@ export class AnalyticsService {
       }),
       // Recent Activity
       prisma.activityEvent.findMany({
-        where: isFullView
+        where: isGlobalOverview
           ? {}
           : {
               ticket: {
                 assignees: {
-                  some: { userId: user.id },
+                  some: { userId: user.id, isCurrent: true },
                 },
               },
             },
