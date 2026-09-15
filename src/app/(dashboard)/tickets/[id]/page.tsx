@@ -20,7 +20,7 @@ export default async function TicketDetailsPage({ params }: { params: { id: stri
     notFound();
   }
 
-  const [teamMembers, departmentsWithUsers] = await Promise.all([
+  const [teamMembers, schools, taskTypes, departmentsWithUsers] = await Promise.all([
     prisma.user.findMany({
       where: { isActive: true, id: { not: user.id } },
       select: {
@@ -30,6 +30,8 @@ export default async function TicketDetailsPage({ params }: { params: { id: stri
         department: { select: { name: true } },
       },
     }),
+    prisma.school.findMany({ where: { isDeleted: false }, select: { id: true, name: true, contactPerson: true, phone: true, whatsapp: true, email: true, city: true, area: true }, orderBy: { name: 'asc' } }),
+    prisma.taskType.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     prisma.department.findMany({
       where: { isActive: true },
       select: {
@@ -54,7 +56,10 @@ export default async function TicketDetailsPage({ params }: { params: { id: stri
       ticket={ticket}
       teamMembers={teamMembers}
       departmentsWithUsers={departmentsWithUsers}
+      schools={schools}
+      taskTypes={taskTypes}
       currentUser={user}
+      canTransfer={hasPermission(user, PERMISSIONS.TICKETS_TRANSFER)}
       canDelete={user.role === 'SUPER_ADMIN' && hasPermission(user, PERMISSIONS.TICKETS_DELETE)}
     />
   );

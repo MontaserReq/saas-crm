@@ -95,10 +95,16 @@ export const communicationAttemptSchema = z.object({
 
 export const rejectedTicketUpdateSchema = z.object({
   ticketId: z.string().min(1, 'Ticket ID is required'),
+  schoolId: z.string().optional().nullable(),
+  phone: z.string().max(100).optional().nullable(),
+  whatsapp: z.string().max(100).optional().nullable(),
+  email: z.string().email('Invalid email address').optional().nullable().or(z.literal('')),
+  taskTypeId: z.string().optional().nullable(),
   subject: z.string().trim().min(3, 'Subject must be at least 3 characters').max(200),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
   dueDate: z.string().optional().nullable(),
   followUpAt: z.string().optional().nullable(),
+  correctionNote: z.string().trim().max(5000).optional().nullable(),
 });
 
 export const todoSchema = z.object({

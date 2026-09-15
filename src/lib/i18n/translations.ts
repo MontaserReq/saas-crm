@@ -273,6 +273,12 @@ export const translations = {
       "meetingAttachmentsHint": "You can attach meeting minute files (PDF, Word, Excel, PowerPoint, images) after the meeting is created.",
       "meetingDetails": "Meeting Details",
       "meetingBadge": "Meeting",
+      "rejectedCorrectInfo": "Correct Ticket Information",
+      "resubmitTicket": "Resubmit Ticket",
+      "rejectedCorrectTitle": "Correct Rejected Ticket",
+      "oldNewValuesSavedInActivity": "The old and new values will be saved in the activity log.",
+      "subject": "Subject",
+      "followUp": "Follow-up",
     },"schools": {
       "title": "Schools Registry",
       "subtitle": "Maintain full registry of partner schools, coordinators, contact channels, and locations.",
@@ -594,7 +600,12 @@ export const translations = {
         "status": "Status",
         "transferWorkTooltip": "Transfer Work / Offboard",
         "confirmDeleteTitle": "Confirm Deleting / Archiving User: {name}",
-        "confirmDeleteDesc": "You are about to delete or deactivate user account ({name} - {email}). If this user has audit history, the account will be safely archived."
+        "confirmDeleteDesc": "You are about to delete or deactivate user account ({name} - {email}). If this user has audit history, the account will be safely archived.",
+        "deleteFailed": "Failed to delete user",
+        "enableFailed": "Failed to enable account",
+        "enableDesc": "The account for {name} will become active and may sign in again.",
+        "permissionsUpdateFailed": "Failed to update permissions",
+        "permissionsDesc": "Select the direct permissions granted to this user. Role permissions remain independent."
       },
       "roles": {
         "title": "Roles & Permission Matrix",
@@ -711,6 +722,7 @@ export const translations = {
         "editRequestPending": "Edit Request Pending Approval",
         "deleteRequestPending": "Deletion Request Pending Approval",
         "viewPendingRequest": "View Pending Request"
+        ,"ticketType": { "correction": "Ticket Correction", "resubmit": "Ticket Resubmission" }
       },
       "analytics": {       "title": "Operational Analytics & Insights",
         "subtitle": "Real-time performance metrics across departments, task types, team members, and communication channels.",
@@ -877,7 +889,24 @@ export const translations = {
       "all": "All",
       "clear": "Clear",
       "saving": "Saving...",
-      "add": "Add"
+      "add": "Add",
+      "toggleTheme": "Toggle theme",
+      "notifications": "Notifications",
+      "securityAccess": "Security & access",
+      "permissions": "Permissions",
+      "enableAccount": "Enable account",
+      "disableAccount": "Disable account",
+      "savePermissions": "Save permissions",
+      "savingPermissions": "Saving permissions...",
+      "oneIpPerLine": "One IP address per line",
+      "restrictedIps": "Restricted IPs",
+      "accessRestrictionsHint": "Only Super Admin can apply or change access restrictions. Existing login records remain unchanged.",
+      "publicSearch": "Public search",
+      "publicSearchDescription": "Search only information explicitly published for public access.",
+      "schoolOrCity": "School or city",
+      "searching": "Searching...",
+      "generalTicket": "General ticket",
+      "noSchoolLinked": "No school linked"
     },
     "statusMap": {
       "PENDING": "Pending",
@@ -958,6 +987,7 @@ export const translations = {
       "none": "None",
       "noEvents": "No events scheduled for this day.",
       "deleteEventConfirm": "Are you sure you want to delete this calendar event?",
+      "deleteEvent": "Delete Calendar Event",
       "month": "Month",
       "week": "Week",
       "day": "Day",
@@ -1306,6 +1336,12 @@ export const translations = {
       "meetingAttachmentsHint": "يمكنك إرفاق ملفات محضر الاجتماع (PDF، وورد، إكسل، بوربوينت، صور) بعد إنشاء الاجتماع.",
       "meetingDetails": "تفاصيل الاجتماع",
       "meetingBadge": "اجتماع",
+      "rejectedCorrectInfo": "تصحيح معلومات التذكرة",
+      "resubmitTicket": "إعادة إرسال التذكرة",
+      "rejectedCorrectTitle": "تصحيح التذكرة المرفوضة",
+      "oldNewValuesSavedInActivity": "سيتم حفظ القيم القديمة والجديدة في سجل النشاطات.",
+      "subject": "الموضوع",
+      "followUp": "المتابعة",
 
     },
     "schools": {
@@ -1628,7 +1664,12 @@ export const translations = {
         "status": "الحالة",
         "transferWorkTooltip": "نقل المهام / إنهاء الخدمة",
         "confirmDeleteTitle": "تأكيد حذف / أرشفة المستخدم: {name}",
-        "confirmDeleteDesc": "أنت على وشك حذف أو تعطيل حساب المستخدم ({name} - {email}). سيتم تعطيل الحساب لحماية سجلات التدقيق والملاحظات التاريخية."
+        "confirmDeleteDesc": "أنت على وشك حذف أو تعطيل حساب المستخدم ({name} - {email}). سيتم تعطيل الحساب لحماية سجلات التدقيق والملاحظات التاريخية.",
+        "deleteFailed": "فشل حذف المستخدم",
+        "enableFailed": "فشل تفعيل الحساب",
+        "enableDesc": "سيتم تفعيل حساب {name} وسيتمكن من تسجيل الدخول مجدداً.",
+        "permissionsUpdateFailed": "فشل تحديث الصلاحيات",
+        "permissionsDesc": "اختر الصلاحيات المباشرة الممنوحة لهذا المستخدم. تبقى صلاحيات الدور مستقلة."
       },
       "roles": {
         "title": "مصفوفة الأدوار والصلاحيات",
@@ -1745,6 +1786,7 @@ export const translations = {
         "editRequestPending": "طلب تعديل بانتظار الموافقة",
         "deleteRequestPending": "طلب حذف بانتظار الموافقة",
         "viewPendingRequest": "عرض الطلب المعلق"
+        ,"ticketType": { "correction": "تصحيح تذكرة", "resubmit": "إعادة إرسال تذكرة" }
       },
       "analytics": {       "title": "التحليلات والتقارير التشغيلية",
         "subtitle": "مؤشرات الأداء اللحظية عبر الأقسام، أنواع المهام، أعضاء الفريق، وقنوات التواصل.",
@@ -1911,7 +1953,24 @@ export const translations = {
       "all": "الكل",
       "clear": "إلغاء التحديد",
       "saving": "جاري الحفظ...",
-      "add": "إضافة"
+      "add": "إضافة",
+      "toggleTheme": "تبديل المظهر",
+      "notifications": "الإشعارات",
+      "securityAccess": "الأمان والوصول",
+      "permissions": "الصلاحيات",
+      "enableAccount": "تفعيل الحساب",
+      "disableAccount": "تعطيل الحساب",
+      "savePermissions": "حفظ الصلاحيات",
+      "savingPermissions": "جاري حفظ الصلاحيات...",
+      "oneIpPerLine": "عنوان IP واحد في كل سطر",
+      "restrictedIps": "عناوين IP مقيّدة",
+      "accessRestrictionsHint": "يمكن للمدير العام فقط تطبيق أو تغيير قيود الوصول. تبقى سجلات تسجيل الدخول الحالية دون تغيير.",
+      "publicSearch": "البحث العام",
+      "publicSearchDescription": "ابحث فقط في المعلومات المنشورة صراحةً للوصول العام.",
+      "schoolOrCity": "اسم المدرسة أو المدينة",
+      "searching": "جاري البحث...",
+      "generalTicket": "تذكرة عامة",
+      "noSchoolLinked": "لا توجد مدرسة مرتبطة"
     },
     "statusMap": {
       "PENDING": "قيد الانتظار",
@@ -1992,6 +2051,7 @@ export const translations = {
       "none": "لا يوجد",
       "noEvents": "لا توجد أحداث مجدولة لهذا اليوم.",
       "deleteEventConfirm": "هل أنت متأكد من حذف هذا الموعد من التقويم؟",
+      "deleteEvent": "حذف موعد التقويم",
       "month": "شهر",
       "week": "أسبوع",
       "day": "يوم",

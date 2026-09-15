@@ -118,7 +118,9 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       show: hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_VIEW)
         || hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_DECIDE)
         || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_EDIT)
-        || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_DELETE),
+        || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_DELETE)
+        || hasPermission(user, PERMISSIONS.TICKETS_CORRECTION_APPROVE)
+        || hasPermission(user, PERMISSIONS.TICKETS_RESUBMIT_APPROVE),
     },
   ];
 

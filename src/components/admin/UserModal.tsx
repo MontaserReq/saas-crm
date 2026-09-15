@@ -255,12 +255,12 @@ export function UserModal({ isOpen, onClose, onSaved, user, roles, departments, 
 
         {isEditing && (
           <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
-            <div className="text-sm font-bold text-slate-800 dark:text-slate-200">Security &amp; Access</div>
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('common.securityAccess')}</div>
             <select value={formData.accessMode} onChange={e => setFormData({ ...formData, accessMode: e.target.value, allowedIps: e.target.value === 'ANY_IP' ? [] : formData.allowedIps })} className="w-full p-2.5 rounded-lg border bg-white dark:bg-slate-800 text-sm">
-              <option value="ANY_IP">Any IP</option><option value="RESTRICTED_IPS">Restricted IPs</option>
+              <option value="ANY_IP">{t('common.all')}</option><option value="RESTRICTED_IPS">{t('common.restrictedIps')}</option>
             </select>
-            {formData.accessMode === 'RESTRICTED_IPS' && <textarea value={formData.allowedIps.join('\n')} onChange={e => setFormData({ ...formData, allowedIps: e.target.value.split(/[,\n]/).map(x => x.trim()).filter(Boolean) })} placeholder="One IP per line" rows={3} className="w-full p-2.5 rounded-lg border bg-white dark:bg-slate-800 text-sm" />}
-            <p className="text-[11px] text-slate-500">Only Super Admin can apply or change access restrictions. Existing login records remain unchanged.</p>
+            {formData.accessMode === 'RESTRICTED_IPS' && <textarea value={formData.allowedIps.join('\n')} onChange={e => setFormData({ ...formData, allowedIps: e.target.value.split(/[,\n]/).map(x => x.trim()).filter(Boolean) })} placeholder={t('common.oneIpPerLine')} rows={3} className="w-full p-2.5 rounded-lg border bg-white dark:bg-slate-800 text-sm" />}
+            <p className="text-[11px] text-slate-500">{t('common.accessRestrictionsHint')}</p>
           </div>
         )}
 

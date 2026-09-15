@@ -83,7 +83,7 @@ export function NoteStream({
   const handleDepartmentChange = (deptId: string) => {
     setSelectedDepartmentId(deptId);
     const dept = departments.find((d) => d.id === deptId);
-    if (dept && dept.users.length > 0) {
+    if (dept && Array.isArray(dept.users) && dept.users.length > 0) {
       setSelectedUserId(dept.users[0].id);
     } else {
       setSelectedUserId('');

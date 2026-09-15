@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, X } from "lucide-react";
 import { decideSchoolApprovalAction } from "@/server/actions/schools";
+import { decideTicketApprovalAction } from "@/server/actions/tickets";
 import { useI18n } from "@/lib/i18n/context";
 
 export function ApprovalRequestsClient({ requests }: { requests: any[] }) {
@@ -12,7 +13,9 @@ export function ApprovalRequestsClient({ requests }: { requests: any[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const decide = async (id: string, approve: boolean) => {
     setBusy(id);
-    await decideSchoolApprovalAction(id, approve);
+    const request = requests.find((item) => item.id === id);
+    if (request?.kind === 'TICKET') await decideTicketApprovalAction(id, approve);
+    else await decideSchoolApprovalAction(id, approve);
     setBusy(null);
     router.refresh();
   };
@@ -51,8 +54,8 @@ export function ApprovalRequestsClient({ requests }: { requests: any[] }) {
                 <React.Fragment key={request.id}>
                   {/* Desktop row */}
                   <tr className="hidden md:table-row border-t border-slate-100 dark:border-slate-800">
-                    <td className="p-3 font-bold">{request.school.name}</td>
-                    <td className="p-3">{request.type}</td>
+                    <td className="p-3 font-bold">{request.kind === 'TICKET' ? `${request.ticket.ticketNumber} — ${request.ticket.subject}` : request.school.name}</td>
+                    <td className="p-3">{request.kind === 'TICKET' ? t(`admin.approvalRequests.ticketType.${request.type.toLowerCase()}`) : request.type}</td>
                     <td className="p-3">{statusBadge}</td>
                     <td className="p-3">{request.requester.name}</td>
                     <td className="p-3">{new Date(request.createdAt).toLocaleString()}</td>
@@ -63,10 +66,10 @@ export function ApprovalRequestsClient({ requests }: { requests: any[] }) {
                   <tr className="md:hidden border-t border-slate-100 dark:border-slate-800">
                     <td colSpan={6} className="p-4 space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold truncate">{request.school.name}</span>
+                        <span className="font-bold truncate">{request.kind === 'TICKET' ? `${request.ticket.ticketNumber} — ${request.ticket.subject}` : request.school.name}</span>
                         {statusBadge}
                       </div>
-                      <div className="text-slate-500">{request.type}</div>
+                      <div className="text-slate-500">{request.kind === 'TICKET' ? t(`admin.approvalRequests.ticketType.${request.type.toLowerCase()}`) : request.type}</div>
                       <div className="flex items-center justify-between gap-2 text-slate-500">
                         <span>{request.requester.name}</span>
                         <span>{new Date(request.createdAt).toLocaleString()}</span>

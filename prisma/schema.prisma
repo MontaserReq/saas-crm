@@ -32,30 +32,32 @@ model User {
 
   // Relations
   ticketAssignees         TicketAssignee[]
-  createdTickets          Ticket[]                @relation("TicketCreator")
-  createdAssignments      SchoolAssignment[]      @relation("AssignmentCreator")
-  notes                   Note[]                  @relation("NoteAuthor")
-  communicationAttempts   CommunicationAttempt[]  @relation("AttemptAuthor")
-  assignmentHistoryFrom   AssignmentHistory[]     @relation("AssignFrom")
-  assignmentHistoryTo     AssignmentHistory[]     @relation("AssignTo")
-  assignmentHistoryAction AssignmentHistory[]     @relation("AssignPerformed")
+  createdTickets          Ticket[]                  @relation("TicketCreator")
+  createdAssignments      SchoolAssignment[]        @relation("AssignmentCreator")
+  notes                   Note[]                    @relation("NoteAuthor")
+  communicationAttempts   CommunicationAttempt[]    @relation("AttemptAuthor")
+  assignmentHistoryFrom   AssignmentHistory[]       @relation("AssignFrom")
+  assignmentHistoryTo     AssignmentHistory[]       @relation("AssignTo")
+  assignmentHistoryAction AssignmentHistory[]       @relation("AssignPerformed")
   notifications           Notification[]
-  auditLogs               AuditLog[]              @relation("AuditActor")
-  activityEvents          ActivityEvent[]         @relation("ActivityActor")
-  todos                   Todo[]                  @relation("UserTodos")
-  createdSchools          School[]                @relation("SchoolCreator")
-  responsibleSchools      School[]                @relation("SchoolResponsible")
+  auditLogs               AuditLog[]                @relation("AuditActor")
+  activityEvents          ActivityEvent[]           @relation("ActivityActor")
+  todos                   Todo[]                    @relation("UserTodos")
+  createdSchools          School[]                  @relation("SchoolCreator")
+  responsibleSchools      School[]                  @relation("SchoolResponsible")
   managedDepartments      DepartmentManager[]
-  sentMessages            Message[]               @relation("SentMessages")
-  receivedMessages        MessageRecipient[]      @relation("ReceivedMessages")
+  sentMessages            Message[]                 @relation("SentMessages")
+  receivedMessages        MessageRecipient[]        @relation("ReceivedMessages")
   chatMemberships         ChatParticipant[]
-  sentChatMessages        ChatMessage[]           @relation("ChatMessageSender")
+  sentChatMessages        ChatMessage[]             @relation("ChatMessageSender")
   loginSessions           LoginSession[]
   passwordResetTokens     PasswordResetToken[]
-  schoolApprovalRequests  SchoolApprovalRequest[] @relation("SchoolApprovalRequester")
-  schoolApprovalDecisions SchoolApprovalRequest[] @relation("SchoolApprovalDecider")
-  assignedCalendarEvents  CalendarEvent[]         @relation("CalendarAssignedUser")
-  createdCalendarEvents   CalendarEvent[]         @relation("CalendarCreator")
+  schoolApprovalRequests  SchoolApprovalRequest[]   @relation("SchoolApprovalRequester")
+  schoolApprovalDecisions SchoolApprovalRequest[]   @relation("SchoolApprovalDecider")
+  ticketApprovalRequests  TicketApprovalRequest[]   @relation("TicketApprovalRequester")
+  ticketApprovalDecisions TicketApprovalRequest[]   @relation("TicketApprovalDecider")
+  assignedCalendarEvents  CalendarEvent[]           @relation("CalendarAssignedUser")
+  createdCalendarEvents   CalendarEvent[]           @relation("CalendarCreator")
   taskTypeMemberships     TaskTypeMember[]
   schoolResearchJobs      SchoolResearchJob[]       @relation("SchoolResearchJobCreator")
   schoolResearchDecisions SchoolResearchCandidate[] @relation("SchoolResearchCandidateDecider")
@@ -180,9 +182,9 @@ model School {
   createdById String?
   createdBy   User?   @relation("SchoolCreator", fields: [createdById], references: [id])
 
-  tickets          Ticket[]
-  calendarEvents   CalendarEvent[]
-  approvalRequests SchoolApprovalRequest[]
+  tickets                  Ticket[]
+  calendarEvents           CalendarEvent[]
+  approvalRequests         SchoolApprovalRequest[]
   researchCandidateMatches SchoolResearchCandidate[]
 
   createdAt DateTime @default(now())
@@ -204,16 +206,16 @@ model SchoolResearchJob {
   createdById String
   createdBy   User   @relation("SchoolResearchJobCreator", fields: [createdById], references: [id])
 
-  mode           String @default("FIND_NEW") // FIND_NEW | ENRICH_EXISTING | VERIFY_EXISTING
-  status         String @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED | CANCELLED
+  mode           String  @default("FIND_NEW") // FIND_NEW | ENRICH_EXISTING | VERIFY_EXISTING
+  status         String  @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED | CANCELLED
   location       String
   area           String?
   schoolType     String?
   requestedCount Int
   requiredFields String // JSON array, e.g. ["phone","email","website"]
   error          String?
-  aiCallCount    Int    @default(0)
-  sourceCount    Int    @default(0)
+  aiCallCount    Int     @default(0)
+  sourceCount    Int     @default(0)
 
   startedAt   DateTime?
   completedAt DateTime?
@@ -241,8 +243,8 @@ model SchoolResearchCandidate {
   contactPerson  String?
   schoolType     String?
   address        String?
-  confidence     Int    @default(0)
-  status         String @default("NEW") // NEW | NEEDS_REVIEW | DUPLICATE | APPROVED | REJECTED | IMPORTED
+  confidence     Int     @default(0)
+  status         String  @default("NEW") // NEW | NEEDS_REVIEW | DUPLICATE | APPROVED | REJECTED | IMPORTED
 
   matchedSchoolId String?
   matchedSchool   School? @relation(fields: [matchedSchoolId], references: [id])
@@ -297,7 +299,7 @@ model SchoolResearchAttempt {
 
   // Outcome
   status     String // "SUCCESS" | "FAILED" | "RATE_LIMITED"
-  httpStatus Int?   // HTTP status code, null on network errors
+  httpStatus Int? // HTTP status code, null on network errors
 
   // Timing (actual wall-clock, never estimated)
   durationMs  Int
@@ -349,6 +351,26 @@ model SchoolApprovalRequest {
 
   @@index([status, type])
   @@index([schoolId, createdAt])
+  @@index([requesterId])
+}
+
+model TicketApprovalRequest {
+  id              String    @id @default(cuid())
+  ticketId        String
+  ticket          Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  requesterId     String
+  requester       User      @relation("TicketApprovalRequester", fields: [requesterId], references: [id])
+  decidedById     String?
+  decidedBy       User?     @relation("TicketApprovalDecider", fields: [decidedById], references: [id])
+  type            String // CORRECTION | RESUBMIT
+  status          String    @default("PENDING")
+  proposedData    String
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  decidedAt       DateTime?
+
+  @@index([status, type])
+  @@index([ticketId, createdAt])
   @@index([requesterId])
 }
 
@@ -522,8 +544,9 @@ model Ticket {
   calendarEvents        CalendarEvent[]
   meetingDetails        MeetingDetails?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  TicketApprovalRequest TicketApprovalRequest[]
 
   @@index([status])
   @@index([schoolId])
@@ -537,16 +560,16 @@ model Ticket {
 // Kept 1:1 with Ticket so meeting tickets reuse the normal Ticket lifecycle,
 // notes, attachments, assignment, and notifications untouched.
 model MeetingDetails {
-  id          String @id @default(cuid())
-  ticketId    String @unique
-  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  ticketId String @unique
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
-  meetingDate DateTime
-  meetingTime String // "HH:mm" (24h)
+  meetingDate  DateTime
+  meetingTime  String // "HH:mm" (24h)
   // JSON array of { name: string, userId?: string }
   participants String
   // JSON array of { text: string, assigneeId?: string, done: boolean }
-  actionItems String?
+  actionItems  String?
 
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])

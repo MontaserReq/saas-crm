@@ -128,32 +128,38 @@ export async function logCommunicationAttemptAction(data: {
 
 export async function updateRejectedTicketAction(data: {
   ticketId: string;
+  schoolId?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  taskTypeId?: string | null;
   subject: string;
   priority: string;
   dueDate?: string | null;
   followUpAt?: string | null;
+  correctionNote?: string | null;
 }) {
   try {
     const user = await requireAuth();
-    ticketPermission(user, PERMISSIONS.TICKETS_RESUBMIT);
+    ticketPermission(user, PERMISSIONS.TICKETS_CORRECTION_REQUEST);
     const ticket = await TicketService.updateRejectedTicket(user, data);
     revalidatePath(`/tickets/${data.ticketId}`);
     revalidatePath('/tickets');
-    return { success: true, ticketId: ticket.id };
+    return { success: true, ticketId: data.ticketId, pending: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to update rejected ticket' };
   }
 }
 
-export async function resubmitRejectedTicketAction(ticketId: string) {
+export async function resubmitRejectedTicketAction(ticketId: string, targetDepartmentId?: string | null, targetUserId?: string | null) {
   try {
     const user = await requireAuth();
-    ticketPermission(user, PERMISSIONS.TICKETS_CLOSE);
-    const ticket = await TicketService.resubmitRejectedTicket(user, ticketId);
+    ticketPermission(user, PERMISSIONS.TICKETS_RESUBMIT_REQUEST);
+    const ticket = await TicketService.resubmitRejectedTicket(user, ticketId, targetDepartmentId, targetUserId);
     revalidatePath(`/tickets/${ticketId}`);
     revalidatePath('/tickets');
     revalidatePath('/');
-    return { success: true, status: ticket.status };
+    return { success: true, pending: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to resubmit ticket' };
   }
@@ -171,6 +177,28 @@ export async function closeTicketAction(ticketId: string, closingReason: string)
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to close ticket' };
   }
+}
+
+export async function listTicketApprovalRequestsAction(status = 'PENDING') {
+  const user = await requireAuth();
+  if (!hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_VIEW) && !hasPermission(user, PERMISSIONS.TICKETS_CORRECTION_APPROVE) && !hasPermission(user, PERMISSIONS.TICKETS_RESUBMIT_APPROVE)) return [];
+  return TicketService.listTicketApprovalRequests(status);
+}
+
+export async function decideTicketApprovalAction(requestId: string, approve: boolean, rejectionReason?: string) {
+  try {
+    const user = await requireAuth();
+    const requests = await TicketService.listTicketApprovalRequests('PENDING');
+    const request = requests.find((item) => item.id === requestId);
+    if (!request) return { success: false, error: 'Request not found' };
+    const permission = request.type === 'CORRECTION' ? PERMISSIONS.TICKETS_CORRECTION_APPROVE : PERMISSIONS.TICKETS_RESUBMIT_APPROVE;
+    if (!hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_DECIDE) && !hasPermission(user, permission)) return { success: false, error: 'Forbidden' };
+    const result = await TicketService.decideTicketApproval(requestId, user.id, approve, rejectionReason);
+    revalidatePath(`/tickets/${request.ticket.id}`);
+    revalidatePath('/tickets');
+    revalidatePath('/admin/approval-requests');
+    return { success: true, request: result };
+  } catch (err: any) { return { success: false, error: err.message || 'Approval decision failed' }; }
 }
 
 export async function createTicketAction(input: {

@@ -1162,7 +1162,7 @@ export class TicketService {
 
   static async updateRejectedTicket(
     user: UserSession,
-    input: { ticketId: string; subject: string; priority: string; dueDate?: string | null; followUpAt?: string | null }
+    input: { ticketId: string; schoolId?: string | null; phone?: string | null; whatsapp?: string | null; email?: string | null; taskTypeId?: string | null; subject: string; priority: string; dueDate?: string | null; followUpAt?: string | null; correctionNote?: string | null }
   ) {
     const validated = rejectedTicketUpdateSchema.parse(input);
     const ticket = await prisma.ticket.findUnique({ where: { id: validated.ticketId } });
@@ -1171,52 +1171,58 @@ export class TicketService {
     if (ticket.status !== 'REJECTED') throw new Error('Only rejected tickets can be corrected.');
 
     return prisma.$transaction(async (tx) => {
-      const updated = await tx.ticket.update({
-        where: { id: ticket.id },
-        data: {
-          subject: validated.subject,
-          priority: validated.priority,
-          dueDate: validated.dueDate ? new Date(validated.dueDate) : null,
-          followUpAt: validated.followUpAt ? new Date(validated.followUpAt) : null,
-        },
-      });
+      const pending = await tx.ticketApprovalRequest.findFirst({ where: { ticketId: ticket.id, type: 'CORRECTION', status: 'PENDING' } });
+      const request = pending
+        ? await tx.ticketApprovalRequest.update({ where: { id: pending.id }, data: { proposedData: JSON.stringify(validated), createdAt: new Date() } })
+        : await tx.ticketApprovalRequest.create({ data: { ticketId: ticket.id, requesterId: user.id, type: 'CORRECTION', proposedData: JSON.stringify(validated) } });
       const changes = {
-        subject: { old: ticket.subject, new: updated.subject },
-        priority: { old: ticket.priority, new: updated.priority },
-        dueDate: { old: ticket.dueDate, new: updated.dueDate },
-        followUpAt: { old: ticket.followUpAt, new: updated.followUpAt },
+        schoolId: { old: ticket.schoolId, new: validated.schoolId },
+        taskTypeId: { old: ticket.taskTypeId, new: validated.taskTypeId },
+        subject: { old: ticket.subject, new: validated.subject },
+        priority: { old: ticket.priority, new: validated.priority },
+        dueDate: { old: ticket.dueDate, new: validated.dueDate },
+        followUpAt: { old: ticket.followUpAt, new: validated.followUpAt },
+        phone: validated.phone,
+        whatsapp: validated.whatsapp,
+        email: validated.email,
       };
       await tx.activityEvent.create({
         data: {
           ticketId: ticket.id,
           actorId: user.id,
-          type: 'INFORMATION_UPDATED',
-          title: 'Ticket information updated',
-          description: `Correction submitted by ${user.name}.`,
+          type: 'INFORMATION_UPDATE_REQUESTED',
+          title: 'Ticket correction approval requested',
+          description: `Correction submitted by ${user.name} and is awaiting admin approval.`,
           metadata: JSON.stringify(changes),
         },
       });
       await tx.auditLog.create({
         data: {
           actorId: user.id,
-          action: 'TICKET_INFORMATION_UPDATED',
+          action: 'TICKET_CORRECTION_REQUESTED',
           entityType: 'Ticket',
           entityId: ticket.id,
           metadata: JSON.stringify(changes),
         },
       });
-      return updated;
+      return request;
     });
   }
 
-  static async resubmitRejectedTicket(user: UserSession, ticketId: string) {
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+  static async resubmitRejectedTicket(user: UserSession, ticketId: string, targetDepartmentId?: string | null, targetUserId?: string | null) {
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, include: { assignees: { where: { isCurrent: true } } } });
     if (!ticket) throw new Error('Ticket not found');
     if (ticket.createdById !== user.id) throw new Error('Only the original creator can resubmit this ticket.');
     if (ticket.status !== 'REJECTED') throw new Error('Only rejected tickets can be resubmitted.');
 
+    if (!targetDepartmentId || !targetUserId) throw new Error('Select a department and employee before resubmitting.');
+    const targetUser = await prisma.user.findFirst({ where: { id: targetUserId, isActive: true, departmentId: targetDepartmentId } });
+    if (!targetUser) throw new Error('The selected employee is not active or does not belong to the selected department.');
+
     return prisma.$transaction(async (tx) => {
-      const updated = await tx.ticket.update({ where: { id: ticketId }, data: { status: 'PENDING', rejectionReason: null } });
+      const pending = await tx.ticketApprovalRequest.findFirst({ where: { ticketId, type: 'RESUBMIT', status: 'PENDING' } });
+      if (pending) throw new Error('A ticket resubmission request is already awaiting approval.');
+      const request = await tx.ticketApprovalRequest.create({ data: { ticketId, requesterId: user.id, type: 'RESUBMIT', proposedData: JSON.stringify({ targetDepartmentId, targetUserId }) } });
       await tx.activityEvent.create({
         data: {
           ticketId,
@@ -1245,7 +1251,43 @@ export class TicketService {
           metadata: JSON.stringify({ previousStatus: 'REJECTED', newStatus: 'PENDING' }),
         },
       });
-      return updated;
+      return request;
+    });
+  }
+
+  static async listTicketApprovalRequests(status = 'PENDING') {
+    return prisma.ticketApprovalRequest.findMany({
+      where: { status },
+      orderBy: { createdAt: 'desc' },
+      include: { ticket: { select: { id: true, ticketNumber: true, subject: true } }, requester: { select: { name: true } } },
+    });
+  }
+
+  static async decideTicketApproval(requestId: string, approverId: string, approve: boolean, rejectionReason?: string) {
+    const request = await prisma.ticketApprovalRequest.findUnique({ where: { id: requestId }, include: { ticket: { include: { assignees: { where: { isCurrent: true } } } } } });
+    if (!request) throw new Error('Request not found');
+    if (request.status !== 'PENDING') throw new Error('This request has already been decided.');
+
+    return prisma.$transaction(async (tx) => {
+      if (approve) {
+        const data = JSON.parse(request.proposedData) as any;
+        if (request.type === 'CORRECTION') {
+          await tx.ticket.update({ where: { id: request.ticketId }, data: { schoolId: data.schoolId || null, taskTypeId: data.taskTypeId || null, subject: data.subject, priority: data.priority, dueDate: data.dueDate ? new Date(data.dueDate) : null, followUpAt: data.followUpAt ? new Date(data.followUpAt) : null } });
+          if (data.schoolId) await tx.school.update({ where: { id: data.schoolId }, data: { phone: data.phone?.trim() || null, whatsapp: data.whatsapp?.trim() || null, email: data.email?.trim() || null } });
+          if (data.correctionNote?.trim()) await tx.note.create({ data: { ticketId: request.ticketId, authorId: request.requesterId, content: data.correctionNote.trim() } });
+        } else if (request.type === 'RESUBMIT') {
+          const targetUser = await tx.user.findFirst({ where: { id: data.targetUserId, isActive: true, departmentId: data.targetDepartmentId } });
+          if (!targetUser) throw new Error('The selected employee is no longer active or is not in the selected department.');
+          await tx.ticket.update({ where: { id: request.ticketId }, data: { status: 'PENDING', rejectionReason: null, departmentId: data.targetDepartmentId } });
+          await tx.ticketAssignee.updateMany({ where: { ticketId: request.ticketId, isCurrent: true }, data: { isCurrent: false, role: 'VIEWER', unassignedAt: new Date() } });
+          await tx.ticketAssignee.create({ data: { ticketId: request.ticketId, userId: targetUser.id, isCurrent: true, role: 'ASSIGNEE' } });
+          await tx.assignmentHistory.create({ data: { ticketId: request.ticketId, fromUserId: request.ticket.assignees[0]?.userId || null, toUserId: targetUser.id, performedById: approverId, action: 'REASSIGN', reason: 'Approved ticket resubmission request.' } });
+          await tx.notification.create({ data: { userId: targetUser.id, type: 'TICKET_ASSIGNED', title: 'Ticket resubmitted to you', message: `Ticket ${request.ticket.ticketNumber} has been approved and assigned to you.`, entityType: 'ticket', entityId: request.ticketId } });
+        }
+      }
+      const decided = await tx.ticketApprovalRequest.update({ where: { id: requestId }, data: { status: approve ? 'APPROVED' : 'REJECTED', decidedById: approverId, decidedAt: new Date(), rejectionReason: approve ? null : (rejectionReason || 'Rejected by approver') } });
+      await tx.auditLog.create({ data: { actorId: approverId, action: `TICKET_${request.type}_APPROVAL_${approve ? 'APPROVED' : 'REJECTED'}`, entityType: 'TicketApprovalRequest', entityId: requestId, metadata: JSON.stringify({ ticketId: request.ticketId, rejectionReason }) } });
+      return decided;
     });
   }
 

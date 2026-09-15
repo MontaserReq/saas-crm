@@ -25,16 +25,22 @@ interface TicketDetailClientViewProps {
   ticket: any;
   teamMembers: any[];
   departmentsWithUsers: any[];
+  schools: Array<{ id: string; name: string }>;
+  taskTypes: Array<{ id: string; name: string }>;
   currentUser?: any;
   canDelete?: boolean;
+  canTransfer?: boolean;
 }
 
 export function TicketDetailClientView({
   ticket,
   teamMembers,
   departmentsWithUsers,
+  schools,
+  taskTypes,
   currentUser,
   canDelete = false,
+  canTransfer = false,
 }: TicketDetailClientViewProps) {
   const { t, language, getStatusLabel } = useI18n();
   const currentAssignee = ticket.assignees.find((a: any) => a.isCurrent)?.user;
@@ -77,7 +83,7 @@ export function TicketDetailClientView({
           </div>
 
           {/* Action Buttons */}
-          <TicketActionButtons ticket={ticket} teamMembers={teamMembers} canDelete={canDelete} />
+          <TicketActionButtons ticket={ticket} teamMembers={teamMembers} canDelete={canDelete} canTransfer={canTransfer} />
         </div>
 
         {/* Rejection notice if status is REJECTED */}
@@ -85,7 +91,7 @@ export function TicketDetailClientView({
           <div className="p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-2xl text-xs text-rose-800 dark:text-rose-300">
             <span className="font-bold block mb-0.5">{t('tickets.rejectionReason')}:</span>
             <p className="italic">&ldquo;{ticket.rejectionReason}&rdquo;</p>
-            {currentUser?.id === ticket.createdById && <RejectedTicketCorrection ticket={ticket} />}
+            {currentUser?.id === ticket.createdById && <RejectedTicketCorrection ticket={ticket} schools={schools} taskTypes={taskTypes} departments={departmentsWithUsers} />}
           </div>
         )}
       </div>

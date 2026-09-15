@@ -43,7 +43,7 @@ export function UsersClientView({ users, roles, departments, permissions }: User
     if (!deletingUser) return;
     const res = await deleteUserAction(deletingUser.id);
     if (!res.success) {
-      throw new Error(res.error || 'Failed to delete user');
+      throw new Error(res.error || t('admin.users.deleteFailed'));
     }
   };
 
@@ -56,7 +56,7 @@ export function UsersClientView({ users, roles, departments, permissions }: User
   const handleEnableConfirm = async () => {
     if (!enablingUser) return;
     const res = await enableUserAction(enablingUser.id);
-    if (!res.success) throw new Error(res.error || 'Failed to enable account');
+    if (!res.success) throw new Error(res.error || t('admin.users.enableFailed'));
     router.refresh();
   };
 
@@ -136,10 +136,10 @@ export function UsersClientView({ users, roles, departments, permissions }: User
                     ><UserX className="w-3.5 h-3.5" /><span className="sr-only">{language === 'ar' ? 'تعطيل الحساب' : 'Disable Account'}</span></button>
                     <button
                       onClick={() => setSecurityUser(u)}
-                      title="Security & Access"
+                      title={t('common.securityAccess')}
                       className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 hover:bg-blue-100 transition-colors"
                     ><Shield className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => { setPermissionsUser(u); setSelectedPermissions((u.userPermissions || []).map((p: any) => p.permissionId)); }} title="Permissions" className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 hover:bg-indigo-100 transition-colors"><Shield className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setPermissionsUser(u); setSelectedPermissions((u.userPermissions || []).map((p: any) => p.permissionId)); }} title={t('common.permissions')} className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 hover:bg-indigo-100 transition-colors"><Shield className="w-3.5 h-3.5" /></button>
                     <button
                       onClick={() => {
                         setOffboardingUser(u);
@@ -321,7 +321,7 @@ export function UsersClientView({ users, roles, departments, permissions }: User
         cancelText={t('common.cancel')}
         confirmVariant="warning"
       />
-      <ConfirmDialog isOpen={!!enablingUser} onClose={() => setEnablingUser(null)} onConfirm={async () => { await handleEnableConfirm(); setEnablingUser(null); }} title="Enable Account / تفعيل الحساب" description={`The account for ${enablingUser?.name || ''} will become active and may sign in again.`} confirmText="Enable Account" cancelText={t('common.cancel')} confirmVariant="primary" />
+      <ConfirmDialog isOpen={!!enablingUser} onClose={() => setEnablingUser(null)} onConfirm={async () => { await handleEnableConfirm(); setEnablingUser(null); }} title={t('common.enableAccount')} description={t('admin.users.enableDesc', { name: enablingUser?.name || '' })} confirmText={t('common.enableAccount')} cancelText={t('common.cancel')} confirmVariant="primary" />
       <LoginSessionsModal user={securityUser} isOpen={!!securityUser} onClose={() => setSecurityUser(null)} />
       <ConfirmDialog
         isOpen={!!permissionsUser}
@@ -331,13 +331,13 @@ export function UsersClientView({ users, roles, departments, permissions }: User
           setSavingPermissions(true);
           const result = await updateUserPermissionsAction(permissionsUser.id, selectedPermissions);
           setSavingPermissions(false);
-          if (!result.success) throw new Error(result.error || 'Failed to update permissions');
+          if (!result.success) throw new Error(result.error || t('admin.users.permissionsUpdateFailed'));
           setPermissionsUser(null);
           router.refresh();
         }}
-        title={`Permissions / الصلاحيات — ${permissionsUser?.name || ''}`}
-        description={savingPermissions ? 'Saving permissions…' : 'Select the direct permissions granted to this user. Role permissions remain independent.'}
-        confirmText="Save Permissions"
+        title={`${t('common.permissions')} — ${permissionsUser?.name || ''}`}
+        description={savingPermissions ? t('common.savingPermissions') : t('admin.users.permissionsDesc')}
+        confirmText={t('common.savePermissions')}
         cancelText={t('common.cancel')}
       >
         <div className="max-h-72 overflow-y-auto space-y-3 text-start">
