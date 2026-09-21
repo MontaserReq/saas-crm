@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n/context';
@@ -75,7 +75,8 @@ export function NoteStream({
   const [error, setError] = useState<string | null>(null);
   const { t, language } = useI18n();
 
-  const isLocked = !canAddNote || ticketStatus === 'CLOSED' || ticketStatus === 'REJECTED' || isViewer;
+  const isPending = ticketStatus === 'PENDING';
+  const isLocked = !canAddNote || ticketStatus === 'CLOSED' || ticketStatus === 'REJECTED' || isViewer || isPending;
 
   // Find users in currently selected department
   const currentDeptUsers = departments.find((d) => d.id === selectedDepartmentId)?.users || [];
@@ -103,6 +104,16 @@ export function NoteStream({
 
     if (isTransferEnabled && !selectedUserId) {
       setError(t('tickets.selectRecipientPrompt'));
+      return;
+    }
+
+    // Require note content when transfer is enabled (belt-and-suspenders, server also checks)
+    if (isTransferEnabled && !content.trim()) {
+      setError(
+        language === 'ar'
+          ? 'يجب كتابة ملاحظة قبل تحويل التذكرة.'
+          : 'Please add a note before transferring the ticket.'
+      );
       return;
     }
 
@@ -221,7 +232,11 @@ export function NoteStream({
         <div className="flex items-center gap-2.5 p-4 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs">
           <Lock className="w-4 h-4 text-slate-500 shrink-0" />
           <span>
-            {ticketStatus === 'CLOSED'
+            {ticketStatus === 'PENDING'
+              ? (language === 'ar'
+                  ? 'يجب قبول التذكرة أولًا قبل إضافة أي ملاحظة.'
+                  : 'Please accept the ticket before adding a note.')
+              : ticketStatus === 'CLOSED'
               ? t('tickets.ticketClosedNotice')
               : ticketStatus === 'REJECTED'
               ? t('tickets.ticketRejectedNotice')

@@ -6,7 +6,8 @@ import { SchoolFormModal } from './SchoolFormModal';
 import { PhoneNumber } from '@/components/ui/PhoneNumber';
 import { SchoolImportModal } from './SchoolImportModal';
 import { ExportDropdown } from '@/components/ui/ExportDropdown';
-import { deleteSchoolAction } from '@/server/actions/schools';
+import { deleteSchoolAction, exportSchoolsAction } from '@/server/actions/schools';
+import { buildSchoolExportColumns } from '@/lib/schools/export';
 import { formatNumber } from '@/lib/formatters';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
@@ -28,6 +29,12 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
+
+/**
+ * Mirrors SchoolService.MAX_EXPORT_ROWS (server-side cap for a single export).
+ * Kept locally so this client bundle never imports the Prisma-backed service.
+ */
+const EXPORT_ROW_LIMIT = 20000;
 
 interface SchoolsClientViewProps {
   initialSchools: any[];
@@ -72,8 +79,9 @@ export function SchoolsClientView({
   const [deletingSchool, setDeletingSchool] = useState<any | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [exportTruncated, setExportTruncated] = useState(false);
 
-  const { t, language } = useI18n();
+  const { t, language, getStatusLabel } = useI18n();
   const router = useRouter();
   const grandTotal = totalAllSchools !== undefined ? totalAllSchools : total;
   const isAll = pageSize === 'all' || (typeof pageSize === 'number' && pageSize >= 10000);
@@ -177,16 +185,53 @@ export function SchoolsClientView({
     }
   };
 
-  const exportColumns = [
-    { header: t('schools.schoolName'), accessor: (s: any) => s.name },
-    { header: t('schools.classification'), accessor: (s: any) => s.classification ? `Class ${s.classification}` : '—' },
-    { header: t('schools.responsibleEmployee'), accessor: (s: any) => s.responsibleEmployee?.name || '—' },
-    { header: t('schools.contactPerson'), accessor: (s: any) => s.contactPerson || '—' },
-    { header: t('schools.phone'), accessor: (s: any) => s.phone || '—' },
-    { header: t('schools.whatsapp'), accessor: (s: any) => s.whatsapp || '—' },
-    { header: t('schools.city'), accessor: (s: any) => s.city },
-    { header: t('schools.area'), accessor: (s: any) => s.area || '—' },
-  ];
+  // Every registry field is exported in a fixed, workflow-friendly order.
+  const exportColumns = buildSchoolExportColumns({
+    index: '#',
+    schoolName: t('schools.schoolName'),
+    classification: t('schools.classification'),
+    schoolType: t('schools.type'),
+    city: t('schools.city'),
+    area: t('schools.area'),
+    contactPerson: t('schools.contactPerson'),
+    phone: t('schools.phone'),
+    whatsapp: t('schools.whatsapp'),
+    email: t('schools.email'),
+    status: t('schools.status'),
+    responsibleEmployee: t('schools.responsibleEmployee'),
+    ticketsCount: t('schools.ticketsCountLabel'),
+    notes: t('schools.notes'),
+    addedBy: t('schools.addedBy'),
+    addedAt: t('schools.addedAt'),
+    lastUpdatedAt: t('schools.lastUpdatedAt'),
+    unassignedEmployee: t('schools.unassignedEmployee'),
+    schoolTypeLabel: (value?: string | null) => (value ? getStatusLabel(value) : ''),
+    statusLabel: (value?: string | null) => (value ? getStatusLabel(value) : ''),
+  });
+
+  // The export header/sheet repeats the filters that produced the export.
+  const exportFilters: Record<string, string | number> = {
+    [t('common.search')]: initialSearch,
+    [t('schools.classification')]: initialClassification
+      ? t(`schools.class${initialClassification}`)
+      : '',
+    [t('schools.city')]: initialCity,
+    ...(exportTruncated
+      ? { [t('export.truncatedNotice')]: t('export.truncatedValue', { max: formatNumber(EXPORT_ROW_LIMIT, language) }) }
+      : {}),
+  };
+
+  // Export runs against the complete filtered registry, not just the open page.
+  const loadAllSchoolsForExport = async () => {
+    const result = await exportSchoolsAction({
+      search: initialSearch,
+      classification: initialClassification,
+      city: initialCity,
+    });
+    if (!result.success) throw new Error(result.error);
+    setExportTruncated(!!result.truncated);
+    return (result.schools || []) as any[];
+  };
 
   return (
     <div className="space-y-6">
@@ -204,6 +249,12 @@ export function SchoolsClientView({
             columns={exportColumns}
             filename="schools_registry"
             title={t('schools.title')}
+            formats={['excel', 'pdf']}
+            loadAll={loadAllSchoolsForExport}
+            columnWidths={[5, 34, 11, 14, 14, 20, 22, 18, 18, 28, 14, 22, 11, 32, 20, 17, 17]}
+            sheetName={t('schools.title')}
+            filters={exportFilters}
+            pdfMode="print"
           />
 
           {canAssign && (

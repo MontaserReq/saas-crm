@@ -128,6 +128,17 @@ export const PERMISSIONS = {
 
   // AI Knowledge Assistant (read-only chatbot)
   AI_ASSISTANT_VIEW: 'ai_assistant.view',
+
+  // Proposals
+  PROPOSALS_VIEW: 'proposals.view',
+  PROPOSALS_CREATE: 'proposals.create',
+  PROPOSALS_UPDATE: 'proposals.update',
+  PROPOSALS_DELETE: 'proposals.delete',
+  PROPOSALS_GENERATE: 'proposals.generate',
+  PROPOSALS_TEMPLATE_VIEW: 'proposals.template.view',
+  PROPOSALS_TEMPLATE_CREATE: 'proposals.template.create',
+  PROPOSALS_TEMPLATE_UPDATE: 'proposals.template.update',
+  PROPOSALS_TEMPLATE_DELETE: 'proposals.template.delete',
 } as const;
 
 export function hasPermission(user: UserSession | null | undefined, permissionCode: string): boolean {

@@ -1,4 +1,4 @@
-﻿import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/db/prisma';
 import { UserSession, TicketStatus, PaginationParams, PaginatedResult } from '@/types';
 import {
   hasPermission,
@@ -392,6 +392,23 @@ export class TicketService {
       throw new Error('Forbidden: You cannot add notes to this ticket (ticket is closed, rejected, or you have view-only access).');
     }
 
+    const ticket = await prisma.ticket.findUnique({ where: { id: input.ticketId } });
+    if (!ticket) throw new Error('Ticket not found');
+
+    // Block notes on PENDING tickets — must accept first.
+    if (ticket.status === 'PENDING') {
+      throw new Error(
+        'يجب قبول التذكرة أولًا قبل إضافة أي ملاحظة. / Please accept the ticket before adding a note.'
+      );
+    }
+
+    // Require note content when performing a transfer via note.
+    if (input.transferToUserId && (!input.content || !input.content.trim())) {
+      throw new Error(
+        'يجب كتابة ملاحظة قبل تحويل التذكرة. / Please add a note before transferring the ticket.'
+      );
+    }
+
     const validated = createNoteSchema.parse({
       ticketId: input.ticketId,
       content: input.content,
@@ -474,11 +491,12 @@ export class TicketService {
         });
 
         // Fetch ticket number and update Ticket status & department
+        // Status set to PENDING so new assignee must explicitly accept.
         const currentTicket = await tx.ticket.findUnique({ where: { id: validated.ticketId } });
         await tx.ticket.update({
           where: { id: validated.ticketId },
           data: {
-            status: 'TRANSFERRED',
+            status: 'PENDING',
             departmentId: targetUser.departmentId || undefined,
           },
         });
@@ -689,10 +707,10 @@ export class TicketService {
         },
       });
 
-      // 5. Update Ticket Status
+      // 5. Update Ticket Status — set to PENDING so the new assignee must accept it
       await tx.ticket.update({
         where: { id: ticketId },
-        data: { status: 'TRANSFERRED' },
+        data: { status: 'PENDING' },
       });
 
       // 6. Record Activity Event

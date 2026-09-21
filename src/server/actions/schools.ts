@@ -53,6 +53,42 @@ export async function validateSchoolImportAction(rawRows: any[]) {
   }
 }
 
+export interface SchoolExportFilters {
+  search?: string;
+  classification?: string;
+  city?: string;
+}
+
+/**
+ * Loads every school matching the active registry filters so exports are always
+ * generated from the complete result set instead of the visible page.
+ * Visibility follows schools.view (the registry page rule); the dedicated
+ * schools.export permission is honored as well.
+ */
+export async function exportSchoolsAction(filters: SchoolExportFilters = {}) {
+  try {
+    const user = await requireAuth();
+    if (!hasPermission(user, PERMISSIONS.SCHOOLS_VIEW) && !hasPermission(user, PERMISSIONS.SCHOOLS_EXPORT)) {
+      return { success: false as const, error: 'Forbidden: Insufficient permissions to export schools' };
+    }
+
+    const schools = await SchoolService.listSchoolsForExport({
+      search: filters.search || '',
+      classification: filters.classification || undefined,
+      city: filters.city || undefined,
+    });
+
+    return {
+      success: true as const,
+      schools,
+      total: schools.length,
+      truncated: schools.length >= SchoolService.MAX_EXPORT_ROWS,
+    };
+  } catch (err: any) {
+    return { success: false as const, error: err.message || 'Failed to load schools for export' };
+  }
+}
+
 export async function deleteSchoolAction(id: string) {
   try {
     const user = await requireAuth();

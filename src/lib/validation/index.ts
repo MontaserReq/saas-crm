@@ -78,7 +78,10 @@ export const ticketTransferSchema = z.object({
 
 export const createNoteSchema = z.object({
   ticketId: z.string().min(1, 'Ticket ID is required'),
-  content: z.string().min(2, 'Note content cannot be empty'),
+  content: z.string().min(2, 'Note content cannot be empty').refine(
+    val => val.trim().length >= 2,
+    'Note content must be at least 2 characters and not just whitespace'
+  ),
   priority: z.string().optional().nullable(),
   transferToUserId: z.string().optional().nullable(),
 });

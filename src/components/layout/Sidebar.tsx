@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -18,6 +18,7 @@ import {
   BarChart3,
   FileSpreadsheet,
   CalendarDays,
+  FileText,
   Plus,
 } from "lucide-react";
 import { UserSession } from "@/types";
@@ -51,6 +52,12 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       show: hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL),
     },
     { label: t("nav.calendar"), href: "/calendar", icon: CalendarDays },
+    {
+      label: t("nav.proposals"),
+      href: "/proposals",
+      icon: FileText,
+      show: hasPermission(user, PERMISSIONS.PROPOSALS_VIEW),
+    },
     {
       label: t("nav.schools"),
       href: "/schools",

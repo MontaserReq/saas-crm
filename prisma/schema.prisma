@@ -58,11 +58,14 @@ model User {
   ticketApprovalDecisions TicketApprovalRequest[]   @relation("TicketApprovalDecider")
   assignedCalendarEvents  CalendarEvent[]           @relation("CalendarAssignedUser")
   createdCalendarEvents   CalendarEvent[]           @relation("CalendarCreator")
+  calendarEventAssignees  CalendarEventAssignee[]
   taskTypeMemberships     TaskTypeMember[]
   schoolResearchJobs      SchoolResearchJob[]       @relation("SchoolResearchJobCreator")
   schoolResearchDecisions SchoolResearchCandidate[] @relation("SchoolResearchCandidateDecider")
   createdMeetingDetails   MeetingDetails[]
   presence                UserPresence?
+  createdProposals        Proposal[]                @relation("ProposalCreator")
+  createdProposalTemplates ProposalTemplate[]       @relation("ProposalTemplateCreator")
 
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -187,8 +190,12 @@ model School {
   approvalRequests         SchoolApprovalRequest[]
   researchCandidateMatches SchoolResearchCandidate[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  logoKey      String?
+  logoProvider String  @default("local")
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  proposals Proposal[]
 
   @@index([city])
   @@index([status])
@@ -798,14 +805,19 @@ model CalendarEvent {
   id          String    @id @default(cuid())
   title       String
   description String?
-  type        String    @default("EVENT") // "MEETING", "FOLLOW_UP", "DUE_DATE", "TASK", "EVENT"
+  // "MEETING" | "CALL" | "FOLLOW_UP" | "CONTRACT_SIGNING" | "APPOINTMENT" | "SCHEDULED_TASK" | "DUE_DATE" | "TASK" | "EVENT"
+  type        String    @default("MEETING")
   startDate   DateTime
   endDate     DateTime?
   allDay      Boolean   @default(false)
   location    String?
 
+  // Legacy single-assignee field (preserved for backwards compat)
   userId String?
   user   User?   @relation("CalendarAssignedUser", fields: [userId], references: [id])
+
+  // Multi-assignee relation
+  assignees CalendarEventAssignee[]
 
   createdById String
   createdBy   User   @relation("CalendarCreator", fields: [createdById], references: [id])
@@ -825,6 +837,20 @@ model CalendarEvent {
   @@index([type])
 }
 
+model CalendarEventAssignee {
+  id      String        @id @default(cuid())
+  eventId String
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+}
+
 model MessageTemplate {
   id        String  @id @default(cuid())
   code      String  @unique
@@ -842,3 +868,74 @@ model MessageTemplate {
 
   @@index([category])
 }
+
+// ── Proposal Templates ───────────────────────────────────────────────────
+// Reusable base PDF templates with bounding box configurations for logos/fields.
+model ProposalTemplate {
+  id                 String     @id @default(cuid())
+  name               String
+  description        String?
+  pdfStorageKey      String
+  pdfStorageProvider String     @default("local")
+  originalFileName   String
+  fileSize           Int        @default(0)
+  isActive           Boolean    @default(true)
+
+  // JSON: { schoolLogoPosition: { page, x, y, width, height }, codeLineLogoPosition: { page, x, y, width, height } }
+  config             String?
+
+  createdById        String
+  createdBy          User       @relation("ProposalTemplateCreator", fields: [createdById], references: [id])
+
+  proposals          Proposal[]
+
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([isActive])
+  @@index([createdById])
+}
+
+// ── Proposals ─────────────────────────────────────────────────────────────
+// Stores commercial proposals generated for schools / clients.
+model Proposal {
+  id            String  @id @default(cuid())
+  title         String
+  clientName    String
+  contactPerson String?
+  clientEmail   String?
+  clientPhone   String?
+
+  templateId    String?
+  template      ProposalTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  schoolId      String?
+  school        School?           @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+
+  // Snapshot of school logo used at generation time (preserves historical accuracy)
+  logoKey       String?
+  logoProvider  String            @default("local")
+
+  // DRAFT | GENERATED | SENT
+  status        String            @default("DRAFT")
+
+  // JSON blob: { services: [], pricing: [], terms: "", notes: "", dynamicValues: {} }
+  content       String?
+
+  generatedAt          DateTime?
+  generatedPdfKey      String?
+  generatedPdfProvider String    @default("local")
+
+  createdById   String
+  createdBy     User              @relation("ProposalCreator", fields: [createdById], references: [id])
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([status])
+  @@index([createdById])
+  @@index([schoolId])
+  @@index([templateId])
+  @@index([createdAt])
+}
+

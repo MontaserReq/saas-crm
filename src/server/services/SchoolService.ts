@@ -90,6 +90,37 @@ export class SchoolService {
     const pageSize = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 15;
     const skip = (page - 1) * pageSize;
 
+    const where = this.buildSchoolWhere(filters);
+
+    const [total, data] = await Promise.all([
+      prisma.school.count({ where }),
+      prisma.school.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          createdBy: { select: { id: true, name: true } },
+          responsibleEmployee: { select: { id: true, name: true, email: true } },
+          _count: { select: { tickets: true } },
+        },
+      }),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  /**
+   * Single source of truth for the Schools Registry filter clause so the paged
+   * view and the export always return the same result set.
+   */
+  private static buildSchoolWhere(filters: SchoolFilters) {
     const where: any = { isDeleted: false };
     if (filters.search && filters.search.trim() !== '') {
       const q = filters.search.trim();
@@ -129,28 +160,29 @@ export class SchoolService {
       };
     }
 
-    const [total, data] = await Promise.all([
-      prisma.school.count({ where }),
-      prisma.school.findMany({
-        where,
-        skip,
-        take: pageSize,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          createdBy: { select: { id: true, name: true } },
-          responsibleEmployee: { select: { id: true, name: true, email: true } },
-          _count: { select: { tickets: true } },
-        },
-      }),
-    ]);
+    return where;
+  }
 
-    return {
-      data,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
-    };
+  /** Upper bound for a single registry export so a huge registry cannot hang the request. */
+  static readonly MAX_EXPORT_ROWS = 20000;
+
+  /**
+   * Returns the complete registry (every matching record, not just the visible
+   * page) with the relations required by the export writers. Rows are grouped by
+   * classification, then city, then school name so the exported sheet reads like
+   * an organized directory.
+   */
+  static async listSchoolsForExport(filters: Omit<SchoolFilters, 'page' | 'pageSize'>) {
+    return prisma.school.findMany({
+      where: this.buildSchoolWhere(filters as SchoolFilters),
+      orderBy: [{ classification: 'asc' }, { city: 'asc' }, { name: 'asc' }],
+      take: this.MAX_EXPORT_ROWS,
+      include: {
+        createdBy: { select: { id: true, name: true } },
+        responsibleEmployee: { select: { id: true, name: true, email: true } },
+        _count: { select: { tickets: true } },
+      },
+    });
   }
 
   static async getSchoolById(user: UserSession, id: string) {
