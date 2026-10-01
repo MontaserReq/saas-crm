@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash, randomBytes } from 'crypto';
 
-const { prismaMock, sendTransactionalEmail, mockHeaderState } = vi.hoisted(() => {
+const { prismaMock, sendTransactionalEmail, mockHeaderState, rateLimitMock } = vi.hoisted(() => {
   const mockHeaderState = { ip: '10.0.0.1', ua: 'vitest-agent' };
   const prismaMock: any = {
     user: { findUnique: vi.fn(), update: vi.fn() },
@@ -17,7 +17,8 @@ const { prismaMock, sendTransactionalEmail, mockHeaderState } = vi.hoisted(() =>
   };
   prismaMock.$transaction = vi.fn(async (fn: any) => fn(prismaMock));
   const sendTransactionalEmail = vi.fn().mockResolvedValue(undefined);
-  return { prismaMock, sendTransactionalEmail, mockHeaderState };
+  const rateLimitMock = vi.fn();
+  return { prismaMock, sendTransactionalEmail, mockHeaderState, rateLimitMock };
 });
 
 vi.mock('next/headers', () => ({
@@ -34,6 +35,10 @@ vi.mock('next/headers', () => ({
 
 vi.mock('@/lib/db/prisma', () => ({ default: prismaMock }));
 vi.mock('@/lib/email', () => ({ sendTransactionalEmail: (...args: any[]) => sendTransactionalEmail(...args) }));
+vi.mock('@/lib/security/rateLimiter', () => ({
+  checkRateLimit: rateLimitMock,
+  RATE_LIMIT_POLICY_CONFIG: { password_reset: { limit: 20, windowSeconds: 900 } },
+}));
 
 import { forgotPasswordAction, resetPasswordAction } from '@/server/actions/auth';
 
@@ -42,6 +47,7 @@ describe('Password reset — unit', () => {
     vi.clearAllMocks();
     prismaMock.passwordResetToken.deleteMany.mockResolvedValue({ count: 0 });
     prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock));
+    rateLimitMock.mockResolvedValue({ status: 'allowed', allowed: true });
     process.env.APP_URL = 'https://crmplatform.codelinejo.com';
     mockHeaderState.ip = `10.0.0.${Math.floor(Math.random() * 250) + 1}`;
   });
@@ -112,6 +118,12 @@ describe('Password reset — unit', () => {
   });
 
   it('rate-limits repeated requests for the same email within the window', async () => {
+    const counts = new Map<string, number>();
+    rateLimitMock.mockImplementation(async ({ identity }: { identity: string }) => {
+      const count = (counts.get(identity) || 0) + 1;
+      counts.set(identity, count);
+      return { status: count <= 5 ? 'allowed' : 'blocked', allowed: count <= 5 };
+    });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', email: 'flood@codeline.jo', name: 'A', isActive: true });
     prismaMock.passwordResetToken.create.mockResolvedValue({});
     const email = `flood-${Date.now()}@codeline.jo`;

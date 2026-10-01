@@ -18,6 +18,10 @@ const { prismaMock } = vi.hoisted(() => {
 
 vi.mock('@/lib/db/prisma', () => ({ default: prismaMock }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('@/lib/security/rateLimiter', () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ status: 'allowed', allowed: true }),
+  RATE_LIMIT_POLICY_CONFIG: { ai_research: { limit: 5, windowSeconds: 900 } },
+}));
 
 let currentUser: UserSession | null = null;
 vi.mock('@/lib/auth/session', () => ({

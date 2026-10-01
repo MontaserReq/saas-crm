@@ -6,6 +6,7 @@ import { AuditService } from '@/server/services/AuditService';
 import { classifyIntent } from '@/lib/ai-assistant/classify';
 import { routeTool } from '@/lib/ai-assistant/router';
 import { composeAnswer } from '@/lib/ai-assistant/compose';
+import { checkRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
 
 const MAX_MESSAGE_LENGTH = 1000;
 const MAX_TURNS = 4;
@@ -22,25 +23,6 @@ const ACTION_REQUEST_PATTERN =
 // as an action request — it's asking for an explanation, not asking the
 // assistant to act. Checked first so it always wins over the pattern above.
 const HOW_TO_QUESTION_PATTERN = /\b(how (do|can|to) i?|what('?s| is) the (way|process|steps?) to)\b|كيف|شلون|الطريقة/i;
-
-// Simple per-user in-memory rate limit (single-instance deployment — see
-// docker-compose.prod.yml, one `app` service). Not shared across instances,
-// which is an acceptable MVP tradeoff for an internal tool.
-const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
-const RATE_LIMIT_MAX_REQUESTS = 20;
-const rateLimitState = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitState.get(userId);
-  if (!entry || entry.resetAt < now) {
-    rateLimitState.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) return false;
-  entry.count += 1;
-  return true;
-}
 
 export interface AskAssistantInput {
   message: string;
@@ -67,7 +49,9 @@ export async function askAssistantAction(input: AskAssistantInput): Promise<AskA
     const message = (input.message || '').trim().slice(0, MAX_MESSAGE_LENGTH);
     if (!message) return { success: false, error: 'Empty message' };
 
-    if (!checkRateLimit(user.id)) {
+    const policy = RATE_LIMIT_POLICY_CONFIG.ai;
+    const limit = await checkRateLimit({ policy: 'ai', identity: `ai-assistant-user:${user.id}`, ...policy });
+    if (!limit.allowed) {
       return {
         success: true,
         reply: input.language === 'ar' ? 'في طلبات كثيرة بوقت قصير، جرّب بعد شوي.' : 'Too many requests in a short time — please try again shortly.',

@@ -7,6 +7,8 @@ import { userCreateSchema, userUpdateSchema } from '@/lib/validation';
 import { AuditService } from '@/server/services/AuditService';
 import { revalidatePath } from 'next/cache';
 import { requireOrganizationId } from '@/lib/auth/organization';
+import { checkRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
+import { getRequestContext } from '@/lib/security/request';
 
 async function validateReportingManager(userId: string | null | undefined, managerId: string | null | undefined, organizationId: string) {
   if (!managerId) return;
@@ -484,6 +486,18 @@ export async function updateUserCredentialsAction(data: {
 }) {
   try {
     const user = await requireAuth();
+
+    if (data.newPassword) {
+      const policy = RATE_LIMIT_POLICY_CONFIG.password_change;
+      const request = getRequestContext();
+      const [userLimit, ipLimit] = await Promise.all([
+        checkRateLimit({ policy: 'password_change', identity: `password-change-user:${user.id}`, ...policy }),
+        checkRateLimit({ policy: 'password_change', identity: `password-change-ip:${request.ipAddress}`, ...policy }),
+      ]);
+      if (!userLimit.allowed || !ipLimit.allowed) {
+        return { success: false, error: 'Unable to change credentials at this time' };
+      }
+    }
 
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },

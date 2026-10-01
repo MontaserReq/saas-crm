@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { prismaMock, sendTransactionalEmail, mockHeaderState } = vi.hoisted(() => {
+const { prismaMock, sendTransactionalEmail, mockHeaderState, rateLimitMock } = vi.hoisted(() => {
   const mockHeaderState = { ip: '203.0.113.5', ua: 'vitest-agent' };
   const prismaMock: any = {
     user: { findUnique: vi.fn(), update: vi.fn() },
@@ -16,7 +16,8 @@ const { prismaMock, sendTransactionalEmail, mockHeaderState } = vi.hoisted(() =>
   };
   prismaMock.$transaction = vi.fn(async (fn: any) => fn(prismaMock));
   const sendTransactionalEmail = vi.fn().mockResolvedValue(undefined);
-  return { prismaMock, sendTransactionalEmail, mockHeaderState };
+  const rateLimitMock = vi.fn();
+  return { prismaMock, sendTransactionalEmail, mockHeaderState, rateLimitMock };
 });
 
 vi.mock('next/headers', () => ({
@@ -33,6 +34,10 @@ vi.mock('next/headers', () => ({
 
 vi.mock('@/lib/db/prisma', () => ({ default: prismaMock }));
 vi.mock('@/lib/email', () => ({ sendTransactionalEmail: (...args: any[]) => sendTransactionalEmail(...args) }));
+vi.mock('@/lib/security/rateLimiter', () => ({
+  checkRateLimit: rateLimitMock,
+  RATE_LIMIT_POLICY_CONFIG: { password_reset: { limit: 20, windowSeconds: 900 } },
+}));
 
 import { forgotPasswordAction, resetPasswordAction, checkResetTokenAction } from '@/server/actions/auth';
 
@@ -62,6 +67,7 @@ describe('Password reset — security', () => {
     vi.clearAllMocks();
     activeStore = null;
     prismaMock.passwordResetToken.deleteMany.mockResolvedValue({ count: 0 });
+    rateLimitMock.mockResolvedValue({ status: 'allowed', allowed: true });
     // Snapshot/restore the fake token store around each callback so a throw rolls back
     // the CAS claim, mirroring a real Postgres transaction abort.
     prismaMock.$transaction.mockImplementation(async (fn: any) => {
@@ -287,7 +293,27 @@ describe('Password reset — security', () => {
   });
 
   describe('Rate limiting', () => {
+    it('preserves the generic response and fails closed when the limiter is unavailable', async () => {
+      rateLimitMock.mockResolvedValue({ status: 'unavailable', allowed: false });
+      const result = await forgotPasswordAction('victim@codeline.jo', 'en');
+      expect(result).toEqual({ success: true, message: expect.stringContaining('If an account exists') });
+      expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('fails closed before attempting reset-token consumption when the limiter is unavailable', async () => {
+      rateLimitMock.mockResolvedValue({ status: 'unavailable', allowed: false });
+      const result = await resetPasswordAction('opaque-token', 'longenough1', 'longenough1');
+      expect(result).toEqual({ success: false, error: 'RESET_FAILED' });
+      expect(prismaMock.passwordResetToken.updateMany).not.toHaveBeenCalled();
+    });
+
     it('blocks a flood of requests from the same IP across many different emails', async () => {
+      const counts = new Map<string, number>();
+      rateLimitMock.mockImplementation(async ({ identity }: { identity: string }) => {
+        const count = (counts.get(identity) || 0) + 1;
+        counts.set(identity, count);
+        return { status: count <= 20 ? 'allowed' : 'blocked', allowed: count <= 20 };
+      });
       prismaMock.user.findUnique.mockResolvedValue(null);
       const ip = '192.0.2.77';
       mockHeaderState.ip = ip;

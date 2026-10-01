@@ -9,12 +9,26 @@ export const RATE_LIMIT_POLICIES = [
   'public_search',
   'chatbot',
   'ai',
+  'ai_research',
   'import',
 ] as const;
 
 export type RateLimitPolicy = (typeof RATE_LIMIT_POLICIES)[number];
 export type RateLimitFailureMode = 'open' | 'closed';
 export type RateLimitStatus = 'allowed' | 'blocked' | 'unavailable';
+
+// All endpoint limits live here so callers select a security policy rather
+// than duplicating undocumented thresholds in individual routes/actions.
+export const RATE_LIMIT_POLICY_CONFIG: Record<RateLimitPolicy, { limit: number; windowSeconds: number }> = {
+  login: { limit: 10, windowSeconds: 15 * 60 },
+  password_reset: { limit: 20, windowSeconds: 15 * 60 },
+  password_change: { limit: 5, windowSeconds: 15 * 60 },
+  public_search: { limit: 30, windowSeconds: 60 },
+  chatbot: { limit: 60, windowSeconds: 60 },
+  ai: { limit: 20, windowSeconds: 5 * 60 },
+  ai_research: { limit: 5, windowSeconds: 15 * 60 },
+  import: { limit: 5, windowSeconds: 60 * 60 },
+};
 
 export interface RateLimitCheckInput {
   policy: RateLimitPolicy;

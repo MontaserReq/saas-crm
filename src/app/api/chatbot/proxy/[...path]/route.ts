@@ -1,4 +1,5 @@
-import { rateLimit, tooManyRequests } from '@/lib/security/api';
+import { clientIp, tooManyRequests } from '@/lib/security/api';
+import { checkRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
 
 const WIDGET_ORIGIN = process.env.CHATBOT_UPSTREAM_ORIGIN;
 const MAX_BODY_BYTES = 256 * 1024;
@@ -41,8 +42,15 @@ async function forward(
   const path = `/${params.path.join('/')}`;
   if (!allowedPaths().has(path)) return new Response('Not Found', { status: 404 });
   if (!['GET', 'POST'].includes(request.method)) return new Response('Method Not Allowed', { status: 405 });
-  const limited = rateLimit(request, 'chatbot-proxy', 60, 60_000);
-  if (!limited.allowed) return tooManyRequests(limited.retryAfter);
+  const policy = RATE_LIMIT_POLICY_CONFIG.chatbot;
+  const limited = await checkRateLimit({ policy: 'chatbot', identity: `chatbot-proxy-ip:${clientIp(request)}`, ...policy });
+  if (!limited.allowed) {
+    return tooManyRequests(limited.retryAfterSeconds ?? policy.windowSeconds, {
+      limit: policy.limit,
+      remaining: limited.remaining ?? 0,
+      resetAt: limited.resetAt?.getTime(),
+    });
+  }
   const contentLength = Number(request.headers.get('content-length') || 0);
   if (contentLength > MAX_BODY_BYTES) return new Response('Payload too large', { status: 413 });
   const target = `${WIDGET_ORIGIN.replace(/\/$/, '')}${path}${new URL(request.url).search}`;

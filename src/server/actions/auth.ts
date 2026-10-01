@@ -9,23 +9,12 @@ import { randomUUID } from 'crypto';
 import { createHash, randomBytes } from 'crypto';
 import { sendTransactionalEmail } from '@/lib/email';
 import { getRequestContext, parseAllowedIps } from '@/lib/security/request';
+import { checkRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
 
-const resetRateLimitByEmail = new Map<string, { count: number; resetAt: number }>();
-const resetRateLimitByIp = new Map<string, { count: number; resetAt: number }>();
-const RESET_WINDOW_MS = 15 * 60 * 1000;
-const RESET_MAX_REQUESTS_PER_EMAIL = 5;
-const RESET_MAX_REQUESTS_PER_IP = 20;
 const RESET_TTL_MS = 3 * 60 * 1000;
 const RESET_GENERIC_MESSAGE = 'If an account exists for this email address, a password reset link will be sent.';
 
 function hashResetToken(token: string) { return createHash('sha256').update(token).digest('hex'); }
-
-function isRateLimited(map: Map<string, { count: number; resetAt: number }>, key: string, max: number, now: number): boolean {
-  const entry = map.get(key);
-  if (entry && entry.resetAt > now && entry.count >= max) return true;
-  map.set(key, entry && entry.resetAt > now ? { count: entry.count + 1, resetAt: entry.resetAt } : { count: 1, resetAt: now + RESET_WINDOW_MS });
-  return false;
-}
 
 function buildResetEmail(name: string, link: string, language: 'en' | 'ar') {
   const isAr = language === 'ar';
@@ -68,11 +57,14 @@ export async function forgotPasswordAction(emailInput: string, language: 'en' | 
   const request = getRequestContext();
   const now = Date.now();
   try {
-    if (isRateLimited(resetRateLimitByIp, request.ipAddress, RESET_MAX_REQUESTS_PER_IP, now)) {
+    const policy = RATE_LIMIT_POLICY_CONFIG.password_reset;
+    const ipLimit = await checkRateLimit({ policy: 'password_reset', identity: `forgot-ip:${request.ipAddress}`, ...policy });
+    if (!ipLimit.allowed) {
       return { success: true, message: RESET_GENERIC_MESSAGE };
     }
     if (!email || !loginSchema.shape.email.safeParse(email).success) return { success: true, message: RESET_GENERIC_MESSAGE };
-    if (isRateLimited(resetRateLimitByEmail, email, RESET_MAX_REQUESTS_PER_EMAIL, now)) {
+    const emailLimit = await checkRateLimit({ policy: 'password_reset', identity: `forgot-email:${email}`, ...policy });
+    if (!emailLimit.allowed) {
       return { success: true, message: RESET_GENERIC_MESSAGE };
     }
 
@@ -125,6 +117,10 @@ export async function resetPasswordAction(token: string, newPassword: string, co
   if (newPassword !== confirmPassword) return { success: false, error: 'PASSWORD_MISMATCH' };
   const request = getRequestContext();
   const tokenHash = hashResetToken(token);
+  const resetPolicy = RATE_LIMIT_POLICY_CONFIG.password_reset;
+  const ipLimit = await checkRateLimit({ policy: 'password_reset', identity: `reset-ip:${request.ipAddress}`, ...resetPolicy });
+  const tokenLimit = await checkRateLimit({ policy: 'password_reset', identity: `reset-token:${tokenHash}`, ...resetPolicy });
+  if (!ipLimit.allowed || !tokenLimit.allowed) return { success: false, error: 'RESET_FAILED' };
   const passwordHash = await hashPassword(newPassword);
   const now = new Date();
   try {
@@ -167,10 +163,18 @@ export async function resetPasswordAction(token: string, newPassword: string, co
 
 export async function loginAction(formData: { email: string; password: string }) {
   try {
-    const validated = loginSchema.parse(formData);
+    const validated = loginSchema.parse({ ...formData, email: formData.email.trim() });
+    const normalizedEmail = validated.email.trim().toLowerCase();
+    const request = getRequestContext();
+    const policy = RATE_LIMIT_POLICY_CONFIG.login;
+    const [ipLimit, accountLimit] = await Promise.all([
+      checkRateLimit({ policy: 'login', identity: `login-ip:${request.ipAddress}`, ...policy }),
+      checkRateLimit({ policy: 'login', identity: `login-account:${normalizedEmail}`, ...policy }),
+    ]);
+    if (!ipLimit.allowed || !accountLimit.allowed) return { success: false, error: 'Invalid email or password' };
 
     const user = await prisma.user.findUnique({
-      where: { email: validated.email.toLowerCase() },
+      where: { email: normalizedEmail },
       include: {
         role: {
           include: {
@@ -184,7 +188,6 @@ export async function loginAction(formData: { email: string; password: string })
       },
     });
 
-    const request = getRequestContext();
     if (!user || !user.isActive) {
       await AuditService.logAudit({ action: 'AUTH_LOGIN_FAILED', entityType: 'User', metadata: { email: validated.email }, ipAddress: request.ipAddress, userAgent: request.userAgent });
       return { success: false, error: 'Invalid email or password' };

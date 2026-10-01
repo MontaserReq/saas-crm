@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { rateLimit } from '@/lib/security/api';
+import { clientIp } from '@/lib/security/api';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -10,17 +10,15 @@ describe('API hardening', () => {
 
   it('does not trust forwarded headers unless a trusted proxy is configured', () => {
     const request = new Request('http://localhost/api/public-search', { headers: { 'x-forwarded-for': '10.0.0.1', 'x-real-ip': '10.0.0.2' } });
-    expect(rateLimit(request, 'test-a', 1, 60_000).allowed).toBe(true);
-    expect(rateLimit(request, 'test-a', 1, 60_000).allowed).toBe(false);
+    expect(clientIp(request)).toBe('anonymous');
   });
 
   it('uses the forwarded client IP only behind a configured trusted proxy', () => {
     process.env.TRUST_PROXY = 'true';
     const first = new Request('http://localhost/api/public-search', { headers: { 'x-forwarded-for': '10.0.0.3' } });
     const second = new Request('http://localhost/api/public-search', { headers: { 'x-forwarded-for': '10.0.0.4' } });
-    expect(rateLimit(first, 'test-b', 1, 60_000).allowed).toBe(true);
-    expect(rateLimit(first, 'test-b', 1, 60_000).allowed).toBe(false);
-    expect(rateLimit(second, 'test-b', 1, 60_000).allowed).toBe(true);
+    expect(clientIp(first)).toBe('10.0.0.3');
+    expect(clientIp(second)).toBe('10.0.0.4');
   });
 
   it('fails closed for unconfigured chatbot proxy paths and does not expose raw template errors', () => {

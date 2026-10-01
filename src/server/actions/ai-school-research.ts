@@ -7,12 +7,21 @@ import { SchoolResearchCandidateService } from '@/server/services/SchoolResearch
 import { schoolResearchCandidateRejectSchema, schoolResearchCandidateBulkApproveSchema } from '@/lib/validation';
 import { revalidatePath } from 'next/cache';
 import { requireOrganizationId } from '@/lib/auth/organization';
+import { checkRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
 
 export async function createResearchJobAction(input: CreateResearchJobInput) {
   try {
     const user = await requireAuth();
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_CREATE) || !hasPermission(user, PERMISSIONS.AI_RESEARCH_RUN)) {
       return { success: false, error: 'Forbidden: Insufficient permissions to run AI School Research' };
+    }
+    const policy = RATE_LIMIT_POLICY_CONFIG.ai_research;
+    const [userLimit, organizationLimit] = await Promise.all([
+      checkRateLimit({ policy: 'ai_research', identity: `ai-research-user:${user.id}`, ...policy }),
+      checkRateLimit({ policy: 'ai_research', identity: `ai-research-org:${requireOrganizationId(user)}`, ...policy }),
+    ]);
+    if (!userLimit.allowed || !organizationLimit.allowed) {
+      return { success: false, error: 'Research is temporarily unavailable. Please try again shortly.' };
     }
     const job = await SchoolResearchService.createJob(input, user.id);
     revalidatePath('/ai-school-research');

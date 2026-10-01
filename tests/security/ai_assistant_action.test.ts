@@ -5,14 +5,19 @@ vi.mock('@/server/services/AuditService', () => ({
   AuditService: { logAudit: vi.fn().mockResolvedValue(undefined) },
 }));
 
-const { classifyIntentMock, routeToolMock, composeAnswerMock } = vi.hoisted(() => ({
+const { classifyIntentMock, routeToolMock, composeAnswerMock, rateLimitMock } = vi.hoisted(() => ({
   classifyIntentMock: vi.fn(),
   routeToolMock: vi.fn(),
   composeAnswerMock: vi.fn(),
+  rateLimitMock: vi.fn(),
 }));
 vi.mock('@/lib/ai-assistant/classify', () => ({ classifyIntent: classifyIntentMock }));
 vi.mock('@/lib/ai-assistant/router', () => ({ routeTool: routeToolMock }));
 vi.mock('@/lib/ai-assistant/compose', () => ({ composeAnswer: composeAnswerMock }));
+vi.mock('@/lib/security/rateLimiter', () => ({
+  checkRateLimit: rateLimitMock,
+  RATE_LIMIT_POLICY_CONFIG: { ai: { limit: 20, windowSeconds: 300 } },
+}));
 
 let currentUser: UserSession | null = null;
 vi.mock('@/lib/auth/session', () => ({
@@ -46,6 +51,7 @@ describe('askAssistantAction — access control', () => {
     composeAnswerMock.mockResolvedValue({ reply: 'ok', resultSummary: null });
     routeToolMock.mockResolvedValue({ tool: 'none', result: null });
     classifyIntentMock.mockResolvedValue({ tool: 'none', args: {} });
+    rateLimitMock.mockResolvedValue({ status: 'allowed', allowed: true });
   });
 
   it('rejects an unauthenticated caller', async () => {
@@ -114,12 +120,25 @@ describe('askAssistantAction — rate limiting', () => {
   });
 
   it('stops answering via the classifier after the per-user request cap is hit within the window', async () => {
+    let calls = 0;
+    rateLimitMock.mockImplementation(async () => {
+      calls += 1;
+      return { status: calls <= 20 ? 'allowed' : 'blocked', allowed: calls <= 20 };
+    });
     for (let i = 0; i < 20; i++) {
       await askAssistantAction({ message: `question number ${i}`, language: 'en' });
     }
     classifyIntentMock.mockClear();
     const res = await askAssistantAction({ message: 'one more question', language: 'en' });
     expect(res.success).toBe(true);
+    expect(classifyIntentMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed with a stable action response when the limiter is unavailable', async () => {
+    rateLimitMock.mockResolvedValue({ status: 'unavailable', allowed: false });
+    const res = await askAssistantAction({ message: 'one more question', language: 'en' });
+    expect(res.success).toBe(true);
+    expect(res.reply).toMatch(/Too many requests|طلبات كثيرة/i);
     expect(classifyIntentMock).not.toHaveBeenCalled();
   });
 });

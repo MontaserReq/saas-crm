@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, verifyPassword, hashPassword, requireAuth, createSession } = vi.hoisted(() => ({
+const { prismaMock, verifyPassword, hashPassword, requireAuth, createSession, rateLimitMock } = vi.hoisted(() => ({
   prismaMock: {
     user: { findUnique: vi.fn(), update: vi.fn() },
     loginSession: { updateMany: vi.fn() },
@@ -11,16 +11,27 @@ const { prismaMock, verifyPassword, hashPassword, requireAuth, createSession } =
   hashPassword: vi.fn(),
   requireAuth: vi.fn(),
   createSession: vi.fn(),
+  rateLimitMock: vi.fn(),
 }));
 
 vi.mock('@/lib/db/prisma', () => ({ default: prismaMock }));
 vi.mock('@/lib/auth/session', () => ({ requireAuth, verifyPassword, hashPassword, createSession }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/headers', () => ({
+  headers: () => ({ get: (name: string) => name.toLowerCase() === 'user-agent' ? 'vitest-agent' : null }),
+}));
+vi.mock('@/lib/security/rateLimiter', () => ({
+  checkRateLimit: rateLimitMock,
+  RATE_LIMIT_POLICY_CONFIG: { password_change: { limit: 5, windowSeconds: 900 } },
+}));
 
 import { updateUserCredentialsAction } from '@/server/actions/users';
 
 describe('password change session invalidation', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rateLimitMock.mockResolvedValue({ status: 'allowed', allowed: true });
+  });
 
   it('keeps the current session and invalidates every other active session', async () => {
     requireAuth.mockResolvedValue({ id: 'user-a', sessionId: 'current-session', organizationId: 'org-a' });
@@ -50,5 +61,13 @@ describe('password change session invalidation', () => {
     expect(result).toEqual({ success: false, error: 'Current password is incorrect' });
     expect(prismaMock.user.update).not.toHaveBeenCalled();
     expect(prismaMock.loginSession.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the distributed limiter is unavailable', async () => {
+    requireAuth.mockResolvedValue({ id: 'user-a', sessionId: 'current-session', organizationId: 'org-a' });
+    rateLimitMock.mockResolvedValue({ status: 'unavailable', allowed: false });
+    const result = await updateUserCredentialsAction({ currentPassword: 'old-password', newPassword: 'new-password', newEmail: undefined });
+    expect(result).toEqual({ success: false, error: 'Unable to change credentials at this time' });
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
   });
 });
