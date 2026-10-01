@@ -4,8 +4,33 @@ const WIDGET_ORIGIN = process.env.CHATBOT_UPSTREAM_ORIGIN;
 const MAX_BODY_BYTES = 256 * 1024;
 const TIMEOUT_MS = 10_000;
 
+class PayloadTooLargeError extends Error {}
+
 function allowedPaths() {
   return new Set((process.env.CHATBOT_PROXY_ALLOWED_PATHS || '').split(',').map((value) => value.trim()).filter(Boolean));
+}
+
+async function readBoundedBody(request: Request): Promise<Uint8Array | undefined> {
+  if (request.method === 'GET' || request.method === 'HEAD' || !request.body) return undefined;
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_BODY_BYTES) throw new PayloadTooLargeError();
+      chunks.push(value);
+    }
+  } catch (error) {
+    await reader.cancel();
+    throw error;
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength; }
+  return body;
 }
 
 async function forward(
@@ -24,16 +49,20 @@ async function forward(
   const headers = new Headers();
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
-  const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.arrayBuffer();
-  if (body && body.byteLength > MAX_BODY_BYTES) return new Response('Payload too large', { status: 413 });
+  let body: Uint8Array | undefined;
+  try {
+    body = await readBoundedBody(request);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return new Response('Payload too large', { status: 413 });
+    return new Response('Unable to read request body', { status: 400 });
+  }
 
-  const response = await fetch(target, {
-    method: request.method,
-    headers,
-    body,
-    cache: "no-store",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetch(target, { method: request.method, headers, body: body as unknown as BodyInit, cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT_MS) });
+  } catch {
+    return new Response('Chatbot service unavailable', { status: 502 });
+  }
 
   return new Response(response.body, {
     status: response.status,
