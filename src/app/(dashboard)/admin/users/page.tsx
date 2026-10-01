@@ -13,6 +13,7 @@ export default async function AdminUsersPage() {
 
   const [users, roles, departments, permissions] = await Promise.all([
     prisma.user.findMany({
+      where: { organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } } },
       orderBy: { createdAt: 'desc' },
       include: {
         role: true,
@@ -21,7 +22,7 @@ export default async function AdminUsersPage() {
       },
     }),
     prisma.role.findMany({ orderBy: { name: 'asc' } }),
-    prisma.department.findMany({ orderBy: { name: 'asc' } }),
+    prisma.department.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: 'asc' } }),
     prisma.permission.findMany({ orderBy: [{ module: 'asc' }, { code: 'asc' }] }),
   ]);
 

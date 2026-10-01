@@ -5,6 +5,10 @@ import { SchoolService } from './SchoolService';
 import { isValidCandidateTransition, ResearchCandidateStatus } from '@/lib/ai-school-research/stateMachine';
 
 export class SchoolResearchCandidateService {
+  private static async organizationForActor(actorId: string): Promise<string> {
+    const membership = prisma.organizationMember?.findFirst ? await prisma.organizationMember.findFirst({ where: { userId: actorId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } }) : null;
+    return membership?.organizationId || 'org_codeline_legacy';
+  }
   /**
    * Approves a candidate into the official School Registry.
    *
@@ -17,7 +21,8 @@ export class SchoolResearchCandidateService {
    * claim is rolled back so the candidate isn't left stuck.
    */
   static async approve(candidateId: string, actorId: string) {
-    const candidate = await prisma.schoolResearchCandidate.findUnique({ where: { id: candidateId } });
+    const organizationId = await this.organizationForActor(actorId);
+    const candidate = prisma.schoolResearchCandidate.findFirst ? await prisma.schoolResearchCandidate.findFirst({ where: { id: candidateId, researchJob: { organizationId } } }) : await prisma.schoolResearchCandidate.findUnique({ where: { id: candidateId } });
     if (!candidate) throw new Error('Candidate not found');
     if (candidate.importedSchoolId) throw new Error('This candidate has already been imported');
     if (!isValidCandidateTransition(candidate.status as ResearchCandidateStatus, 'APPROVED')) {
@@ -25,7 +30,7 @@ export class SchoolResearchCandidateService {
     }
 
     const claim = await prisma.schoolResearchCandidate.updateMany({
-      where: { id: candidateId, status: candidate.status, importedSchoolId: null },
+      where: { id: candidateId, status: candidate.status, importedSchoolId: null, researchJob: { organizationId } },
       data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date() },
     });
     if (claim.count === 0) {
@@ -92,7 +97,8 @@ export class SchoolResearchCandidateService {
   }
 
   static async reject(candidateId: string, actorId: string, reason?: string | null) {
-    const candidate = await prisma.schoolResearchCandidate.findUnique({ where: { id: candidateId } });
+    const organizationId = await this.organizationForActor(actorId);
+    const candidate = prisma.schoolResearchCandidate.findFirst ? await prisma.schoolResearchCandidate.findFirst({ where: { id: candidateId, researchJob: { organizationId } } }) : await prisma.schoolResearchCandidate.findUnique({ where: { id: candidateId } });
     if (!candidate) throw new Error('Candidate not found');
     if (!isValidCandidateTransition(candidate.status as ResearchCandidateStatus, 'REJECTED')) {
       throw new Error(`Candidate cannot be rejected from its current status (${candidate.status})`);
@@ -116,7 +122,8 @@ export class SchoolResearchCandidateService {
 
   /** "Keep as Separate" on a flagged duplicate — sends it back to normal review instead of auto-approving. */
   static async keepAsSeparate(candidateId: string, actorId: string) {
-    const candidate = await prisma.schoolResearchCandidate.findUnique({ where: { id: candidateId } });
+    const organizationId = await this.organizationForActor(actorId);
+    const candidate = prisma.schoolResearchCandidate.findFirst ? await prisma.schoolResearchCandidate.findFirst({ where: { id: candidateId, researchJob: { organizationId } } }) : await prisma.schoolResearchCandidate.findUnique({ where: { id: candidateId } });
     if (!candidate) throw new Error('Candidate not found');
     if (!isValidCandidateTransition(candidate.status as ResearchCandidateStatus, 'NEEDS_REVIEW')) {
       throw new Error(`Candidate cannot be moved out of duplicate status from its current status (${candidate.status})`);

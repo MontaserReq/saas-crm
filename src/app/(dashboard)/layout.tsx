@@ -19,21 +19,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const [notifications, schools, taskTypes, users, manager] = await Promise.all([
     hasPermission(user, PERMISSIONS.NOTIFICATIONS_VIEW) ? NotificationService.getUserNotifications(user.id, 10) : Promise.resolve([]),
     hasPermission(user, PERMISSIONS.SCHOOLS_VIEW) ? prisma.school.findMany({
-      where: { isDeleted: false },
+      where: { isDeleted: false, organizationId: user.organizationId },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }) : Promise.resolve([]),
     hasPermission(user, PERMISSIONS.TICKETS_VIEW_ASSIGNED) || hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL) ? prisma.taskType.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationId: user.organizationId },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }) : Promise.resolve([]),
     hasPermission(user, PERMISSIONS.CHAT_VIEW) || hasPermission(user, PERMISSIONS.MESSAGES_SEND) || hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL) ? prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } } },
       select: { id: true, name: true, email: true, reportsToUserId: true, department: { select: { name: true } } },
       orderBy: { name: "asc" },
     }) : Promise.resolve([]),
-    user.reportsToUserId ? prisma.user.findUnique({ where: { id: user.reportsToUserId }, select: { id: true, name: true, isActive: true } }) : Promise.resolve(null),
+    user.reportsToUserId ? prisma.user.findFirst({ where: { id: user.reportsToUserId, organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } } }, select: { id: true, name: true, isActive: true } }) : Promise.resolve(null),
   ]);
 
   return (

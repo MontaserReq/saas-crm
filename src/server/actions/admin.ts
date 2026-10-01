@@ -50,10 +50,11 @@ export async function createDepartmentAction(data: any, managerUserIds: string[]
     }
 
     const validated = departmentSchema.parse(data);
+    const organizationId = user.organizationId || 'org_codeline_legacy';
 
     // Check duplicate code
-    const existing = await prisma.department.findUnique({
-      where: { code: validated.code },
+    const existing = await prisma.department.findFirst({
+      where: { code: validated.code, organizationId },
     });
     if (existing) {
       return { success: false, error: `Department code "${validated.code}" is already in use` };
@@ -66,10 +67,13 @@ export async function createDepartmentAction(data: any, managerUserIds: string[]
           code: validated.code,
           description: validated.description || null,
           isActive: validated.isActive !== undefined ? validated.isActive : true,
+          organizationId,
         },
       });
 
       if (managerUserIds && managerUserIds.length > 0) {
+        const managers = await tx.user.count({ where: { id: { in: managerUserIds }, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } } });
+        if (managers !== managerUserIds.length) throw new Error('Every department manager must belong to the active organization');
         await tx.departmentManager.createMany({
           data: managerUserIds.map((uId) => ({
             departmentId: dept.id,
@@ -104,12 +108,14 @@ export async function updateDepartmentAction(id: string, data: any, managerUserI
     }
 
     const validated = departmentSchema.parse(data);
+    const organizationId = user.organizationId || 'org_codeline_legacy';
 
     // Check if code taken by another department
     const existing = await prisma.department.findFirst({
       where: {
         code: validated.code,
         id: { not: id },
+        organizationId,
       },
     });
     if (existing) {
@@ -118,7 +124,7 @@ export async function updateDepartmentAction(id: string, data: any, managerUserI
 
     const department = await prisma.$transaction(async (tx) => {
       const dept = await tx.department.update({
-        where: { id },
+        where: { id, organizationId },
         data: {
           name: validated.name,
           code: validated.code,
@@ -130,6 +136,8 @@ export async function updateDepartmentAction(id: string, data: any, managerUserI
       // Update managers
       await tx.departmentManager.deleteMany({ where: { departmentId: id } });
       if (managerUserIds && managerUserIds.length > 0) {
+        const managers = await tx.user.count({ where: { id: { in: managerUserIds }, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } } });
+        if (managers !== managerUserIds.length) throw new Error('Every department manager must belong to the active organization');
         await tx.departmentManager.createMany({
           data: managerUserIds.map((uId) => ({
             departmentId: id,
@@ -163,8 +171,9 @@ export async function deleteDepartmentAction(id: string) {
       return { success: false, error: 'Forbidden: Only Super Admin can delete or archive departments' };
     }
 
-    const department = await prisma.department.findUnique({
-      where: { id },
+    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const department = await prisma.department.findFirst({
+      where: { id, organizationId },
       include: {
         _count: {
           select: {
@@ -231,7 +240,8 @@ export async function toggleDepartmentStatusAction(id: string) {
       return { success: false, error: 'Forbidden: Only Super Admin can modify department status' };
     }
 
-    const department = await prisma.department.findUnique({ where: { id } });
+    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const department = await prisma.department.findFirst({ where: { id, organizationId } });
     if (!department) return { success: false, error: 'Department not found' };
 
     const updated = await prisma.department.update({
@@ -266,14 +276,15 @@ export async function createTaskTypeAction(data: any) {
     }
 
     const validated = taskTypeSchema.parse(data);
+    const organizationId = user.organizationId || 'org_codeline_legacy';
 
     const memberIds = validated.members.map((member) => member.userId);
     if (new Set(memberIds).size !== memberIds.length) return { success: false, error: 'Duplicate team members are not allowed' };
 
     const taskType = await prisma.$transaction(async (tx) => {
-      const department = await tx.department.findUnique({ where: { id: validated.departmentId }, select: { id: true } });
+      const department = await tx.department.findFirst({ where: { id: validated.departmentId, organizationId }, select: { id: true } });
       if (!department) throw new Error('Department not found');
-      const users = await tx.user.findMany({ where: { id: { in: memberIds }, departmentId: department.id }, select: { id: true } });
+      const users = await tx.user.findMany({ where: { id: { in: memberIds }, departmentId: department.id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
       if (users.length !== memberIds.length) throw new Error('Every team member must belong to the selected department');
 
       const generatedCode = `TASK_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -285,6 +296,7 @@ export async function createTaskTypeAction(data: any) {
           description: validated.description || null,
           isActive: validated.isActive !== undefined ? validated.isActive : true,
           createdById: user.id,
+          organizationId,
           members: { create: validated.members.map((member) => ({ userId: member.userId, responsibility: member.responsibility })) },
         },
         include: { department: true, members: { include: { user: { select: { id: true, name: true, email: true } } } } },
@@ -315,17 +327,20 @@ export async function updateTaskTypeAction(id: string, data: any) {
     }
 
     const validated = taskTypeSchema.parse(data);
+    const organizationId = user.organizationId || 'org_codeline_legacy';
 
     const memberIds = validated.members.map((member) => member.userId);
     if (new Set(memberIds).size !== memberIds.length) return { success: false, error: 'Duplicate team members are not allowed' };
 
     const taskType = await prisma.$transaction(async (tx) => {
-      const department = await tx.department.findUnique({ where: { id: validated.departmentId }, select: { id: true } });
+      const department = await tx.department.findFirst({ where: { id: validated.departmentId, organizationId }, select: { id: true } });
       if (!department) throw new Error('Department not found');
-      const users = await tx.user.findMany({ where: { id: { in: memberIds }, departmentId: department.id }, select: { id: true } });
+      const users = await tx.user.findMany({ where: { id: { in: memberIds }, departmentId: department.id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
       if (users.length !== memberIds.length) throw new Error('Every team member must belong to the selected department');
+      const existing = await tx.taskType.findFirst({ where: { id, organizationId }, select: { id: true } });
+      if (!existing) throw new Error('Task type not found');
       return tx.taskType.update({
-        where: { id },
+        where: { id: existing.id },
         data: {
           name: validated.name,
           departmentId: validated.departmentId,
@@ -362,8 +377,9 @@ export async function deleteTaskTypeAction(id: string) {
       return { success: false, error: 'Forbidden: Only Super Admin can delete or archive task types' };
     }
 
-    const taskType = await prisma.taskType.findUnique({
-      where: { id },
+    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const taskType = await prisma.taskType.findFirst({
+      where: { id, organizationId },
       include: {
         _count: {
           select: { tickets: true },
@@ -426,7 +442,8 @@ export async function toggleTaskTypeStatusAction(id: string) {
       return { success: false, error: 'Forbidden: Only Super Admin can modify task type status' };
     }
 
-    const taskType = await prisma.taskType.findUnique({ where: { id } });
+    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const taskType = await prisma.taskType.findFirst({ where: { id, organizationId } });
     if (!taskType) return { success: false, error: 'Task type not found' };
 
     const updated = await prisma.taskType.update({
@@ -485,7 +502,10 @@ export async function updateRolePermissionsAction(roleId: string, permissionIds:
 export async function listUserPermissionsAction(userId: string) {
   try {
     const actor = await requireAuth();
+    const organizationId = actor.organizationId || 'org_codeline_legacy';
     if (!hasPermission(actor, PERMISSIONS.USERS_MANAGE_PERMISSIONS)) return { success: false, error: 'Forbidden' };
+    const target = await prisma.user.findFirst({ where: { id: userId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
+    if (!target) return { success: false, error: 'User not found' };
     const permissions = await prisma.userPermission.findMany({ where: { userId }, include: { permission: true }, orderBy: { permission: { module: 'asc' } } });
     return { success: true, permissions };
   } catch (err: any) { return { success: false, error: err.message || 'Failed to load user permissions' }; }
@@ -494,8 +514,11 @@ export async function listUserPermissionsAction(userId: string) {
 export async function updateUserPermissionsAction(userId: string, permissionIds: string[]) {
   try {
     const actor = await requireAuth();
+    const organizationId = actor.organizationId || 'org_codeline_legacy';
     if (!hasPermission(actor, PERMISSIONS.USERS_MANAGE_PERMISSIONS)) return { success: false, error: 'Forbidden' };
     if (userId === actor.id) return { success: false, error: 'You cannot change your own permissions' };
+    const target = await prisma.user.findFirst({ where: { id: userId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
+    if (!target) return { success: false, error: 'User not found' };
     const ids = Array.from(new Set(permissionIds.filter((id) => typeof id === 'string' && id.length > 0)));
     const valid = await prisma.permission.count({ where: { id: { in: ids } } });
     if (valid !== ids.length) return { success: false, error: 'One or more permissions are invalid' };

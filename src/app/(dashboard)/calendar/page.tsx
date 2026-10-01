@@ -13,18 +13,18 @@ export default async function CalendarPage() {
   const [events, schools, tickets, users] = await Promise.all([
     CalendarService.getCalendarEvents(user),
     prisma.school.findMany({
-      where: { isDeleted: false },
+      where: { isDeleted: false, organizationId: user.organizationId },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
     prisma.ticket.findMany({
-      where: { status: { notIn: ['CLOSED', 'REJECTED'] } },
+      where: { organizationId: user.organizationId, status: { notIn: ['CLOSED', 'REJECTED'] } },
       select: { id: true, ticketNumber: true, subject: true },
       orderBy: { createdAt: 'desc' },
       take: 50,
     }),
     prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } } },
       select: { id: true, name: true, email: true },
       orderBy: { name: 'asc' },
     }),

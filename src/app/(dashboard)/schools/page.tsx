@@ -30,7 +30,8 @@ export default async function SchoolsPage({
 
   // Registry visibility is governed by schools.view. Responsible employee and
   // ticket assignment are business data, not access filters.
-  const schoolScope = { isDeleted: false };
+  const organizationId = user.organizationId || 'org_codeline_legacy';
+  const schoolScope = { organizationId, isDeleted: false };
   const [result, totalAllSchools, totalAssignedSchools, totalClassA, users, pendingRequests] = await Promise.all([
     SchoolService.listSchools({
       page,
@@ -38,12 +39,12 @@ export default async function SchoolsPage({
       search,
       classification: classification || undefined,
       city: city || undefined,
-    }),
+    }, organizationId),
     prisma.school.count({ where: schoolScope }),
     prisma.school.count({ where: { ...schoolScope, status: 'ASSIGNED' } }),
     prisma.school.count({ where: { ...schoolScope, classification: 'A' } }),
     prisma.user.findMany({
-      where: { isActive: true, ...(hasPermission(user, PERMISSIONS.SCHOOLS_ASSIGN) ? {} : { id: user.id }) },
+      where: { isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } }, ...(hasPermission(user, PERMISSIONS.SCHOOLS_ASSIGN) ? {} : { id: user.id }) },
       select: { id: true, name: true, email: true, department: { select: { name: true } } },
       orderBy: { name: 'asc' },
     }),

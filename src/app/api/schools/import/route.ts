@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     const rows = matrix.slice(1)
       .filter((row) => Array.isArray(row) && row.some((value) => value !== '' && value !== null && value !== undefined))
       .map((row) => Object.fromEntries(headers.map((header, index) => [header, Array.isArray(row) ? row[index] ?? '' : ''])));
-    const preview = await SchoolService.validateImportRows(rows);
+    const preview = await SchoolService.validateImportRows(rows, user.organizationId || 'org_codeline_legacy');
     return NextResponse.json({ success: true, fileName: file.name, ...preview });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Excel validation failed';

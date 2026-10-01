@@ -14,13 +14,14 @@ export async function GET(
     if (!user) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
+    if (!user.organizationId) return new NextResponse('Organization context required', { status: 403 });
 
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_VIEW)) {
       return new NextResponse('Forbidden', { status: 403 });
     }
 
-    const proposal = await prisma.proposal.findUnique({
-      where: { id: params.id },
+    const proposal = await prisma.proposal.findFirst({
+      where: { id: params.id, organizationId: user.organizationId },
       select: { logoKey: true, logoProvider: true },
     });
 
@@ -50,7 +51,7 @@ export async function GET(
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=3600',
+        'Cache-Control': 'private, max-age=3600',
       },
     });
   } catch (err: any) {
@@ -68,6 +69,7 @@ export async function POST(
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+    if (!user.organizationId) return NextResponse.json({ success: false, error: 'Organization context required' }, { status: 403 });
 
     const formData = await request.formData();
     const file = formData.get('logo') as File | null;

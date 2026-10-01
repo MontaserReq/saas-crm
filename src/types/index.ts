@@ -46,6 +46,11 @@ export interface UserSession {
   reportsToUserId?: string | null;
   permissions: string[];
   sessionId?: string;
+  /** Organization selected by the authenticated session. Optional during the
+   * legacy-to-multi-tenant migration; server code must resolve it from
+   * membership rather than accepting a browser-supplied organization ID. */
+  organizationId?: string;
+  organizationName?: string;
 }
 
 export interface BreadcrumbItem {
@@ -64,6 +69,7 @@ export interface PaginationParams {
   assigneeId?: string;
   city?: string;
   schoolType?: string;
+  clientId?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }

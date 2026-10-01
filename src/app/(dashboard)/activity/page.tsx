@@ -7,11 +7,13 @@ export default async function ActivityPage() {
   const user = (await getCurrentUser())!;
   if (!hasPermission(user, PERMISSIONS.ACTIVITY_VIEW)) return null;
   const isFullView = hasPermission(user, PERMISSIONS.ACTIVITY_VIEW_ALL);
+  const organizationId = user.organizationId || 'org_codeline_legacy';
 
   const [activities, assignments, auditLogs] = await Promise.all([prisma.activityEvent.findMany({
     where: isFullView
-      ? {}
+      ? { organizationId }
       : {
+          organizationId,
           ticket: {
             assignees: {
               some: { userId: user.id },
@@ -31,7 +33,7 @@ export default async function ActivityPage() {
         },
       },
     },
-  }), prisma.assignmentHistory.findMany({ where: isFullView ? {} : { OR: [{ toUserId: user.id }, { fromUserId: user.id }, { performedById: user.id }] }, orderBy: { createdAt: 'desc' }, take: 40, include: { performedBy: { select: { name: true } }, toUser: { select: { name: true } } } }), prisma.auditLog.findMany({ where: isFullView ? {} : { actorId: user.id }, orderBy: { createdAt: 'desc' }, take: 40, include: { actor: { select: { name: true } } } })]);
+  }), prisma.assignmentHistory.findMany({ where: isFullView ? { ticket: { organizationId } } : { ticket: { organizationId }, OR: [{ toUserId: user.id }, { fromUserId: user.id }, { performedById: user.id }] }, orderBy: { createdAt: 'desc' }, take: 40, include: { performedBy: { select: { name: true } }, toUser: { select: { name: true } } } }), prisma.auditLog.findMany({ where: isFullView ? { organizationId } : { organizationId, actorId: user.id }, orderBy: { createdAt: 'desc' }, take: 40, include: { actor: { select: { name: true } } } })]);
   const unified = [
     ...activities.map(a => ({ ...a, actor: a.actor, source: 'activity' })),
     ...assignments.map(a => ({ id: `assignment-${a.id}`, title: a.action, description: `Assigned to ${a.toUser.name}`, createdAt: a.createdAt, actor: a.performedBy, ticket: null, source: 'assignment' })),

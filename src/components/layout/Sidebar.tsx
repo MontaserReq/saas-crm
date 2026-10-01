@@ -59,11 +59,16 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       show: hasPermission(user, PERMISSIONS.PROPOSALS_VIEW),
     },
     {
-      label: t("nav.schools"),
-      href: "/schools",
-      icon: GraduationCap,
+      label: "Clients",
+      href: "/clients",
+      icon: Building2,
       show: hasPermission(user, PERMISSIONS.SCHOOLS_VIEW),
     },
+    { label: "Deals", href: "/deals", icon: FileText, show: hasPermission(user, PERMISSIONS.DEALS_VIEW) },
+    { label: "Tasks", href: "/tasks", icon: ListTodo, show: hasPermission(user, PERMISSIONS.TASKS_VIEW) },
+    { label: "Pipelines", href: "/pipelines", icon: BarChart3, show: hasPermission(user, PERMISSIONS.PIPELINES_VIEW) },
+    { label: "Leads", href: "/leads", icon: Users, show: hasPermission(user, PERMISSIONS.SCHOOLS_VIEW) },
+    { label: "Contacts", href: "/contacts", icon: Users, show: hasPermission(user, PERMISSIONS.SCHOOLS_VIEW) },
     {
       label: t("nav.aiSchoolResearch"),
       href: "/ai-school-research",
@@ -77,6 +82,7 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       show: hasPermission(user, PERMISSIONS.SCHOOLS_ASSIGN),
     },
     { label: t("nav.messages"), href: "/messages", icon: Mail },
+    { label: "Chatbot (اختبار)", href: "#assistant", icon: Sparkles, action: "openAssistant" },
     { label: t("nav.myTodo"), href: "/todos", icon: StickyNote },
     { label: t("nav.activityChanges"), href: "/activity", icon: Activity },
   ];
@@ -182,7 +188,13 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
                     <Link
                       key={item.href}
                       href={item.href}
-                      onClick={handleLinkClick}
+                      onClick={(event) => {
+                        if (item.action === "openAssistant") {
+                          event.preventDefault();
+                          window.dispatchEvent(new CustomEvent("codeline:open-hosted-assistant"));
+                        }
+                        handleLinkClick();
+                      }}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                         isActive
                           ? "bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 font-semibold"

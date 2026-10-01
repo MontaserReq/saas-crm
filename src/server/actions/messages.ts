@@ -105,7 +105,7 @@ export async function getTeamMembersForMessaging() {
     if (!hasPermission(user, PERMISSIONS.MESSAGES_SEND)) return { success: false, error: 'Forbidden' };
     // Return all active team members except maybe current user or including everyone
     const users = await prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationMemberships: { some: { organizationId: user.organizationId || 'org_codeline_legacy', status: 'ACTIVE' } } },
       select: {
         id: true,
         name: true,
@@ -139,7 +139,7 @@ export async function getMessageTemplatesAction() {
     const user = await requireAuth();
     if (!hasPermission(user, PERMISSIONS.MESSAGES_SEND)) return { success: false, error: 'Forbidden', templates: [] };
     const templates = await prisma.messageTemplate.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationId: user.organizationId || 'org_codeline_legacy' },
       orderBy: { createdAt: 'asc' },
     });
     return { success: true, templates };

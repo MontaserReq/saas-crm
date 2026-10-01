@@ -196,7 +196,10 @@ export class AiAssistantToolService {
   static async getMeetingMinutes(user: UserSession, args: { ticketId?: string; ticketNumber?: string }): Promise<ToolResult> {
     let ticketId = args.ticketId || null;
     if (!ticketId && args.ticketNumber) {
-      const ticket = await prisma.ticket.findUnique({ where: { ticketNumber: args.ticketNumber }, select: { id: true } });
+      const ticket = await prisma.ticket.findFirst({
+        where: { ticketNumber: args.ticketNumber, organizationId: user.organizationId || 'org_codeline_legacy' },
+        select: { id: true },
+      });
       ticketId = ticket?.id || null;
     }
     if (!ticketId) return { ok: true, data: null };
@@ -243,7 +246,13 @@ export class AiAssistantToolService {
 
     const rows = await prisma.ticketAssignee.groupBy({
       by: ['userId'],
-      where: { isCurrent: true, ticket: { status: { notIn: ['CLOSED', 'REJECTED', 'COMPLETED'] } } },
+      where: {
+        isCurrent: true,
+        ticket: {
+          organizationId: user.organizationId || 'org_codeline_legacy',
+          status: { notIn: ['CLOSED', 'REJECTED', 'COMPLETED'] },
+        },
+      },
       _count: { userId: true },
       orderBy: { _count: { userId: 'desc' } },
       take: 5,

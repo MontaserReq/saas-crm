@@ -13,6 +13,7 @@ export async function GET(
     if (!user) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
+    if (!user.organizationId) return new NextResponse('Organization context required', { status: 403 });
 
     const attachmentId = params.id;
     const isAllowed = await canAccessMessageAttachment(user, attachmentId);
@@ -20,8 +21,8 @@ export async function GET(
       return new NextResponse('Forbidden: Access to this message attachment is restricted', { status: 403 });
     }
 
-    const attachment = await prisma.messageAttachment.findUnique({
-      where: { id: attachmentId },
+    const attachment = await prisma.messageAttachment.findFirst({
+      where: { id: attachmentId, organizationId: user.organizationId },
     });
 
     if (!attachment) {

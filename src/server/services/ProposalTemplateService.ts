@@ -3,6 +3,7 @@ import { UserSession } from '@/types';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { getStorageProvider } from '@/lib/storage';
 import { AuditService } from './AuditService';
+import { requireOrganizationContext } from '@/lib/auth/organization';
 
 export interface LogoPositionConfig {
   page: number;
@@ -50,8 +51,9 @@ export class ProposalTemplateService {
     ) {
       throw new Error('Forbidden: proposals.template.view permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const where: any = {};
+    const where: any = { organizationId };
     if (options?.onlyActive) {
       where.isActive = true;
     }
@@ -73,9 +75,10 @@ export class ProposalTemplateService {
     ) {
       throw new Error('Forbidden: proposals.template.view permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const template = await prisma.proposalTemplate.findUnique({
-      where: { id },
+    const template = await prisma.proposalTemplate.findFirst({
+      where: { id, organizationId },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
         _count: { select: { proposals: true } },
@@ -90,6 +93,7 @@ export class ProposalTemplateService {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_TEMPLATE_CREATE)) {
       throw new Error('Forbidden: proposals.template.create permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
     if (!input.name || input.name.trim().length < 2) {
       throw new Error('Template name is required (minimum 2 characters)');
@@ -110,7 +114,7 @@ export class ProposalTemplateService {
       input.pdfBuffer,
       input.originalFileName || `${input.name.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`,
       'application/pdf',
-      { keyPrefix: 'proposals/templates' }
+      { keyPrefix: `${organizationId}/proposals/templates` }
     );
 
     // Default configuration: top-right area on page 1 for school logo (in standard pt coordinates)
@@ -144,6 +148,7 @@ export class ProposalTemplateService {
         isActive: true,
         config: JSON.stringify(finalConfig),
         createdById: user.id,
+        organizationId,
       },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
@@ -165,8 +170,9 @@ export class ProposalTemplateService {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_TEMPLATE_UPDATE)) {
       throw new Error('Forbidden: proposals.template.update permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const existing = await prisma.proposalTemplate.findUnique({ where: { id } });
+    const existing = await prisma.proposalTemplate.findFirst({ where: { id, organizationId } });
     if (!existing) throw new Error('Proposal template not found');
 
     const data: any = {};
@@ -197,7 +203,7 @@ export class ProposalTemplateService {
         input.pdfBuffer,
         input.originalFileName || `${(input.name || existing.name).replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`,
         'application/pdf',
-        { keyPrefix: 'proposals/templates' }
+        { keyPrefix: `${organizationId}/proposals/templates` }
       );
 
       data.pdfStorageKey = uploadRes.storageKey;
@@ -229,9 +235,10 @@ export class ProposalTemplateService {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_TEMPLATE_DELETE)) {
       throw new Error('Forbidden: proposals.template.delete permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const existing = await prisma.proposalTemplate.findUnique({
-      where: { id },
+    const existing = await prisma.proposalTemplate.findFirst({
+      where: { id, organizationId },
       include: { _count: { select: { proposals: true } } },
     });
     if (!existing) throw new Error('Proposal template not found');
@@ -266,8 +273,9 @@ export class ProposalTemplateService {
     ) {
       throw new Error('Forbidden: proposals.template.view permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const template = await prisma.proposalTemplate.findUnique({ where: { id } });
+    const template = await prisma.proposalTemplate.findFirst({ where: { id, organizationId } });
     if (!template) throw new Error('Template not found');
 
     const storage = getStorageProvider(template.pdfStorageProvider as any);

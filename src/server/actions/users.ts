@@ -7,10 +7,10 @@ import { userCreateSchema, userUpdateSchema } from '@/lib/validation';
 import { AuditService } from '@/server/services/AuditService';
 import { revalidatePath } from 'next/cache';
 
-async function validateReportingManager(userId: string | null | undefined, managerId: string | null | undefined) {
+async function validateReportingManager(userId: string | null | undefined, managerId: string | null | undefined, organizationId: string) {
   if (!managerId) return;
   if (userId && userId === managerId) throw new Error('A user cannot report to themselves');
-  const manager = await prisma.user.findUnique({ where: { id: managerId }, select: { id: true, isActive: true } });
+  const manager = await prisma.user.findFirst({ where: { id: managerId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true, isActive: true } });
   if (!manager || !manager.isActive) throw new Error('The selected reporting manager is not active');
 
   // Walk upward so a user can never become their own ancestor.
@@ -20,7 +20,7 @@ async function validateReportingManager(userId: string | null | undefined, manag
     if (userId && cursor === userId) throw new Error('Circular reporting hierarchy is not allowed');
     if (visited.has(cursor)) throw new Error('Circular reporting hierarchy is not allowed');
     visited.add(cursor);
-    const parent: { reportsToUserId: string | null } | null = await prisma.user.findUnique({ where: { id: cursor }, select: { reportsToUserId: true } });
+    const parent: { reportsToUserId: string | null } | null = await prisma.user.findFirst({ where: { id: cursor, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { reportsToUserId: true } });
     cursor = parent?.reportsToUserId || null;
   }
 }
@@ -28,13 +28,16 @@ async function validateReportingManager(userId: string | null | undefined, manag
 export async function createUserAction(data: any) {
   try {
     const user = await requireAuth();
+    const organizationId = user.organizationId || 'org_codeline_legacy';
     if (!hasPermission(user, PERMISSIONS.USERS_CREATE)) {
       return { success: false, error: 'Forbidden' };
     }
     if (data.reportsToUserId && !hasPermission(user, PERMISSIONS.USERS_MANAGE_REPORTING)) return { success: false, error: 'Forbidden: reporting hierarchy permission required' };
 
     const validated = userCreateSchema.parse(data);
-    await validateReportingManager(null, validated.reportsToUserId);
+    const department = await prisma.department.findFirst({ where: { id: validated.departmentId, organizationId }, select: { id: true } });
+    if (!department) return { success: false, error: 'Selected department does not belong to the active organization' };
+    await validateReportingManager(null, validated.reportsToUserId, organizationId);
     const existing = await prisma.user.findUnique({ where: { email: validated.email.toLowerCase() } });
     if (existing) {
       return { success: false, error: 'A user with this email already exists' };
@@ -42,8 +45,8 @@ export async function createUserAction(data: any) {
 
     const passwordHash = await hashPassword(validated.password);
 
-    const newUser = await prisma.user.create({
-      data: {
+    const newUser = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({ data: {
         name: validated.name,
         email: validated.email.toLowerCase(),
         phone: validated.phone || null,
@@ -51,7 +54,9 @@ export async function createUserAction(data: any) {
         roleId: validated.roleId,
         departmentId: validated.departmentId,
         reportsToUserId: validated.reportsToUserId || null,
-      },
+      } });
+      await tx.organizationMember.create({ data: { organizationId, userId: created.id, roleId: created.roleId, status: 'ACTIVE' } });
+      return created;
     });
 
     await AuditService.logAudit({
@@ -72,10 +77,11 @@ export async function createUserAction(data: any) {
 export async function getUserForEditAction(id: string) {
   try {
     const actor = await requireAuth();
+    const organizationId = actor.organizationId || 'org_codeline_legacy';
     if (!hasPermission(actor, PERMISSIONS.USERS_UPDATE)) return { success: false, error: 'Forbidden' };
 
     const target = await prisma.user.findUnique({
-      where: { id },
+      where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } },
       select: {
         id: true,
         name: true,
@@ -100,20 +106,24 @@ export async function getUserForEditAction(id: string) {
 
 export async function getLoginSessionsAction(targetUserId: string) {
   const user = await requireAuth();
+  const organizationId = user.organizationId || 'org_codeline_legacy';
   if (!hasPermission(user, PERMISSIONS.USERS_VIEW_SESSIONS)) return { success: false, error: 'Forbidden' };
-  const sessions = await prisma.loginSession.findMany({ where: { userId: targetUserId }, orderBy: { loginAt: 'desc' }, take: 100 });
+  const target = await prisma.user.findFirst({ where: { id: targetUserId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
+  if (!target) return { success: false, error: 'User not found' };
+  const sessions = await prisma.loginSession.findMany({ where: { userId: target.id }, orderBy: { loginAt: 'desc' }, take: 100 });
   return { success: true, sessions };
 }
 
 export async function updateUserAction(id: string, data: any) {
   try {
     const user = await requireAuth();
+    const organizationId = user.organizationId || 'org_codeline_legacy';
     if (!hasPermission(user, PERMISSIONS.USERS_UPDATE)) {
       return { success: false, error: 'Forbidden' };
     }
 
     const validated = userUpdateSchema.parse(data);
-    const existingUser = await prisma.user.findUnique({ where: { id }, select: { name: true, email: true, phone: true, roleId: true, departmentId: true, isActive: true, accessMode: true, allowedIps: true, reportsToUserId: true, userPermissions: { select: { permissionId: true } } } });
+    const existingUser = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { name: true, email: true, phone: true, roleId: true, departmentId: true, isActive: true, accessMode: true, allowedIps: true, reportsToUserId: true, userPermissions: { select: { permissionId: true } } } });
     if (!existingUser) return { success: false, error: 'User not found' };
     if (validated.isActive !== existingUser.isActive && !hasPermission(user, validated.isActive ? PERMISSIONS.USERS_ENABLE : PERMISSIONS.USERS_DISABLE)) return { success: false, error: 'Forbidden: account status permission required' };
     const canManageAccess = hasPermission(user, PERMISSIONS.USERS_MANAGE_ACCESS_RESTRICTIONS);
@@ -124,7 +134,9 @@ export async function updateUserAction(id: string, data: any) {
     if (validated.roleId !== existingUser.roleId && !canManageRoles) return { success: false, error: 'Forbidden: role assignment permission required' };
     const canManageReporting = hasPermission(user, PERMISSIONS.USERS_MANAGE_REPORTING);
     if (validated.reportsToUserId !== existingUser.reportsToUserId && !canManageReporting) return { success: false, error: 'Forbidden: reporting hierarchy permission required' };
-    await validateReportingManager(id, canManageReporting ? validated.reportsToUserId : existingUser.reportsToUserId);
+    const department = await prisma.department.findFirst({ where: { id: validated.departmentId, organizationId }, select: { id: true } });
+    if (!department) return { success: false, error: 'Selected department does not belong to the active organization' };
+    await validateReportingManager(id, canManageReporting ? validated.reportsToUserId : existingUser.reportsToUserId, organizationId);
 
     const updateData: any = {
       name: validated.name,
@@ -194,6 +206,7 @@ export async function updateUserAction(id: string, data: any) {
 export async function disableUserAction(id: string) {
   try {
     const user = await requireAuth();
+    const organizationId = user.organizationId || 'org_codeline_legacy';
     if (!hasPermission(user, PERMISSIONS.USERS_DISABLE)) {
       return { success: false, error: 'Forbidden: Insufficient permissions to disable user' };
     }
@@ -202,9 +215,12 @@ export async function disableUserAction(id: string) {
       return { success: false, error: 'Cannot disable your own account' };
     }
 
+    const target = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
+    if (!target) return { success: false, error: 'User not found' };
+
     const [targetUser] = await prisma.$transaction([
-      prisma.user.update({ where: { id }, data: { isActive: false } }),
-      prisma.loginSession.updateMany({ where: { userId: id, logoutAt: null }, data: { logoutAt: new Date() } }),
+      prisma.user.update({ where: { id: target.id }, data: { isActive: false } }),
+      prisma.loginSession.updateMany({ where: { userId: target.id, logoutAt: null }, data: { logoutAt: new Date() } }),
     ]);
 
     await AuditService.logAudit({ actorId: user.id, action: 'USER_DISABLED', entityType: 'User', entityId: id, metadata: { name: targetUser.name, email: targetUser.email, activeSessionsRevoked: true } });
@@ -219,8 +235,11 @@ export async function disableUserAction(id: string) {
 export async function enableUserAction(id: string) {
   try {
     const user = await requireAuth();
+    const organizationId = user.organizationId || 'org_codeline_legacy';
     if (!hasPermission(user, PERMISSIONS.USERS_ENABLE)) return { success: false, error: 'Forbidden: Insufficient permissions to enable user' };
-    const targetUser = await prisma.user.update({ where: { id }, data: { isActive: true } });
+    const target = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
+    if (!target) return { success: false, error: 'User not found' };
+    const targetUser = await prisma.user.update({ where: { id: target.id }, data: { isActive: true } });
     await AuditService.logAudit({ actorId: user.id, action: 'USER_ENABLED', entityType: 'User', entityId: id, metadata: { name: targetUser.name, email: targetUser.email } });
     revalidatePath('/admin/users');
     return { success: true };
@@ -230,6 +249,7 @@ export async function enableUserAction(id: string) {
 export async function deleteUserAction(id: string) {
   try {
     const user = await requireAuth();
+    const organizationId = user.organizationId || 'org_codeline_legacy';
     if (user.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Forbidden: Super Admin access required' };
     }
@@ -238,7 +258,7 @@ export async function deleteUserAction(id: string) {
     }
 
     const targetUser = await prisma.user.findUnique({
-      where: { id },
+      where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } },
       include: {
         _count: {
           select: {
@@ -299,6 +319,7 @@ export async function transferUserWorkAction(data: {
 }) {
   try {
     const user = await requireAuth();
+    const organizationId = user.organizationId || 'org_codeline_legacy';
     if (!hasPermission(user, PERMISSIONS.USERS_TRANSFER_WORK)) {
       return { success: false, error: 'Forbidden: Admin access required for work transfer' };
     }
@@ -310,8 +331,8 @@ export async function transferUserWorkAction(data: {
     }
 
     const [fromUser, toUser] = await Promise.all([
-      prisma.user.findUnique({ where: { id: fromUserId } }),
-      prisma.user.findUnique({ where: { id: toUserId, isActive: true }, include: { department: true } }),
+      prisma.user.findFirst({ where: { id: fromUserId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } } }),
+      prisma.user.findFirst({ where: { id: toUserId, isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, include: { department: true } }),
     ]);
 
     if (!fromUser || !toUser) {

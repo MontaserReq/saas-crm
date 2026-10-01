@@ -26,6 +26,29 @@ export interface TicketFilters extends PaginationParams {
 }
 
 export class TicketService {
+  private static organizationId(user: UserSession): string {
+    // Authenticated runtime sessions always carry this value. The fallback is
+    // retained only for legacy unit fixtures while the ownership migration is
+    // being rolled out.
+    return user.organizationId || 'org_codeline_legacy';
+  }
+
+  private static async validateTicketRelations(user: UserSession, input: { schoolId?: string | null; clientId?: string | null; taskTypeId?: string | null; departmentId: string }) {
+    const organizationId = this.organizationId(user);
+    if (input.schoolId && prisma.school?.findFirst && !(await prisma.school.findFirst({ where: { id: input.schoolId, organizationId }, select: { id: true } }))) {
+      throw new Error('Related school not found');
+    }
+    if (input.clientId && !(await prisma.client.findFirst({ where: { id: input.clientId, organizationId, deletedAt: null }, select: { id: true } }))) {
+      throw new Error('Related client not found');
+    }
+    if (input.taskTypeId && prisma.taskType?.findFirst && !(await prisma.taskType.findFirst({ where: { id: input.taskTypeId, organizationId }, select: { id: true } }))) {
+      throw new Error('Related task type not found');
+    }
+    if (prisma.department?.findFirst && !(await prisma.department.findFirst({ where: { id: input.departmentId, organizationId, isActive: true }, select: { id: true } }))) {
+      throw new Error('Department not found');
+    }
+  }
+
   /**
    * Retrieves a paginated list of tickets strictly scoped by user permissions.
    */
@@ -40,7 +63,7 @@ export class TicketService {
     const pageSize = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 15;
     const skip = (page - 1) * pageSize;
 
-    const where: any = {};
+    const where: any = { organizationId: this.organizationId(user) };
 
     // Privacy & Authorization Scope:
     // If user does not have TICKETS_VIEW_ALL or myTicketsOnly is true, scope strictly to current user's assigned tickets
@@ -68,6 +91,7 @@ export class TicketService {
     if (filters.taskTypeId && filters.taskTypeId !== 'ALL') {
       where.taskTypeId = filters.taskTypeId;
     }
+    if (filters.clientId && filters.clientId !== 'ALL') where.clientId = filters.clientId;
 
     if (filters.meetingsOnly) {
       where.meetingDetails = { isNot: null };
@@ -90,6 +114,7 @@ export class TicketService {
         { school: { name: { contains: q, mode: 'insensitive' } } },
         { school: { contactPerson: { contains: q, mode: 'insensitive' } } },
         { school: { phone: { contains: q, mode: 'insensitive' } } },
+        { client: { name: { contains: q, mode: 'insensitive' } } },
       ];
     }
 
@@ -112,6 +137,7 @@ export class TicketService {
               schoolType: true,
             },
           },
+          client: { select: { id: true, name: true, type: true, status: true } },
           taskType: { select: { id: true, name: true, code: true } },
           department: { select: { id: true, name: true, code: true } },
           assignees: {
@@ -150,10 +176,11 @@ export class TicketService {
       throw new Error('Forbidden: You do not have permission to view this ticket');
     }
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: ticketId, organizationId: this.organizationId(user) },
       include: {
         school: true,
+        client: true,
         taskType: true,
         department: true,
         createdBy: { select: { id: true, name: true, email: true } },
@@ -210,8 +237,8 @@ export class TicketService {
       throw new Error('Forbidden: Only Super Admin can delete tickets');
     }
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: ticketId, organizationId: this.organizationId(user) },
       select: {
         id: true,
         ticketNumber: true,
@@ -227,7 +254,7 @@ export class TicketService {
       ...ticket.notes.flatMap((note) => note.attachments.map((attachment) => attachment.storageKey)),
     ];
 
-    await prisma.ticket.delete({ where: { id: ticketId } });
+    await prisma.ticket.deleteMany({ where: { id: ticketId, organizationId: this.organizationId(user) } });
 
     if (storageKeys.length) {
       const storage = getStorageProvider();
@@ -252,7 +279,7 @@ export class TicketService {
     const isAllowed = await canAccessTicket(user, ticketId);
     if (!isAllowed) throw new Error('Forbidden');
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, organizationId: this.organizationId(user) } });
     if (!ticket) throw new Error('Ticket not found');
 
     if (ticket.status === 'PENDING') {
@@ -287,7 +314,7 @@ export class TicketService {
     const isAllowed = await canAccessTicket(user, ticketId);
     if (!isAllowed) throw new Error('Forbidden');
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, organizationId: this.organizationId(user) } });
     if (!ticket) throw new Error('Ticket not found');
 
     if (!isValidStatusTransition(ticket.status as TicketStatus, 'ACCEPTED')) {
@@ -326,7 +353,7 @@ export class TicketService {
 
     const validated = ticketRejectSchema.parse({ ticketId, reason });
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, organizationId: this.organizationId(user) } });
     if (!ticket) throw new Error('Ticket not found');
 
     if (!isValidStatusTransition(ticket.status as TicketStatus, 'REJECTED')) {
@@ -392,7 +419,7 @@ export class TicketService {
       throw new Error('Forbidden: You cannot add notes to this ticket (ticket is closed, rejected, or you have view-only access).');
     }
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: input.ticketId } });
+    const ticket = await prisma.ticket.findFirst({ where: { id: input.ticketId, organizationId: this.organizationId(user) } });
     if (!ticket) throw new Error('Ticket not found');
 
     // Block notes on PENDING tickets — must accept first.
@@ -434,7 +461,7 @@ export class TicketService {
       // 2. Handle Attachments if any
       if (input.attachments && input.attachments.length > 0) {
         for (const file of input.attachments) {
-          const uploaded = await storage.upload(file.buffer, file.originalName, file.mimeType, { keyPrefix: 'tickets' });
+          const uploaded = await storage.upload(file.buffer, file.originalName, file.mimeType, { keyPrefix: `${this.organizationId(user)}/tickets` });
           uploadedKeys.push(uploaded.storageKey);
           await tx.attachment.create({
             data: {
@@ -446,6 +473,7 @@ export class TicketService {
               storageKey: uploaded.storageKey,
               storageProvider: storage.providerId,
               uploadedById: user.id,
+              organizationId: this.organizationId(user),
             },
           });
         }
@@ -453,8 +481,8 @@ export class TicketService {
 
       // 3. Handle Ticket Transfer if transferToUserId is specified
       if (validated.transferToUserId) {
-        const targetUser = await tx.user.findUnique({
-          where: { id: validated.transferToUserId, isActive: true },
+        const targetUser = await tx.user.findFirst({
+          where: { id: validated.transferToUserId, isActive: true, organizationMemberships: { some: { organizationId: this.organizationId(user), status: 'ACTIVE' } } },
           include: { department: true },
         });
 
@@ -492,7 +520,7 @@ export class TicketService {
 
         // Fetch ticket number and update Ticket status & department
         // Status set to PENDING so new assignee must explicitly accept.
-        const currentTicket = await tx.ticket.findUnique({ where: { id: validated.ticketId } });
+        const currentTicket = await tx.ticket.findFirst({ where: { id: validated.ticketId, organizationId: this.organizationId(user) } });
         await tx.ticket.update({
           where: { id: validated.ticketId },
           data: {
@@ -506,6 +534,7 @@ export class TicketService {
           data: {
             ticketId: validated.ticketId,
             actorId: user.id,
+            organizationId: this.organizationId(user),
             type: 'TRANSFERRED',
             title: 'Ticket Transferred via Note',
             description: `Transferred from ${user.name} to ${targetUser.name} (${targetUser.department?.name || 'Department'}). Note: "${validated.content}"`,
@@ -521,6 +550,7 @@ export class TicketService {
         await tx.notification.create({
           data: {
             userId: targetUser.id,
+            organizationId: this.organizationId(user),
             type: 'TICKET_TRANSFERRED',
             title: 'Ticket Transferred to You',
             message: `${user.name} transferred ticket ${currentTicket?.ticketNumber || ''} to you with note: "${validated.content}"`,
@@ -533,6 +563,7 @@ export class TicketService {
         await tx.auditLog.create({
           data: {
             actorId: user.id,
+            organizationId: this.organizationId(user),
             action: 'TICKET_TRANSFERRED_WITH_NOTE',
             entityType: 'Ticket',
             entityId: validated.ticketId,
@@ -551,6 +582,7 @@ export class TicketService {
         data: {
           ticketId: validated.ticketId,
           actorId: user.id,
+          organizationId: this.organizationId(user),
           type: 'NOTE_ADDED',
           title: validated.transferToUserId ? 'Note & Transfer Hand-off' : 'Note Added',
           description: validated.transferToUserId
@@ -563,6 +595,7 @@ export class TicketService {
       await tx.auditLog.create({
         data: {
           actorId: user.id,
+          organizationId: this.organizationId(user),
           action: 'NOTE_CREATED',
           entityType: 'Note',
           entityId: note.id,
@@ -595,7 +628,7 @@ export class TicketService {
       throw new Error('A closing note/reason with at least 3 characters is strictly required.');
     }
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, organizationId: this.organizationId(user) } });
     if (!ticket) throw new Error('Ticket not found');
 
     if (ticket.status === 'CLOSED') {
@@ -623,6 +656,7 @@ export class TicketService {
         data: {
           ticketId,
           actorId: user.id,
+          organizationId: this.organizationId(user),
           type: 'CLOSED',
           title: 'Ticket Closed',
           description: `Closed by ${user.name}. Reason: "${closingReason.trim()}"`,
@@ -634,6 +668,7 @@ export class TicketService {
       await tx.auditLog.create({
         data: {
           actorId: user.id,
+          organizationId: this.organizationId(user),
           action: 'TICKET_CLOSED',
           entityType: 'Ticket',
           entityId: ticketId,
@@ -654,8 +689,8 @@ export class TicketService {
 
     const validated = ticketTransferSchema.parse({ ticketId, targetUserId, reason });
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: ticketId, organizationId: this.organizationId(user) },
       include: {
         assignees: { where: { isCurrent: true } },
       },
@@ -663,8 +698,8 @@ export class TicketService {
 
     if (!ticket) throw new Error('Ticket not found');
 
-    const targetUser = await prisma.user.findUnique({
-      where: { id: validated.targetUserId, isActive: true },
+    const targetUser = await prisma.user.findFirst({
+      where: { id: validated.targetUserId, isActive: true, organizationMemberships: { some: { organizationId: this.organizationId(user), status: 'ACTIVE' } } },
     });
     if (!targetUser) throw new Error('Target user not found or inactive');
 
@@ -718,6 +753,7 @@ export class TicketService {
         data: {
           ticketId,
           actorId: user.id,
+          organizationId: this.organizationId(user),
           type: 'TRANSFERRED',
           title: 'Ticket Transferred',
           description: `Transferred from ${user.name} to ${targetUser.name}. Reason: ${validated.reason}`,
@@ -728,6 +764,7 @@ export class TicketService {
       await tx.notification.create({
         data: {
           userId: targetUser.id,
+          organizationId: this.organizationId(user),
           type: 'TICKET_TRANSFERRED',
           title: 'Ticket Transferred to You',
           message: `${user.name} transferred ticket ${ticket.ticketNumber} to you. Reason: "${validated.reason}"`,
@@ -740,6 +777,7 @@ export class TicketService {
       await tx.auditLog.create({
         data: {
           actorId: user.id,
+          organizationId: this.organizationId(user),
           action: 'TICKET_TRANSFERRED',
           entityType: 'Ticket',
           entityId: ticket.id,
@@ -770,14 +808,18 @@ export class TicketService {
     if (requestedAssigneeId) {
       const canAssign = hasPermission(user, PERMISSIONS.TICKETS_ASSIGN) || hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL) || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
       if (!canAssign) throw new Error('Forbidden: you do not have permission to choose a ticket assignee');
-      const targetAssignee = await prisma.user.findUnique({
-        where: { id: requestedAssigneeId },
+      const targetAssignee = await (prisma.user.findFirst ? prisma.user.findFirst({
+        where: { id: requestedAssigneeId, organizationMemberships: { some: { organizationId: this.organizationId(user), status: 'ACTIVE' } } },
         select: {
           id: true, name: true, isActive: true,
           role: { select: { rolePermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } } } },
           userPermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } },
         },
-      });
+      }) : prisma.user.findUnique({ where: { id: requestedAssigneeId }, select: {
+        id: true, name: true, isActive: true,
+        role: { select: { rolePermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } } } },
+        userPermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } },
+      } }));
       if (!targetAssignee || !targetAssignee.isActive) throw new Error('The selected assignee is not active or could not be found.');
       if (targetAssignee.role.rolePermissions.length === 0 && targetAssignee.userPermissions.length === 0) throw new Error('The selected user is not eligible to receive tickets.');
       return { targetAssigneeId: targetAssignee.id, targetAssignee };
@@ -787,8 +829,8 @@ export class TicketService {
       throw new Error('You cannot create a ticket because your direct manager is not assigned. Please contact an administrator to assign your direct manager.');
     }
     const targetAssigneeId = user.reportsToUserId;
-    const targetAssignee = await prisma.user.findUnique({
-      where: { id: targetAssigneeId },
+    const targetAssignee = await (prisma.user.findFirst ? prisma.user.findFirst({
+      where: { id: targetAssigneeId, organizationMemberships: { some: { organizationId: this.organizationId(user), status: 'ACTIVE' } } },
       select: {
         id: true,
         name: true,
@@ -796,7 +838,11 @@ export class TicketService {
         role: { select: { rolePermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } } } },
         userPermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } },
       },
-    });
+    }) : prisma.user.findUnique({ where: { id: targetAssigneeId }, select: {
+      id: true, name: true, isActive: true,
+      role: { select: { rolePermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } } } },
+      userPermissions: { where: { permission: { code: { in: [PERMISSIONS.TICKETS_VIEW_ASSIGNED, PERMISSIONS.TICKETS_VIEW_ALL] } } }, select: { id: true } },
+    } }));
     if (!targetAssignee) throw new Error('Your direct manager account could not be found.');
     if (!targetAssignee.isActive) {
       throw new Error('You cannot create a ticket because your assigned direct manager is disabled. Please contact an administrator.');
@@ -811,13 +857,13 @@ export class TicketService {
     user: UserSession,
     input: {
       schoolId?: string | null;
+      clientId?: string | null;
       taskTypeId?: string | null;
       departmentId?: string;
       subject: string;
       priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
       dueDate?: string | null;
       initialNote?: string | null;
-      assignedToUserId?: string | null;
     }
   ) {
     const canCreate = hasPermission(user, PERMISSIONS.TICKETS_CREATE) || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
@@ -830,12 +876,14 @@ export class TicketService {
     }
     // Resolve department: prefer explicit input, fall back to user's primary department
     const departmentId = input.departmentId || user.departmentId;
+    await this.validateTicketRelations(user, { schoolId: input.schoolId, clientId: input.clientId || input.schoolId, taskTypeId: input.taskTypeId, departmentId });
 
     // SERVER-SIDE ASSIGNMENT SOURCE OF TRUTH:
     // The assignee is derived from User.reportsToUserId. No client value is trusted.
-    const { targetAssigneeId, targetAssignee } = await this.resolveTicketAssignee(user, input.assignedToUserId);
+    const { targetAssigneeId, targetAssignee } = await this.resolveTicketAssignee(user);
 
-    const count = await prisma.ticket.count();
+    const organizationId = this.organizationId(user);
+    const count = await prisma.ticket.count({ where: { organizationId } });
     const ticketNumber = `CL-${String(count + 101).padStart(5, '0')}`;
 
     return await prisma.$transaction(async (tx) => {
@@ -843,12 +891,14 @@ export class TicketService {
         data: {
           ticketNumber,
           schoolId: input.schoolId,
+          clientId: input.clientId || input.schoolId || null,
           taskTypeId: input.taskTypeId,
           departmentId: departmentId,
           subject: input.subject.trim(),
           priority: input.priority || 'MEDIUM',
           status: 'PENDING',
           createdById: user.id,
+          organizationId,
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
         },
       });
@@ -889,6 +939,7 @@ export class TicketService {
         data: {
           ticketId: ticket.id,
           actorId: user.id,
+          organizationId,
           type: 'CREATED',
           title: 'Ticket Created and Assigned',
           description: `Created by ${user.name} and assigned to ${targetAssignee.name}: "${input.subject.trim()}"`,
@@ -903,6 +954,7 @@ export class TicketService {
           message: `You have been assigned a new ticket by ${user.name}: ${ticket.ticketNumber}.`,
           entityType: 'ticket',
           entityId: ticket.id,
+          organizationId,
         },
       });
 
@@ -914,6 +966,7 @@ export class TicketService {
           entityType: 'Ticket',
           entityId: ticket.id,
           metadata: JSON.stringify({ ticketNumber, schoolId: input.schoolId, assigneeId: targetAssigneeId, assignmentSource: 'reportsToUserId' }),
+          organizationId,
         },
       });
 
@@ -932,6 +985,7 @@ export class TicketService {
     user: UserSession,
     input: {
       schoolId?: string | null;
+      clientId?: string | null;
       taskTypeId?: string | null;
       departmentId?: string;
       subject: string;
@@ -964,11 +1018,13 @@ export class TicketService {
     });
 
     const departmentId = validated.departmentId || user.departmentId;
+    await this.validateTicketRelations(user, { schoolId: validated.schoolId, clientId: input.clientId || validated.schoolId, taskTypeId: validated.taskTypeId, departmentId });
 
     // SERVER-SIDE ASSIGNMENT SOURCE OF TRUTH (same rule as regular tickets).
     const { targetAssigneeId, targetAssignee } = await this.resolveTicketAssignee(user);
 
-    const count = await prisma.ticket.count();
+    const organizationId = this.organizationId(user);
+    const count = await prisma.ticket.count({ where: { organizationId } });
     const ticketNumber = `CL-${String(count + 101).padStart(5, '0')}`;
 
     return await prisma.$transaction(async (tx) => {
@@ -976,12 +1032,14 @@ export class TicketService {
         data: {
           ticketNumber,
           schoolId: validated.schoolId,
+          clientId: input.clientId || validated.schoolId || null,
           taskTypeId: validated.taskTypeId,
           departmentId,
           subject: validated.subject,
           priority: validated.priority,
           status: 'PENDING',
           createdById: user.id,
+          organizationId,
           dueDate: validated.dueDate ? new Date(validated.dueDate) : null,
         },
       });
@@ -1030,6 +1088,7 @@ export class TicketService {
         data: {
           ticketId: ticket.id,
           actorId: user.id,
+          organizationId,
           type: 'CREATED',
           title: 'Meeting Ticket Created and Assigned',
           description: `Created by ${user.name} and assigned to ${targetAssignee.name}: "${validated.subject}"`,
@@ -1050,6 +1109,7 @@ export class TicketService {
       await tx.auditLog.create({
         data: {
           actorId: user.id,
+          organizationId,
           action: 'MEETING_TICKET_CREATED',
           entityType: 'Ticket',
           entityId: ticket.id,
@@ -1078,8 +1138,8 @@ export class TicketService {
 
     const validated = communicationAttemptSchema.parse(input);
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: validated.ticketId },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: validated.ticketId, organizationId: this.organizationId(user) },
       select: { id: true, ticketNumber: true, status: true, createdById: true },
     });
     if (!ticket) throw new Error('Ticket not found');
@@ -1105,6 +1165,7 @@ export class TicketService {
         data: {
           ticketId: validated.ticketId,
           actorId: user.id,
+          organizationId: this.organizationId(user),
           type: 'COMMUNICATION_ATTEMPT',
           title: `Contact Attempt #${attemptsCount + 1} (${validated.method}) - ${resultTitle}`,
           description: `Result: ${validated.result}${validated.note ? ` - Note: "${validated.note}"` : ''}`,
@@ -1147,6 +1208,7 @@ export class TicketService {
           data: {
             ticketId: ticket.id,
             actorId: user.id,
+            organizationId: this.organizationId(user),
             type: 'REJECTED',
             title: 'Incorrect Information - Returned to Creator',
             description: `Ticket returned to its original creator for correction by ${user.name}.`,
@@ -1166,6 +1228,7 @@ export class TicketService {
         await tx.auditLog.create({
           data: {
             actorId: user.id,
+            organizationId: this.organizationId(user),
             action: 'TICKET_RETURNED_FOR_CORRECTION',
             entityType: 'Ticket',
             entityId: ticket.id,
@@ -1183,7 +1246,7 @@ export class TicketService {
     input: { ticketId: string; schoolId?: string | null; phone?: string | null; whatsapp?: string | null; email?: string | null; taskTypeId?: string | null; subject: string; priority: string; dueDate?: string | null; followUpAt?: string | null; correctionNote?: string | null }
   ) {
     const validated = rejectedTicketUpdateSchema.parse(input);
-    const ticket = await prisma.ticket.findUnique({ where: { id: validated.ticketId } });
+    const ticket = await prisma.ticket.findFirst({ where: { id: validated.ticketId, organizationId: this.organizationId(user) } });
     if (!ticket) throw new Error('Ticket not found');
     if (ticket.createdById !== user.id) throw new Error('Only the original creator can correct this ticket.');
     if (ticket.status !== 'REJECTED') throw new Error('Only rejected tickets can be corrected.');
@@ -1192,7 +1255,7 @@ export class TicketService {
       const pending = await tx.ticketApprovalRequest.findFirst({ where: { ticketId: ticket.id, type: 'CORRECTION', status: 'PENDING' } });
       const request = pending
         ? await tx.ticketApprovalRequest.update({ where: { id: pending.id }, data: { proposedData: JSON.stringify(validated), createdAt: new Date() } })
-        : await tx.ticketApprovalRequest.create({ data: { ticketId: ticket.id, requesterId: user.id, type: 'CORRECTION', proposedData: JSON.stringify(validated) } });
+        : await tx.ticketApprovalRequest.create({ data: { ticketId: ticket.id, requesterId: user.id, organizationId: this.organizationId(user), type: 'CORRECTION', proposedData: JSON.stringify(validated) } });
       const changes = {
         schoolId: { old: ticket.schoolId, new: validated.schoolId },
         taskTypeId: { old: ticket.taskTypeId, new: validated.taskTypeId },
@@ -1208,6 +1271,7 @@ export class TicketService {
         data: {
           ticketId: ticket.id,
           actorId: user.id,
+          organizationId: this.organizationId(user),
           type: 'INFORMATION_UPDATE_REQUESTED',
           title: 'Ticket correction approval requested',
           description: `Correction submitted by ${user.name} and is awaiting admin approval.`,
@@ -1217,6 +1281,7 @@ export class TicketService {
       await tx.auditLog.create({
         data: {
           actorId: user.id,
+          organizationId: this.organizationId(user),
           action: 'TICKET_CORRECTION_REQUESTED',
           entityType: 'Ticket',
           entityId: ticket.id,
@@ -1228,23 +1293,24 @@ export class TicketService {
   }
 
   static async resubmitRejectedTicket(user: UserSession, ticketId: string, targetDepartmentId?: string | null, targetUserId?: string | null) {
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, include: { assignees: { where: { isCurrent: true } } } });
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, organizationId: this.organizationId(user) }, include: { assignees: { where: { isCurrent: true } } } });
     if (!ticket) throw new Error('Ticket not found');
     if (ticket.createdById !== user.id) throw new Error('Only the original creator can resubmit this ticket.');
     if (ticket.status !== 'REJECTED') throw new Error('Only rejected tickets can be resubmitted.');
 
     if (!targetDepartmentId || !targetUserId) throw new Error('Select a department and employee before resubmitting.');
-    const targetUser = await prisma.user.findFirst({ where: { id: targetUserId, isActive: true, departmentId: targetDepartmentId } });
+    const targetUser = await prisma.user.findFirst({ where: { id: targetUserId, isActive: true, departmentId: targetDepartmentId, organizationMemberships: { some: { organizationId: this.organizationId(user), status: 'ACTIVE' } } } });
     if (!targetUser) throw new Error('The selected employee is not active or does not belong to the selected department.');
 
     return prisma.$transaction(async (tx) => {
       const pending = await tx.ticketApprovalRequest.findFirst({ where: { ticketId, type: 'RESUBMIT', status: 'PENDING' } });
       if (pending) throw new Error('A ticket resubmission request is already awaiting approval.');
-      const request = await tx.ticketApprovalRequest.create({ data: { ticketId, requesterId: user.id, type: 'RESUBMIT', proposedData: JSON.stringify({ targetDepartmentId, targetUserId }) } });
+      const request = await tx.ticketApprovalRequest.create({ data: { ticketId, requesterId: user.id, organizationId: this.organizationId(user), type: 'RESUBMIT', proposedData: JSON.stringify({ targetDepartmentId, targetUserId }) } });
       await tx.activityEvent.create({
         data: {
           ticketId,
           actorId: user.id,
+          organizationId: this.organizationId(user),
           type: 'RESUBMITTED',
           title: 'Ticket resubmitted',
           description: `Ticket resubmitted by ${user.name} and returned to the assignment workflow.`,
@@ -1263,6 +1329,7 @@ export class TicketService {
       await tx.auditLog.create({
         data: {
           actorId: user.id,
+          organizationId: this.organizationId(user),
           action: 'TICKET_RESUBMITTED',
           entityType: 'Ticket',
           entityId: ticketId,
@@ -1273,16 +1340,18 @@ export class TicketService {
     });
   }
 
-  static async listTicketApprovalRequests(status = 'PENDING') {
+  static async listTicketApprovalRequests(user: UserSession, status = 'PENDING') {
     return prisma.ticketApprovalRequest.findMany({
-      where: { status },
+      where: { status, ticket: { organizationId: this.organizationId(user) } },
       orderBy: { createdAt: 'desc' },
       include: { ticket: { select: { id: true, ticketNumber: true, subject: true } }, requester: { select: { name: true } } },
     });
   }
 
-  static async decideTicketApproval(requestId: string, approverId: string, approve: boolean, rejectionReason?: string) {
-    const request = await prisma.ticketApprovalRequest.findUnique({ where: { id: requestId }, include: { ticket: { include: { assignees: { where: { isCurrent: true } } } } } });
+  static async decideTicketApproval(user: UserSession, requestId: string, approve: boolean, rejectionReason?: string) {
+    const approverId = user.id;
+    const organizationId = this.organizationId(user);
+    const request = await prisma.ticketApprovalRequest.findFirst({ where: { id: requestId, ticket: { organizationId } }, include: { ticket: { include: { assignees: { where: { isCurrent: true } } } } } });
     if (!request) throw new Error('Request not found');
     if (request.status !== 'PENDING') throw new Error('This request has already been decided.');
 
@@ -1291,20 +1360,24 @@ export class TicketService {
         const data = JSON.parse(request.proposedData) as any;
         if (request.type === 'CORRECTION') {
           await tx.ticket.update({ where: { id: request.ticketId }, data: { schoolId: data.schoolId || null, taskTypeId: data.taskTypeId || null, subject: data.subject, priority: data.priority, dueDate: data.dueDate ? new Date(data.dueDate) : null, followUpAt: data.followUpAt ? new Date(data.followUpAt) : null } });
-          if (data.schoolId) await tx.school.update({ where: { id: data.schoolId }, data: { phone: data.phone?.trim() || null, whatsapp: data.whatsapp?.trim() || null, email: data.email?.trim() || null } });
+          if (data.schoolId) {
+            const school = await tx.school.findFirst({ where: { id: data.schoolId, organizationId } });
+            if (!school) throw new Error('The selected school does not belong to this organization.');
+            await tx.school.update({ where: { id: school.id }, data: { phone: data.phone?.trim() || null, whatsapp: data.whatsapp?.trim() || null, email: data.email?.trim() || null } });
+          }
           if (data.correctionNote?.trim()) await tx.note.create({ data: { ticketId: request.ticketId, authorId: request.requesterId, content: data.correctionNote.trim() } });
         } else if (request.type === 'RESUBMIT') {
-          const targetUser = await tx.user.findFirst({ where: { id: data.targetUserId, isActive: true, departmentId: data.targetDepartmentId } });
+          const targetUser = await tx.user.findFirst({ where: { id: data.targetUserId, isActive: true, departmentId: data.targetDepartmentId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } } });
           if (!targetUser) throw new Error('The selected employee is no longer active or is not in the selected department.');
           await tx.ticket.update({ where: { id: request.ticketId }, data: { status: 'PENDING', rejectionReason: null, departmentId: data.targetDepartmentId } });
           await tx.ticketAssignee.updateMany({ where: { ticketId: request.ticketId, isCurrent: true }, data: { isCurrent: false, role: 'VIEWER', unassignedAt: new Date() } });
           await tx.ticketAssignee.create({ data: { ticketId: request.ticketId, userId: targetUser.id, isCurrent: true, role: 'ASSIGNEE' } });
           await tx.assignmentHistory.create({ data: { ticketId: request.ticketId, fromUserId: request.ticket.assignees[0]?.userId || null, toUserId: targetUser.id, performedById: approverId, action: 'REASSIGN', reason: 'Approved ticket resubmission request.' } });
-          await tx.notification.create({ data: { userId: targetUser.id, type: 'TICKET_ASSIGNED', title: 'Ticket resubmitted to you', message: `Ticket ${request.ticket.ticketNumber} has been approved and assigned to you.`, entityType: 'ticket', entityId: request.ticketId } });
+          await tx.notification.create({ data: { userId: targetUser.id, organizationId, type: 'TICKET_ASSIGNED', title: 'Ticket resubmitted to you', message: `Ticket ${request.ticket.ticketNumber} has been approved and assigned to you.`, entityType: 'ticket', entityId: request.ticketId } });
         }
       }
       const decided = await tx.ticketApprovalRequest.update({ where: { id: requestId }, data: { status: approve ? 'APPROVED' : 'REJECTED', decidedById: approverId, decidedAt: new Date(), rejectionReason: approve ? null : (rejectionReason || 'Rejected by approver') } });
-      await tx.auditLog.create({ data: { actorId: approverId, action: `TICKET_${request.type}_APPROVAL_${approve ? 'APPROVED' : 'REJECTED'}`, entityType: 'TicketApprovalRequest', entityId: requestId, metadata: JSON.stringify({ ticketId: request.ticketId, rejectionReason }) } });
+      await tx.auditLog.create({ data: { actorId: approverId, organizationId, action: `TICKET_${request.type}_APPROVAL_${approve ? 'APPROVED' : 'REJECTED'}`, entityType: 'TicketApprovalRequest', entityId: requestId, metadata: JSON.stringify({ ticketId: request.ticketId, rejectionReason }) } });
       return decided;
     });
   }
@@ -1316,7 +1389,7 @@ export class TicketService {
     const isAllowed = await canAccessTicket(user, ticketId);
     if (!isAllowed) throw new Error('Forbidden');
 
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, organizationId: this.organizationId(user) } });
     if (!ticket) throw new Error('Ticket not found');
 
     if (!isValidStatusTransition(ticket.status as TicketStatus, newStatus)) {

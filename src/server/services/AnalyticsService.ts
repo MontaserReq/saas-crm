@@ -26,10 +26,12 @@ export class AnalyticsService {
 
     // Admins get a global operational overview; other accounts see only their
     // currently assigned tickets.
+    const organizationId = user.organizationId || 'org_codeline_legacy';
     const isGlobalOverview = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
     const ticketFilter: any = isGlobalOverview
-      ? {}
+      ? { organizationId }
       : {
+          organizationId,
           assignees: {
             some: {
               userId: user.id,
@@ -64,8 +66,8 @@ export class AnalyticsService {
       prisma.ticket.count({ where: { ...ticketFilter, status: 'COMPLETED' } }),
       prisma.ticket.count({ where: { ...ticketFilter, status: 'CLOSED' } }),
       prisma.ticket.count({ where: ticketFilter }),
-      prisma.school.count({ where: { isDeleted: false } }),
-      prisma.school.count({ where: { status: 'ASSIGNED', isDeleted: false } }),
+      prisma.school.count({ where: { organizationId, isDeleted: false } }),
+      prisma.school.count({ where: { organizationId, status: 'ASSIGNED', isDeleted: false } }),
       // Needs Attention: pending or seen tickets with high/urgent priority
       prisma.ticket.findMany({
         where: {
@@ -82,8 +84,9 @@ export class AnalyticsService {
       // Recent Activity
       prisma.activityEvent.findMany({
         where: isGlobalOverview
-          ? {}
+          ? { organizationId }
           : {
+              organizationId,
               ticket: {
                 assignees: {
                   some: { userId: user.id, isCurrent: true },
@@ -119,7 +122,8 @@ export class AnalyticsService {
     };
   }
 
-  static async getAdminAnalytics() {
+  static async getAdminAnalytics(user?: UserSession | null) {
+    const organizationId = user?.organizationId || 'org_codeline_legacy';
     const [
       ticketsByDepartment,
       ticketsByTaskType,
@@ -128,19 +132,21 @@ export class AnalyticsService {
       usersWithLogs,
     ] = await Promise.all([
       prisma.department.findMany({
+        where: { organizationId },
         select: {
           name: true,
           _count: { select: { tickets: true } },
         },
       }),
       prisma.taskType.findMany({
+        where: { organizationId },
         select: {
           name: true,
           _count: { select: { tickets: true } },
         },
       }),
       prisma.user.findMany({
-        where: { isActive: true, role: { name: 'MEMBER' } },
+        where: { isActive: true, role: { name: 'MEMBER' }, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } },
         select: {
           name: true,
           _count: {
@@ -152,10 +158,11 @@ export class AnalyticsService {
       }),
       prisma.communicationAttempt.groupBy({
         by: ['result'],
+        where: { ticket: { organizationId } },
         _count: { result: true },
       }),
       prisma.user.findMany({
-        where: { isActive: true },
+        where: { isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } },
         select: {
           id: true,
           name: true,
@@ -165,6 +172,7 @@ export class AnalyticsService {
           auditLogs: {
             where: {
               action: { in: ['AUTH_LOGIN', 'AUTH_LOGOUT', 'TICKET_CREATED', 'NOTE_CREATED', 'COMMUNICATION_ATTEMPT'] },
+              organizationId,
             },
             orderBy: { createdAt: 'asc' },
             select: { action: true, createdAt: true },

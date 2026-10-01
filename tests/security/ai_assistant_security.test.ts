@@ -104,7 +104,7 @@ describe('AI Assistant tools — permission enforcement (server-side, not prompt
   it('getMyTasks always queries the CALLER\'s own todos — an attacker cannot see another user\'s tasks by any argument, because no user id is ever accepted as an argument', async () => {
     const attacker = makeUser({ id: ATTACKER_ID, permissions: ['todo.view'] });
     await AiAssistantToolService.getMyTasks(attacker);
-    expect(prismaMock.todo.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: ATTACKER_ID } }));
+    expect(prismaMock.todo.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: ATTACKER_ID, organizationId: 'org_codeline_legacy' } }));
   });
 
   it('getMyTasks is forbidden without todo.view or todo.manage_own', async () => {

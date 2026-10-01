@@ -31,50 +31,306 @@ model User {
   directReports   User[]  @relation("UserReporting")
 
   // Relations
-  ticketAssignees         TicketAssignee[]
-  createdTickets          Ticket[]                  @relation("TicketCreator")
-  createdAssignments      SchoolAssignment[]        @relation("AssignmentCreator")
-  notes                   Note[]                    @relation("NoteAuthor")
-  communicationAttempts   CommunicationAttempt[]    @relation("AttemptAuthor")
-  assignmentHistoryFrom   AssignmentHistory[]       @relation("AssignFrom")
-  assignmentHistoryTo     AssignmentHistory[]       @relation("AssignTo")
-  assignmentHistoryAction AssignmentHistory[]       @relation("AssignPerformed")
-  notifications           Notification[]
-  auditLogs               AuditLog[]                @relation("AuditActor")
-  activityEvents          ActivityEvent[]           @relation("ActivityActor")
-  todos                   Todo[]                    @relation("UserTodos")
-  createdSchools          School[]                  @relation("SchoolCreator")
-  responsibleSchools      School[]                  @relation("SchoolResponsible")
-  managedDepartments      DepartmentManager[]
-  sentMessages            Message[]                 @relation("SentMessages")
-  receivedMessages        MessageRecipient[]        @relation("ReceivedMessages")
-  chatMemberships         ChatParticipant[]
-  sentChatMessages        ChatMessage[]             @relation("ChatMessageSender")
-  loginSessions           LoginSession[]
-  passwordResetTokens     PasswordResetToken[]
-  schoolApprovalRequests  SchoolApprovalRequest[]   @relation("SchoolApprovalRequester")
-  schoolApprovalDecisions SchoolApprovalRequest[]   @relation("SchoolApprovalDecider")
-  ticketApprovalRequests  TicketApprovalRequest[]   @relation("TicketApprovalRequester")
-  ticketApprovalDecisions TicketApprovalRequest[]   @relation("TicketApprovalDecider")
-  assignedCalendarEvents  CalendarEvent[]           @relation("CalendarAssignedUser")
-  createdCalendarEvents   CalendarEvent[]           @relation("CalendarCreator")
-  calendarEventAssignees  CalendarEventAssignee[]
-  taskTypeMemberships     TaskTypeMember[]
-  schoolResearchJobs      SchoolResearchJob[]       @relation("SchoolResearchJobCreator")
-  schoolResearchDecisions SchoolResearchCandidate[] @relation("SchoolResearchCandidateDecider")
-  createdMeetingDetails   MeetingDetails[]
-  presence                UserPresence?
-  createdProposals        Proposal[]                @relation("ProposalCreator")
-  createdProposalTemplates ProposalTemplate[]       @relation("ProposalTemplateCreator")
+  ticketAssignees          TicketAssignee[]
+  createdTickets           Ticket[]                  @relation("TicketCreator")
+  createdAssignments       SchoolAssignment[]        @relation("AssignmentCreator")
+  notes                    Note[]                    @relation("NoteAuthor")
+  communicationAttempts    CommunicationAttempt[]    @relation("AttemptAuthor")
+  assignmentHistoryFrom    AssignmentHistory[]       @relation("AssignFrom")
+  assignmentHistoryTo      AssignmentHistory[]       @relation("AssignTo")
+  assignmentHistoryAction  AssignmentHistory[]       @relation("AssignPerformed")
+  notifications            Notification[]
+  auditLogs                AuditLog[]                @relation("AuditActor")
+  activityEvents           ActivityEvent[]           @relation("ActivityActor")
+  todos                    Todo[]                    @relation("UserTodos")
+  createdSchools           School[]                  @relation("SchoolCreator")
+  responsibleSchools       School[]                  @relation("SchoolResponsible")
+  createdClients            Client[]                  @relation("ClientCreator")
+  updatedClients            Client[]                  @relation("ClientUpdater")
+  assignedLeads             Lead[]                    @relation("LeadAssignee")
+  assignedContacts          Contact[]                 @relation("ContactAssignee")
+  ownedDeals                Deal[]                    @relation("DealOwner")
+  createdDeals              Deal[]                    @relation("DealCreator")
+  dealAssignments           DealAssignee[]
+  ownedCrmTasks             CrmTask[]                 @relation("CrmTaskOwner")
+  assignedCrmTasks          CrmTask[]                 @relation("CrmTaskAssignee")
+  createdCrmTasks           CrmTask[]                 @relation("CrmTaskCreator")
+  managedDepartments       DepartmentManager[]
+  sentMessages             Message[]                 @relation("SentMessages")
+  receivedMessages         MessageRecipient[]        @relation("ReceivedMessages")
+  chatMemberships          ChatParticipant[]
+  sentChatMessages         ChatMessage[]             @relation("ChatMessageSender")
+  loginSessions            LoginSession[]
+  passwordResetTokens      PasswordResetToken[]
+  schoolApprovalRequests   SchoolApprovalRequest[]   @relation("SchoolApprovalRequester")
+  schoolApprovalDecisions  SchoolApprovalRequest[]   @relation("SchoolApprovalDecider")
+  ticketApprovalRequests   TicketApprovalRequest[]   @relation("TicketApprovalRequester")
+  ticketApprovalDecisions  TicketApprovalRequest[]   @relation("TicketApprovalDecider")
+  assignedCalendarEvents   CalendarEvent[]           @relation("CalendarAssignedUser")
+  createdCalendarEvents    CalendarEvent[]           @relation("CalendarCreator")
+  calendarEventAssignees   CalendarEventAssignee[]
+  taskTypeMemberships      TaskTypeMember[]
+  schoolResearchJobs       SchoolResearchJob[]       @relation("SchoolResearchJobCreator")
+  schoolResearchDecisions  SchoolResearchCandidate[] @relation("SchoolResearchCandidateDecider")
+  createdMeetingDetails    MeetingDetails[]
+  presence                 UserPresence?
+  createdProposals         Proposal[]                @relation("ProposalCreator")
+  createdProposalTemplates ProposalTemplate[]        @relation("ProposalTemplateCreator")
+  createdCustomFieldDefinitions CustomFieldDefinition[] @relation("CustomFieldDefinitionCreatedBy")
+  updatedCustomFieldDefinitions CustomFieldDefinition[] @relation("CustomFieldDefinitionUpdatedBy")
+  createdWorkflows        Workflow[] @relation("WorkflowCreatedBy")
+  updatedWorkflows        Workflow[] @relation("WorkflowUpdatedBy")
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  userPermissions UserPermission[]
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  userPermissions         UserPermission[]
+  organizationMemberships OrganizationMember[]
+  teamMemberships         TeamMember[]
+  sentInvitations         OrganizationInvite[] @relation("InvitationSender")
+  receivedInvitations     OrganizationInvite[] @relation("InvitationRecipient")
 
   @@index([roleId])
   @@index([departmentId])
   @@index([reportsToUserId])
   @@index([email])
+}
+
+// Multi-tenant foundation. Legacy business records are backfilled to the
+// imported CodeLine organization by migration and will be progressively
+// migrated to required organization ownership in later migrations.
+model Organization {
+  id           String  @id @default(cuid())
+  name         String
+  slug         String  @unique
+  logoKey      String?
+  logoProvider String  @default("local")
+  primaryColor String?
+  timezone     String  @default("UTC")
+  currency     String  @default("USD")
+  language     String  @default("en")
+  isActive     Boolean @default(true)
+
+  members                OrganizationMember[]
+  teams                  Team[]
+  settings               OrganizationSettings?
+  invitations            OrganizationInvite[]
+  departments            Department[]
+  schools                School[]
+  researchJobs           SchoolResearchJob[]
+  assignments            SchoolAssignment[]
+  taskTypes              TaskType[]
+  tickets                Ticket[]
+  ticketApprovalRequests TicketApprovalRequest[]
+  schoolApprovalRequests SchoolApprovalRequest[]
+  chatConversations      ChatConversation[]
+  calendarEvents         CalendarEvent[]
+  messageTemplates       MessageTemplate[]
+  proposalTemplates      ProposalTemplate[]
+  proposals              Proposal[]
+  attachments            Attachment[]
+  messageAttachments     MessageAttachment[]
+  notifications          Notification[]
+  auditLogs              AuditLog[]
+  activityEvents         ActivityEvent[]
+  todos                  Todo[]
+  messages               Message[]
+  clients                Client[]                    @relation("ClientOrganization")
+  leads                  Lead[]
+  contacts               Contact[]
+  pipelines              Pipeline[]
+  pipelineStages         PipelineStage[]
+  deals                  Deal[]
+  crmTasks               CrmTask[]
+  customFieldDefinitions CustomFieldDefinition[]
+  customFieldValues      CustomFieldValue[]
+  workflows              Workflow[]
+  workflowExecutions     WorkflowExecution[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId         String?
+  role           Role?        @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  status         String       @default("ACTIVE") // INVITED | ACTIVE | SUSPENDED | REMOVED
+  lastActiveAt   DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+  @@index([organizationId, status])
+}
+
+model Team {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  isActive       Boolean      @default(true)
+  members        TeamMember[]
+  assignedLeads  Lead[]      @relation("LeadTeam")
+  assignedDeals  Deal[]      @relation("DealTeam")
+  assignedCrmTasks CrmTask[] @relation("CrmTaskTeam")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("MEMBER") // OWNER | MEMBER | VIEWER
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model OrganizationSettings {
+  id                      String       @id @default(cuid())
+  organizationId          String       @unique
+  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  enabledModules          String       @default("[]")
+  clientTypes             String       @default("[]")
+  leadStatuses            String       @default("[]")
+  ticketStatuses          String       @default("[]")
+  notificationPreferences String       @default("{}")
+  dateFormat              String       @default("yyyy-MM-dd")
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+}
+
+model CustomFieldDefinition {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entityType     String
+  key            String
+  label          String
+  description    String?
+  fieldType      String
+  required       Boolean      @default(false)
+  active         Boolean      @default(true)
+  searchable     Boolean      @default(false)
+  displayOrder   Int          @default(0)
+  options        Json?
+  createdById    String?
+  createdBy      User?        @relation("CustomFieldDefinitionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById    String?
+  updatedBy      User?        @relation("CustomFieldDefinitionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  archivedAt     DateTime?
+  values         CustomFieldValue[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, entityType, key])
+  @@index([organizationId, entityType, active, displayOrder])
+}
+
+model CustomFieldValue {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fieldDefinitionId  String
+  fieldDefinition    CustomFieldDefinition @relation(fields: [fieldDefinitionId], references: [id], onDelete: Cascade)
+  entityType         String
+  entityId           String
+  valueText          String?
+  valueNumber        Decimal?
+  valueBoolean       Boolean?
+  valueDate          DateTime?
+  valueJson          Json?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@unique([organizationId, fieldDefinitionId, entityType, entityId])
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, fieldDefinitionId])
+}
+
+model Workflow {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  entityType      String
+  triggerType     String
+  conditions      Json
+  actions         Json
+  executionConfig Json?
+  isActive        Boolean      @default(false)
+  archivedAt      DateTime?
+  createdById     String
+  createdBy       User         @relation("WorkflowCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById     String
+  updatedBy       User         @relation("WorkflowUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  executions      WorkflowExecution[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId, isActive, entityType, triggerType])
+  @@index([organizationId, archivedAt])
+  @@unique([organizationId, name])
+}
+
+model WorkflowExecution {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workflowId     String
+  workflow       Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  eventId        String
+  eventType      String
+  entityType     String
+  entityId       String
+  status         String       @default("PENDING")
+  startedAt      DateTime?
+  completedAt    DateTime?
+  errorMessage   String?
+  retryCount     Int          @default(0)
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, workflowId, eventId])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, workflowId, createdAt])
+  @@index([organizationId, eventType, entityType, entityId])
+}
+
+model OrganizationInvite {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  roleId         String?
+  role           Role?        @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  tokenHash      String       @unique
+  invitedById    String
+  invitedBy      User         @relation("InvitationSender", fields: [invitedById], references: [id])
+  invitedUserId  String?
+  invitedUser    User?        @relation("InvitationRecipient", fields: [invitedUserId], references: [id], onDelete: SetNull)
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, email])
+  @@index([expiresAt])
 }
 
 model Role {
@@ -84,9 +340,11 @@ model Role {
   description String?
   isSystem    Boolean @default(false)
 
-  rolePermissions RolePermission[]
-  userPermissions UserPermission[]
-  users           User[]
+  rolePermissions     RolePermission[]
+  userPermissions     UserPermission[]
+  users               User[]
+  organizationMembers OrganizationMember[]
+  organizationInvites OrganizationInvite[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -132,11 +390,13 @@ model UserPermission {
 }
 
 model Department {
-  id          String  @id @default(cuid())
-  name        String
-  code        String  @unique // "PR", "SCHOOL_OUTREACH", "VISITS", "DATA_COLLECTION", "NGOS", "MANAGEMENT", "MEDIA"
-  description String?
-  isActive    Boolean @default(true)
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  name           String
+  code           String        @unique // "PR", "SCHOOL_OUTREACH", "VISITS", "DATA_COLLECTION", "NGOS", "MANAGEMENT", "MEDIA"
+  description    String?
+  isActive       Boolean       @default(true)
 
   users     User[]
   managers  DepartmentManager[]
@@ -145,6 +405,234 @@ model Department {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([organizationId, isActive])
+}
+
+// Canonical generic CRM customer. School remains as a compatibility profile
+// during the expand-and-migrate period; migrated School rows use the same id
+// in Client so existing URLs and foreign keys remain stable.
+model Client {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation("ClientOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  name           String
+  type           String       @default("OTHER") // SCHOOL | COMPANY | NGO | UNIVERSITY | GOVERNMENT | INDIVIDUAL | OTHER
+  status         String       @default("ACTIVE") // ACTIVE | INACTIVE | PROSPECT | ARCHIVED
+  description    String?
+  category       String?
+  website        String?
+  email          String?
+  phone          String?
+  address        String?
+  logoKey        String?
+  logoProvider   String       @default("local")
+  createdById    String?
+  createdBy      User?        @relation("ClientCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById    String?
+  updatedBy      User?        @relation("ClientUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  deletedAt      DateTime?
+
+  leads          Lead[]       @relation("LeadClient")
+  contacts       Contact[]    @relation("ContactClient")
+  convertedLeads Lead[]       @relation("LeadConvertedClient")
+  deals         Deal[]
+  crmTasks      CrmTask[]
+  tickets        Ticket[]
+  proposals      Proposal[]
+  calendarEvents CalendarEvent[]
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, type])
+  @@index([organizationId, name])
+}
+
+model Lead {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  name            String
+  companyName     String?
+  email           String?
+  phone           String?
+  source          String?
+  status          String       @default("NEW") // NEW | CONTACTED | QUALIFIED | UNQUALIFIED | CONVERTED | LOST
+  notes           String?
+  assignedUserId  String?
+  assignedUser    User?        @relation("LeadAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  assignedTeamId  String?
+  assignedTeam    Team?        @relation("LeadTeam", fields: [assignedTeamId], references: [id], onDelete: SetNull)
+  convertedClientId String?
+  convertedClient Client?      @relation("LeadConvertedClient", fields: [convertedClientId], references: [id], onDelete: SetNull)
+  convertedContactId String?
+  convertedContact Contact?    @relation("LeadConvertedContact", fields: [convertedContactId], references: [id], onDelete: SetNull)
+  clientId        String?
+  client          Client?      @relation("LeadClient", fields: [clientId], references: [id], onDelete: SetNull)
+  deals           Deal[]
+  crmTasks        CrmTask[]
+  deletedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, assignedUserId])
+  @@index([organizationId, assignedTeamId])
+  @@index([organizationId, clientId])
+}
+
+model Contact {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  clientId       String?
+  client         Client?      @relation("ContactClient", fields: [clientId], references: [id], onDelete: SetNull)
+  firstName      String
+  lastName       String?
+  jobTitle       String?
+  email          String?
+  phone          String?
+  mobile         String?
+  isPrimary      Boolean      @default(false)
+  notes          String?
+  assignedUserId String?
+  assignedUser   User?        @relation("ContactAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  convertedFromLeads Lead[]   @relation("LeadConvertedContact")
+  deals          Deal[]       @relation("DealContact")
+  crmTasks       CrmTask[]    @relation("CrmTaskContact")
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, clientId])
+  @@index([organizationId, email])
+  @@index([organizationId, assignedUserId])
+}
+
+model Pipeline {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  name           String
+  description    String?
+  isDefault      Boolean        @default(false)
+  isActive       Boolean        @default(true)
+  stages         PipelineStage[]
+  deals          Deal[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+  @@index([organizationId, isDefault])
+}
+
+model PipelineStage {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  pipelineId     String
+  pipeline       Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  name           String
+  order          Int
+  probability    Int          @default(0)
+  type           String       @default("OPEN")
+  isActive       Boolean      @default(true)
+  deals          Deal[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  @@unique([pipelineId, name])
+  @@unique([pipelineId, order])
+  @@index([organizationId, pipelineId, order])
+}
+
+model Deal {
+  id                String        @id @default(cuid())
+  organizationId    String
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  title             String
+  description       String?
+  clientId          String?
+  client            Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  primaryContactId  String?
+  primaryContact    Contact?      @relation("DealContact", fields: [primaryContactId], references: [id], onDelete: SetNull)
+  leadId            String?
+  lead              Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  pipelineId        String
+  pipeline          Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stageId           String
+  stage             PipelineStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  status            String        @default("OPEN")
+  value             Decimal?
+  currency          String        @default("USD")
+  probability       Int?
+  expectedCloseDate DateTime?
+  ownerId           String
+  owner             User          @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  teamId            String?
+  team              Team?         @relation("DealTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  createdById       String
+  createdBy         User          @relation("DealCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assignments       DealAssignee[]
+  tasks             CrmTask[]
+  deletedAt         DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  @@index([organizationId, status])
+  @@index([organizationId, pipelineId, stageId])
+  @@index([organizationId, ownerId])
+  @@index([organizationId, createdAt])
+}
+
+model DealAssignee {
+  id        String   @id @default(cuid())
+  dealId    String
+  deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([dealId, userId])
+  @@index([userId])
+}
+
+model CrmTask {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  title          String
+  description    String?
+  status         String        @default("TODO")
+  priority       String        @default("MEDIUM")
+  dueDate        DateTime?
+  ownerId        String?
+  owner          User?         @relation("CrmTaskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  assignedUserId String?
+  assignedUser   User?         @relation("CrmTaskAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  assignedTeamId String?
+  assignedTeam   Team?         @relation("CrmTaskTeam", fields: [assignedTeamId], references: [id], onDelete: SetNull)
+  createdById    String
+  createdBy      User          @relation("CrmTaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  clientId       String?
+  client         Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  leadId         String?
+  lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  contactId      String?
+  contact        Contact?      @relation("CrmTaskContact", fields: [contactId], references: [id], onDelete: SetNull)
+  dealId         String?
+  deal           Deal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  ticketId       String?
+  ticket         Ticket?       @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  @@index([organizationId, status])
+  @@index([organizationId, assignedUserId])
+  @@index([organizationId, assignedTeamId])
+  @@index([organizationId, dueDate])
+  @@index([organizationId, createdAt])
 }
 
 model DepartmentManager {
@@ -162,7 +650,9 @@ model DepartmentManager {
 }
 
 model School {
-  id                String    @id @default(cuid())
+  id                String        @id @default(cuid())
+  organizationId    String?
+  organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   name              String
   contactPerson     String?
   phone             String?
@@ -170,12 +660,12 @@ model School {
   email             String?
   city              String
   area              String?
-  schoolType        String    @default("PRIVATE") // "PRIVATE", "GOVERNMENT", "INTERNATIONAL", "COMMUNITY", "OTHER"
-  classification    String    @default("A") // "A", "B", "C"
+  schoolType        String        @default("PRIVATE") // "PRIVATE", "GOVERNMENT", "INTERNATIONAL", "COMMUNITY", "OTHER"
+  classification    String        @default("A") // "A", "B", "C"
   notes             String?
-  status            String    @default("ACTIVE") // "ACTIVE", "INACTIVE", "CONTACTED", "ASSIGNED"
-  isDeleted         Boolean   @default(false)
-  isPublic          Boolean   @default(false)
+  status            String        @default("ACTIVE") // "ACTIVE", "INACTIVE", "CONTACTED", "ASSIGNED"
+  isDeleted         Boolean       @default(false)
+  isPublic          Boolean       @default(false)
   publicDescription String?
   deletedAt         DateTime?
 
@@ -203,15 +693,19 @@ model School {
   @@index([classification])
   @@index([responsibleEmployeeId])
   @@index([isDeleted])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
 }
 
 // AI School Research: research/discovery workspace. Candidates here are
 // unverified AI-discovered leads and are never treated as official School
 // records until a human explicitly approves one (see SchoolResearchCandidate.status).
 model SchoolResearchJob {
-  id          String @id @default(cuid())
-  createdById String
-  createdBy   User   @relation("SchoolResearchJobCreator", fields: [createdById], references: [id])
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdById    String
+  createdBy      User          @relation("SchoolResearchJobCreator", fields: [createdById], references: [id])
 
   mode           String  @default("FIND_NEW") // FIND_NEW | ENRICH_EXISTING | VERIFY_EXISTING
   status         String  @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED | CANCELLED
@@ -341,19 +835,21 @@ model SchoolResearchAttempt {
 }
 
 model SchoolApprovalRequest {
-  id              String    @id @default(cuid())
+  id              String        @id @default(cuid())
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   schoolId        String
-  school          School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   requesterId     String
-  requester       User      @relation("SchoolApprovalRequester", fields: [requesterId], references: [id])
+  requester       User          @relation("SchoolApprovalRequester", fields: [requesterId], references: [id])
   decidedById     String?
-  decidedBy       User?     @relation("SchoolApprovalDecider", fields: [decidedById], references: [id])
+  decidedBy       User?         @relation("SchoolApprovalDecider", fields: [decidedById], references: [id])
   type            String // EDIT | DELETE
-  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  status          String        @default("PENDING") // PENDING | APPROVED | REJECTED
   previousData    String?
   proposedData    String?
   rejectionReason String?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime      @default(now())
   decidedAt       DateTime?
 
   @@index([status, type])
@@ -362,18 +858,20 @@ model SchoolApprovalRequest {
 }
 
 model TicketApprovalRequest {
-  id              String    @id @default(cuid())
+  id              String        @id @default(cuid())
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   ticketId        String
-  ticket          Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket          Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   requesterId     String
-  requester       User      @relation("TicketApprovalRequester", fields: [requesterId], references: [id])
+  requester       User          @relation("TicketApprovalRequester", fields: [requesterId], references: [id])
   decidedById     String?
-  decidedBy       User?     @relation("TicketApprovalDecider", fields: [decidedById], references: [id])
+  decidedBy       User?         @relation("TicketApprovalDecider", fields: [decidedById], references: [id])
   type            String // CORRECTION | RESUBMIT
-  status          String    @default("PENDING")
+  status          String        @default("PENDING")
   proposedData    String
   rejectionReason String?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime      @default(now())
   decidedAt       DateTime?
 
   @@index([status, type])
@@ -382,11 +880,13 @@ model TicketApprovalRequest {
 }
 
 model ChatConversation {
-  id           String            @id @default(cuid())
-  participants ChatParticipant[]
-  messages     ChatMessage[]
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id             String            @id @default(cuid())
+  organizationId String?
+  organization   Organization?     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  participants   ChatParticipant[]
+  messages       ChatMessage[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([updatedAt])
 }
@@ -464,13 +964,15 @@ model PasswordResetToken {
 }
 
 model SchoolAssignment {
-  id            String  @id @default(cuid())
-  batchNumber   String  @unique // e.g. "ASN-2026-0001"
-  title         String
-  strategy      String  @default("EQUAL_DISTRIBUTION") // "EQUAL_DISTRIBUTION", "MANUAL"
-  totalSchools  Int
-  assignedCount Int
-  notes         String?
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  batchNumber    String        @unique // e.g. "ASN-2026-0001"
+  title          String
+  strategy       String        @default("EQUAL_DISTRIBUTION") // "EQUAL_DISTRIBUTION", "MANUAL"
+  totalSchools   Int
+  assignedCount  Int
+  notes          String?
 
   createdById String
   createdBy   User   @relation("AssignmentCreator", fields: [createdById], references: [id])
@@ -484,13 +986,15 @@ model SchoolAssignment {
 }
 
 model TaskType {
-  id          String  @id @default(cuid())
-  name        String
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  name           String
   // Legacy code retained only for historical ticket references. Not user-editable. Not surfaced in UI.
-  code        String? @unique
-  description String?
-  isActive    Boolean @default(true)
-  createdById String?
+  code           String?       @unique
+  description    String?
+  isActive       Boolean       @default(true)
+  createdById    String?
 
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id])
@@ -520,16 +1024,20 @@ model TaskTypeMember {
 }
 
 model Ticket {
-  id           String            @id @default(cuid())
-  ticketNumber String            @unique // e.g. "CL-00101"
-  schoolId     String?
-  school       School?           @relation(fields: [schoolId], references: [id])
-  taskTypeId   String?
-  taskType     TaskType?         @relation(fields: [taskTypeId], references: [id])
-  departmentId String
-  department   Department        @relation(fields: [departmentId], references: [id])
-  assignmentId String?
-  assignment   SchoolAssignment? @relation(fields: [assignmentId], references: [id])
+  id             String            @id @default(cuid())
+  organizationId String?
+  organization   Organization?     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  ticketNumber   String            @unique // e.g. "CL-00101"
+  schoolId       String?
+  school         School?           @relation(fields: [schoolId], references: [id])
+  clientId       String?
+  client         Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  taskTypeId     String?
+  taskType       TaskType?         @relation(fields: [taskTypeId], references: [id])
+  departmentId   String
+  department     Department        @relation(fields: [departmentId], references: [id])
+  assignmentId   String?
+  assignment     SchoolAssignment? @relation(fields: [assignmentId], references: [id])
 
   subject         String
   priority        String  @default("MEDIUM") // "LOW", "MEDIUM", "HIGH", "URGENT"
@@ -548,6 +1056,7 @@ model Ticket {
   communicationAttempts CommunicationAttempt[]
   assignmentHistory     AssignmentHistory[]
   activityEvents        ActivityEvent[]
+  crmTasks              CrmTask[]
   calendarEvents        CalendarEvent[]
   meetingDetails        MeetingDetails?
 
@@ -557,6 +1066,7 @@ model Ticket {
 
   @@index([status])
   @@index([schoolId])
+  @@index([organizationId, clientId])
   @@index([departmentId])
   @@index([taskTypeId])
   @@index([priority])
@@ -641,16 +1151,18 @@ model Note {
 }
 
 model Attachment {
-  id              String  @id @default(cuid())
+  id              String        @id @default(cuid())
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   ticketId        String?
-  ticket          Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket          Ticket?       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   noteId          String?
-  note            Note?   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  note            Note?         @relation(fields: [noteId], references: [id], onDelete: Cascade)
   originalName    String
   mimeType        String
   size            Int
-  storageKey      String  @unique
-  storageProvider String  @default("local")
+  storageKey      String        @unique
+  storageProvider String        @default("local")
   uploadedById    String
 
   createdAt DateTime @default(now())
@@ -678,16 +1190,18 @@ model CommunicationAttempt {
 }
 
 model Notification {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type       String // "TICKET_ASSIGNED", "TICKET_TRANSFERRED", "TICKET_ACCEPTED", "TICKET_REJECTED", "NEW_NOTE", "STATUS_CHANGED", "MENTION"
-  title      String
-  message    String
-  entityType String? // "ticket", "school", "assignment", "todo"
-  entityId   String?
-  isRead     Boolean   @default(false)
-  readAt     DateTime?
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           String // "TICKET_ASSIGNED", "TICKET_TRANSFERRED", "TICKET_ACCEPTED", "TICKET_REJECTED", "NEW_NOTE", "STATUS_CHANGED", "MENTION"
+  title          String
+  message        String
+  entityType     String? // "ticket", "school", "assignment", "todo"
+  entityId       String?
+  isRead         Boolean       @default(false)
+  readAt         DateTime?
 
   createdAt DateTime @default(now())
 
@@ -696,15 +1210,17 @@ model Notification {
 }
 
 model AuditLog {
-  id         String  @id @default(cuid())
-  actorId    String?
-  actor      User?   @relation("AuditActor", fields: [actorId], references: [id])
-  action     String // e.g. "AUTH_LOGIN", "TICKET_CREATED", "TICKET_SEEN", "TICKET_ACCEPTED", "TICKET_REJECTED", "TICKET_TRANSFERRED", "NOTE_CREATED", "SCHOOL_IMPORTED"
-  entityType String // "Ticket", "School", "Assignment", "User", "Role", "Note", etc.
-  entityId   String?
-  metadata   String? // JSON string
-  ipAddress  String?
-  userAgent  String?
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actorId        String?
+  actor          User?         @relation("AuditActor", fields: [actorId], references: [id])
+  action         String // e.g. "AUTH_LOGIN", "TICKET_CREATED", "TICKET_SEEN", "TICKET_ACCEPTED", "TICKET_REJECTED", "TICKET_TRANSFERRED", "NOTE_CREATED", "SCHOOL_IMPORTED"
+  entityType     String // "Ticket", "School", "Assignment", "User", "Role", "Note", etc.
+  entityId       String?
+  metadata       String? // JSON string
+  ipAddress      String?
+  userAgent      String?
 
   createdAt DateTime @default(now())
 
@@ -714,15 +1230,17 @@ model AuditLog {
 }
 
 model ActivityEvent {
-  id          String  @id @default(cuid())
-  ticketId    String
-  ticket      Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  actorId     String
-  actor       User    @relation("ActivityActor", fields: [actorId], references: [id])
-  type        String // "CREATED", "SEEN", "ACCEPTED", "REJECTED", "IN_PROGRESS", "NOTE_ADDED", "TRANSFERRED", "COMMUNICATION_ATTEMPT", "COMPLETED", "CLOSED"
-  title       String
-  description String?
-  metadata    String? // JSON string
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  ticketId       String
+  ticket         Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorId        String
+  actor          User          @relation("ActivityActor", fields: [actorId], references: [id])
+  type           String // "CREATED", "SEEN", "ACCEPTED", "REJECTED", "IN_PROGRESS", "NOTE_ADDED", "TRANSFERRED", "COMMUNICATION_ATTEMPT", "COMPLETED", "CLOSED"
+  title          String
+  description    String?
+  metadata       String? // JSON string
 
   createdAt DateTime @default(now())
 
@@ -731,16 +1249,18 @@ model ActivityEvent {
 }
 
 model Todo {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation("UserTodos", fields: [userId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  priority    String    @default("MEDIUM") // "LOW", "MEDIUM", "HIGH"
-  color       String    @default("yellow") // "yellow", "blue", "green", "pink", "purple", "orange"
-  isCompleted Boolean   @default(false)
-  completedAt DateTime?
-  dueDate     DateTime?
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  userId         String
+  user           User          @relation("UserTodos", fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  priority       String        @default("MEDIUM") // "LOW", "MEDIUM", "HIGH"
+  color          String        @default("yellow") // "yellow", "blue", "green", "pink", "purple", "orange"
+  isCompleted    Boolean       @default(false)
+  completedAt    DateTime?
+  dueDate        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -750,13 +1270,15 @@ model Todo {
 }
 
 model Message {
-  id          String              @id @default(cuid())
-  senderId    String
-  sender      User                @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  subject     String
-  content     String
-  recipients  MessageRecipient[]
-  attachments MessageAttachment[]
+  id             String              @id @default(cuid())
+  organizationId String?
+  organization   Organization?       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  senderId       String
+  sender         User                @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  subject        String
+  content        String
+  recipients     MessageRecipient[]
+  attachments    MessageAttachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -785,14 +1307,16 @@ model MessageRecipient {
 }
 
 model MessageAttachment {
-  id              String  @id @default(cuid())
+  id              String        @id @default(cuid())
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   messageId       String
-  message         Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message         Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
   originalName    String
   mimeType        String
   size            Int
-  storageKey      String  @unique
-  storageProvider String  @default("local")
+  storageKey      String        @unique
+  storageProvider String        @default("local")
   uploadedById    String
 
   createdAt DateTime @default(now())
@@ -802,15 +1326,17 @@ model MessageAttachment {
 }
 
 model CalendarEvent {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  title          String
+  description    String?
   // "MEETING" | "CALL" | "FOLLOW_UP" | "CONTRACT_SIGNING" | "APPOINTMENT" | "SCHEDULED_TASK" | "DUE_DATE" | "TASK" | "EVENT"
-  type        String    @default("MEETING")
-  startDate   DateTime
-  endDate     DateTime?
-  allDay      Boolean   @default(false)
-  location    String?
+  type           String        @default("MEETING")
+  startDate      DateTime
+  endDate        DateTime?
+  allDay         Boolean       @default(false)
+  location       String?
 
   // Legacy single-assignee field (preserved for backwards compat)
   userId String?
@@ -824,6 +1350,8 @@ model CalendarEvent {
 
   schoolId String?
   school   School? @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   ticketId String?
   ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
@@ -835,6 +1363,7 @@ model CalendarEvent {
   @@index([createdById])
   @@index([startDate])
   @@index([type])
+  @@index([organizationId, clientId])
 }
 
 model CalendarEventAssignee {
@@ -852,16 +1381,18 @@ model CalendarEventAssignee {
 }
 
 model MessageTemplate {
-  id        String  @id @default(cuid())
-  code      String  @unique
-  title     String
-  titleAr   String
-  subject   String
-  subjectAr String
-  content   String
-  contentAr String
-  category  String  @default("GENERAL") // "MEETING", "PERMISSION", "FOLLOW_UP", "APPROVAL", "NOTICE", "GENERAL"
-  isActive  Boolean @default(true)
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  code           String        @unique
+  title          String
+  titleAr        String
+  subject        String
+  subjectAr      String
+  content        String
+  contentAr      String
+  category       String        @default("GENERAL") // "MEETING", "PERMISSION", "FOLLOW_UP", "APPROVAL", "NOTICE", "GENERAL"
+  isActive       Boolean       @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -872,25 +1403,27 @@ model MessageTemplate {
 // ── Proposal Templates ───────────────────────────────────────────────────
 // Reusable base PDF templates with bounding box configurations for logos/fields.
 model ProposalTemplate {
-  id                 String     @id @default(cuid())
+  id                 String        @id @default(cuid())
+  organizationId     String?
+  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   name               String
   description        String?
   pdfStorageKey      String
-  pdfStorageProvider String     @default("local")
+  pdfStorageProvider String        @default("local")
   originalFileName   String
-  fileSize           Int        @default(0)
-  isActive           Boolean    @default(true)
+  fileSize           Int           @default(0)
+  isActive           Boolean       @default(true)
 
   // JSON: { schoolLogoPosition: { page, x, y, width, height }, codeLineLogoPosition: { page, x, y, width, height } }
-  config             String?
+  config String?
 
-  createdById        String
-  createdBy          User       @relation("ProposalTemplateCreator", fields: [createdById], references: [id])
+  createdById String
+  createdBy   User   @relation("ProposalTemplateCreator", fields: [createdById], references: [id])
 
-  proposals          Proposal[]
+  proposals Proposal[]
 
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isActive])
   @@index([createdById])
@@ -899,43 +1432,47 @@ model ProposalTemplate {
 // ── Proposals ─────────────────────────────────────────────────────────────
 // Stores commercial proposals generated for schools / clients.
 model Proposal {
-  id            String  @id @default(cuid())
-  title         String
-  clientName    String
-  contactPerson String?
-  clientEmail   String?
-  clientPhone   String?
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  title          String
+  clientName     String
+  contactPerson  String?
+  clientEmail    String?
+  clientPhone    String?
 
-  templateId    String?
-  template      ProposalTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateId String?
+  template   ProposalTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
-  schoolId      String?
-  school        School?           @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   // Snapshot of school logo used at generation time (preserves historical accuracy)
-  logoKey       String?
-  logoProvider  String            @default("local")
+  logoKey      String?
+  logoProvider String  @default("local")
 
   // DRAFT | GENERATED | SENT
-  status        String            @default("DRAFT")
+  status String @default("DRAFT")
 
   // JSON blob: { services: [], pricing: [], terms: "", notes: "", dynamicValues: {} }
-  content       String?
+  content String?
 
   generatedAt          DateTime?
   generatedPdfKey      String?
   generatedPdfProvider String    @default("local")
 
-  createdById   String
-  createdBy     User              @relation("ProposalCreator", fields: [createdById], references: [id])
+  createdById String
+  createdBy   User   @relation("ProposalCreator", fields: [createdById], references: [id])
 
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([createdById])
   @@index([schoolId])
+  @@index([organizationId, clientId])
   @@index([templateId])
   @@index([createdAt])
 }
-

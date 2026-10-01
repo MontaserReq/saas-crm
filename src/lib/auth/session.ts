@@ -101,12 +101,28 @@ export async function getCurrentUser(): Promise<UserSession | null> {
           name: true,
         },
       },
+      organizationMemberships: {
+        where: { status: 'ACTIVE', organization: { isActive: true } },
+        orderBy: { createdAt: 'asc' },
+        take: 2,
+        select: {
+          organizationId: true,
+          organization: { select: { name: true } },
+        },
+      },
     },
   });
 
   if (!dbUser || !dbUser.isActive) {
     return null;
   }
+
+  // Once organization membership is part of the security boundary, an
+  // authenticated user without an active membership must not receive a
+  // usable application session.
+  const activeMemberships = dbUser.organizationMemberships;
+  if (activeMemberships.length !== 1) return null;
+  const activeOrganization = activeMemberships[0];
 
   const permissions = Array.from(new Set([
     ...dbUser.role.rolePermissions.map((rp) => rp.permission.code),
@@ -126,6 +142,8 @@ export async function getCurrentUser(): Promise<UserSession | null> {
     reportsToUserId: dbUser.reportsToUserId,
     permissions,
     sessionId: session.sessionId,
+    organizationId: activeOrganization.organizationId,
+    organizationName: activeOrganization.organization.name,
   };
 }
 

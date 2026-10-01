@@ -8,6 +8,7 @@ export async function listProposalsAction(filter?: {
   search?: string;
   status?: string;
   schoolId?: string;
+  clientId?: string;
   templateId?: string;
 }) {
   try {

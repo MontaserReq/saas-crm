@@ -6,6 +6,7 @@ import { AuditService } from './AuditService';
 import { ProposalTemplateService, TemplateConfig } from './ProposalTemplateService';
 import { applyProposalOverlay } from '@/lib/pdf/proposalOverlay';
 import { formatProposalCode } from '@/lib/proposals/proposalUtils';
+import { requireOrganizationContext } from '@/lib/auth/organization';
 
 export interface ProposalServiceItem {
   id?: string;
@@ -21,6 +22,7 @@ export interface ProposalInput {
   clientEmail?: string | null;
   clientPhone?: string | null;
   schoolId?: string | null;
+  clientId?: string | null;
   templateId?: string | null;
   status?: 'DRAFT' | 'GENERATED' | 'SENT';
   services?: ProposalServiceItem[];
@@ -49,18 +51,20 @@ const proposalInclude = {
       responsibleEmployeeId: true,
     },
   },
+  client: { select: { id: true, name: true, type: true, status: true, logoKey: true, logoProvider: true } },
 } as const;
 
 export class ProposalService {
   static async listProposals(
     user: UserSession,
-    filter?: { search?: string; status?: string; schoolId?: string; templateId?: string }
+    filter?: { search?: string; status?: string; schoolId?: string; clientId?: string; templateId?: string }
   ) {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_VIEW)) {
       throw new Error('Forbidden: proposals.view permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const where: any = {};
+    const where: any = { organizationId };
 
     if (filter?.status && filter.status !== 'ALL') {
       where.status = filter.status;
@@ -69,6 +73,7 @@ export class ProposalService {
     if (filter?.schoolId && filter.schoolId !== 'ALL') {
       where.schoolId = filter.schoolId;
     }
+    if (filter?.clientId && filter.clientId !== 'ALL') where.clientId = filter.clientId;
 
     if (filter?.templateId && filter.templateId !== 'ALL') {
       where.templateId = filter.templateId;
@@ -95,8 +100,9 @@ export class ProposalService {
       throw new Error('Forbidden: proposals.view permission required');
     }
 
-    const proposal = await prisma.proposal.findUnique({
-      where: { id },
+    const organizationId = (await requireOrganizationContext(user)).id;
+    const proposal = await prisma.proposal.findFirst({
+      where: { id, organizationId },
       include: proposalInclude,
     });
 
@@ -108,6 +114,7 @@ export class ProposalService {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_CREATE)) {
       throw new Error('Forbidden: proposals.create permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
     if (!input.title || input.title.trim().length < 2) {
       throw new Error('Proposal title is required (minimum 2 characters)');
@@ -116,14 +123,27 @@ export class ProposalService {
       throw new Error('Client or school name is required');
     }
 
+    if (input.schoolId) {
+      const school = await prisma.school.findFirst({ where: { id: input.schoolId, organizationId }, select: { id: true } });
+      if (!school) throw new Error('Selected school does not belong to the active organization');
+    }
+    if (input.clientId) {
+      const client = await prisma.client.findFirst({ where: { id: input.clientId, organizationId, deletedAt: null }, select: { id: true } });
+      if (!client) throw new Error('Selected client does not belong to the active organization');
+    }
+    if (input.templateId) {
+      const template = await prisma.proposalTemplate.findFirst({ where: { id: input.templateId, organizationId, isActive: true }, select: { id: true } });
+      if (!template) throw new Error('Selected proposal template does not belong to the active organization');
+    }
+
     // Resolve School logo snapshot:
     // If a schoolId is chosen and has an existing logo, take a snapshot of it for this proposal.
     let initialLogoKey: string | null = null;
     let initialLogoProvider = 'local';
 
     if (input.schoolId) {
-      const school = await prisma.school.findUnique({
-        where: { id: input.schoolId },
+      const school = await prisma.school.findFirst({
+        where: { id: input.schoolId, organizationId },
         select: { logoKey: true, logoProvider: true },
       });
       if (school?.logoKey) {
@@ -146,12 +166,14 @@ export class ProposalService {
         clientEmail: input.clientEmail?.trim() || null,
         clientPhone: input.clientPhone?.trim() || null,
         schoolId: input.schoolId || null,
+        clientId: input.clientId || input.schoolId || null,
         templateId: input.templateId || null,
         logoKey: initialLogoKey,
         logoProvider: initialLogoProvider,
         status: input.status || 'DRAFT',
         content: contentJson,
         createdById: user.id,
+        organizationId,
       },
       include: proposalInclude,
     });
@@ -171,9 +193,23 @@ export class ProposalService {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_UPDATE)) {
       throw new Error('Forbidden: proposals.update permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const existing = await prisma.proposal.findUnique({ where: { id } });
+    const existing = await prisma.proposal.findFirst({ where: { id, organizationId } });
     if (!existing) throw new Error('Proposal not found');
+
+    if (input.schoolId) {
+      const school = await prisma.school.findFirst({ where: { id: input.schoolId, organizationId }, select: { id: true } });
+      if (!school) throw new Error('Selected school does not belong to the active organization');
+    }
+    if (input.clientId) {
+      const client = await prisma.client.findFirst({ where: { id: input.clientId, organizationId, deletedAt: null }, select: { id: true } });
+      if (!client) throw new Error('Selected client does not belong to the active organization');
+    }
+    if (input.templateId) {
+      const template = await prisma.proposalTemplate.findFirst({ where: { id: input.templateId, organizationId, isActive: true }, select: { id: true } });
+      if (!template) throw new Error('Selected proposal template does not belong to the active organization');
+    }
 
     const data: any = {};
     if (input.title !== undefined) data.title = input.title.trim();
@@ -182,6 +218,7 @@ export class ProposalService {
     if (input.clientEmail !== undefined) data.clientEmail = input.clientEmail?.trim() || null;
     if (input.clientPhone !== undefined) data.clientPhone = input.clientPhone?.trim() || null;
     if (input.schoolId !== undefined) data.schoolId = input.schoolId || null;
+    if (input.clientId !== undefined) data.clientId = input.clientId || null;
     if (input.templateId !== undefined) data.templateId = input.templateId || null;
     if (input.status !== undefined) data.status = input.status;
 
@@ -219,8 +256,9 @@ export class ProposalService {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_DELETE)) {
       throw new Error('Forbidden: proposals.delete permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const existing = await prisma.proposal.findUnique({ where: { id } });
+    const existing = await prisma.proposal.findFirst({ where: { id, organizationId } });
     if (!existing) throw new Error('Proposal not found');
 
     // Delete generated PDF if stored
@@ -265,8 +303,9 @@ export class ProposalService {
     ) {
       throw new Error('Forbidden: Insufficient permissions to upload school logo');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const school = await prisma.school.findUnique({ where: { id: schoolId } });
+    const school = await prisma.school.findFirst({ where: { id: schoolId, organizationId } });
     if (!school) throw new Error('School not found');
 
     const allowedMimes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
@@ -290,7 +329,7 @@ export class ProposalService {
     }
 
     const uploadRes = await storage.upload(fileBuffer, originalName, mimeType, {
-      keyPrefix: 'schools/logos',
+      keyPrefix: `${organizationId}/schools/logos`,
     });
 
     // Update School record
@@ -304,8 +343,10 @@ export class ProposalService {
 
     // If linked to a proposal, update the proposal snapshot
     if (proposalId) {
+      const proposal = await prisma.proposal.findFirst({ where: { id: proposalId, organizationId }, select: { id: true } });
+      if (!proposal) throw new Error('Proposal not found');
       await prisma.proposal.update({
-        where: { id: proposalId },
+        where: { id: proposal.id },
         data: {
           logoKey: uploadRes.storageKey,
           logoProvider: storage.providerId,
@@ -329,8 +370,9 @@ export class ProposalService {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_UPDATE)) {
       throw new Error('Forbidden: proposals.update permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const proposal = await prisma.proposal.findUnique({ where: { id: proposalId } });
+    const proposal = await prisma.proposal.findFirst({ where: { id: proposalId, organizationId } });
     if (!proposal) throw new Error('Proposal not found');
 
     const allowedMimes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
@@ -353,7 +395,7 @@ export class ProposalService {
     }
 
     const uploadRes = await storage.upload(fileBuffer, originalName, mimeType, {
-      keyPrefix: 'proposals/logos',
+      keyPrefix: `${organizationId}/proposals/logos`,
     });
 
     const updated = await prisma.proposal.update({
@@ -383,9 +425,10 @@ export class ProposalService {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_GENERATE)) {
       throw new Error('Forbidden: proposals.generate permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const proposal = await prisma.proposal.findUnique({
-      where: { id: proposalId },
+    const proposal = await prisma.proposal.findFirst({
+      where: { id: proposalId, organizationId },
       include: proposalInclude,
     });
 
@@ -446,7 +489,7 @@ export class ProposalService {
     const storage = getStorageProvider();
     const fileName = `Proposal_${proposalCode}_${proposal.title.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]+/g, '_')}.pdf`;
     const uploadRes = await storage.upload(finalPdfBuffer, fileName, 'application/pdf', {
-      keyPrefix: 'proposals/generated',
+      keyPrefix: `${organizationId}/proposals/generated`,
     });
 
     // 6. Update Proposal status and pdf reference
@@ -478,9 +521,10 @@ export class ProposalService {
     if (!hasPermission(user, PERMISSIONS.PROPOSALS_VIEW)) {
       throw new Error('Forbidden: proposals.view permission required');
     }
+    const organizationId = (await requireOrganizationContext(user)).id;
 
-    const proposal = await prisma.proposal.findUnique({
-      where: { id: proposalId },
+    const proposal = await prisma.proposal.findFirst({
+      where: { id: proposalId, organizationId },
       select: {
         id: true,
         title: true,

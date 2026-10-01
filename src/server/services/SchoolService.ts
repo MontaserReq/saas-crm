@@ -34,15 +34,25 @@ export interface ImportPreviewRow {
 }
 
 export class SchoolService {
+  private static async organizationForActor(actorId: string): Promise<string> {
+    const membership = prisma.organizationMember?.findFirst ? await prisma.organizationMember.findFirst({ where: { userId: actorId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } }) : null;
+    return membership?.organizationId || 'org_codeline_legacy';
+  }
+
+  private static scopedSchoolWhere(organizationId: string, id: string) {
+    return { id, organizationId };
+  }
+
   static async createApprovalRequest(schoolId: string, type: 'EDIT' | 'DELETE', requesterId: string, proposedData?: any) {
-    const school = await prisma.school.findUnique({ where: { id: schoolId } });
+    const organizationId = await this.organizationForActor(requesterId);
+    const school = await prisma.school.findFirst({ where: this.scopedSchoolWhere(organizationId, schoolId) });
     if (!school) throw new Error('School not found');
-    const pending = await prisma.schoolApprovalRequest.findFirst({ where: { schoolId, type, status: 'PENDING' } });
+    const pending = await prisma.schoolApprovalRequest.findFirst({ where: { schoolId, organizationId, type, status: 'PENDING' } });
     if (pending) throw new Error('A pending approval request already exists for this school');
-    const request = await prisma.schoolApprovalRequest.create({ data: { schoolId, requesterId, type, previousData: JSON.stringify(school), proposedData: proposedData ? JSON.stringify(proposedData) : null } });
+    const request = await prisma.schoolApprovalRequest.create({ data: { schoolId, requesterId, organizationId, type, previousData: JSON.stringify(school), proposedData: proposedData ? JSON.stringify(proposedData) : null } });
     await AuditService.logAudit({ actorId: requesterId, action: `SCHOOL_${type}_REQUESTED`, entityType: 'SchoolApprovalRequest', entityId: request.id, metadata: { schoolId } });
     const approvers = await prisma.user.findMany({
-      where: { isActive: true, role: { rolePermissions: { some: { permission: { code: type === 'EDIT' ? 'schools.approve_edit' : 'schools.approve_delete' } } } } },
+      where: { isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } }, role: { rolePermissions: { some: { permission: { code: type === 'EDIT' ? 'schools.approve_edit' : 'schools.approve_delete' } } } } },
       select: { id: true },
     });
     if (approvers.length) {
@@ -54,6 +64,7 @@ export class SchoolService {
           message: `A ${type.toLowerCase()} request for ${school.name} is waiting for your approval.`,
           entityType: 'schoolApprovalRequest',
           entityId: request.id,
+          organizationId,
         })),
       });
     }
@@ -61,7 +72,8 @@ export class SchoolService {
   }
 
   static async decideApproval(requestId: string, approverId: string, approve: boolean, rejectionReason?: string) {
-    const request = await prisma.schoolApprovalRequest.findUnique({ where: { id: requestId } });
+    const organizationId = await this.organizationForActor(approverId);
+    const request = await prisma.schoolApprovalRequest.findFirst({ where: { id: requestId, organizationId } });
     if (!request || request.status !== 'PENDING') throw new Error('Approval request is not pending');
     if (approve && request.type === 'EDIT' && request.proposedData) {
       const proposed = JSON.parse(request.proposedData);
@@ -81,16 +93,17 @@ export class SchoolService {
           : `Your ${request.type.toLowerCase()} request for the school was rejected${rejectionReason ? `: ${rejectionReason}` : '.'}`,
         entityType: 'schoolApprovalRequest',
         entityId: request.id,
+        organizationId,
       },
     });
     return result;
   }
-  static async listSchools(filters: SchoolFilters): Promise<PaginatedResult<any>> {
+  static async listSchools(filters: SchoolFilters, organizationId = 'org_codeline_legacy'): Promise<PaginatedResult<any>> {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const pageSize = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 15;
     const skip = (page - 1) * pageSize;
 
-    const where = this.buildSchoolWhere(filters);
+    const where = this.buildSchoolWhere(filters, organizationId);
 
     const [total, data] = await Promise.all([
       prisma.school.count({ where }),
@@ -120,8 +133,8 @@ export class SchoolService {
    * Single source of truth for the Schools Registry filter clause so the paged
    * view and the export always return the same result set.
    */
-  private static buildSchoolWhere(filters: SchoolFilters) {
-    const where: any = { isDeleted: false };
+  private static buildSchoolWhere(filters: SchoolFilters, organizationId = 'org_codeline_legacy') {
+    const where: any = { organizationId, isDeleted: false };
     if (filters.search && filters.search.trim() !== '') {
       const q = filters.search.trim();
       const searchOr = [
@@ -172,9 +185,9 @@ export class SchoolService {
    * classification, then city, then school name so the exported sheet reads like
    * an organized directory.
    */
-  static async listSchoolsForExport(filters: Omit<SchoolFilters, 'page' | 'pageSize'>) {
+  static async listSchoolsForExport(filters: Omit<SchoolFilters, 'page' | 'pageSize'>, organizationId = 'org_codeline_legacy') {
     return prisma.school.findMany({
-      where: this.buildSchoolWhere(filters as SchoolFilters),
+      where: this.buildSchoolWhere(filters as SchoolFilters, organizationId),
       orderBy: [{ classification: 'asc' }, { city: 'asc' }, { name: 'asc' }],
       take: this.MAX_EXPORT_ROWS,
       include: {
@@ -190,8 +203,8 @@ export class SchoolService {
       throw new Error('Forbidden: Missing schools.view permission');
     }
 
-    return prisma.school.findUnique({
-      where: { id },
+    return prisma.school.findFirst({
+      where: { id, organizationId: user.organizationId || 'org_codeline_legacy' },
       include: {
         createdBy: { select: { id: true, name: true } },
         responsibleEmployee: { select: { id: true, name: true, email: true } },
@@ -211,16 +224,34 @@ export class SchoolService {
 
   static async createSchool(data: any, actorId: string) {
     const validated = schoolSchema.parse(data);
+    const organizationId = await this.organizationForActor(actorId);
 
     const school = await prisma.$transaction(async (tx) => {
       const createdSchool = await tx.school.create({
         data: {
           ...validated,
           createdById: actorId,
+          organizationId,
+        },
+      });
+      if (tx.client?.create) await tx.client.create({
+        data: {
+          id: createdSchool.id,
+          organizationId,
+          name: createdSchool.name,
+          type: 'SCHOOL',
+          status: createdSchool.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+          description: createdSchool.notes,
+          email: createdSchool.email,
+          phone: createdSchool.phone,
+          address: [createdSchool.area, createdSchool.city].filter(Boolean).join(', ') || null,
+          logoKey: createdSchool.logoKey,
+          logoProvider: createdSchool.logoProvider || 'local',
+          createdById: actorId,
         },
       });
       if (createdSchool.responsibleEmployeeId) {
-        await this.createResponsibleEmployeeTicket(tx, createdSchool, createdSchool.responsibleEmployeeId, actorId);
+        await this.createResponsibleEmployeeTicket(tx, createdSchool, createdSchool.responsibleEmployeeId, actorId, organizationId);
       }
       return createdSchool;
     });
@@ -237,17 +268,34 @@ export class SchoolService {
   }
 
   static async updateSchool(id: string, data: any, actorId: string) {
+    const organizationId = await this.organizationForActor(actorId);
     const validated = schoolSchema.parse(data);
 
     const school = await prisma.$transaction(async (tx) => {
+      const existing = await tx.school.findFirst({ where: { id, organizationId } });
+      if (!existing) throw new Error('School not found');
       const updatedSchool = await tx.school.update({
-        where: { id },
+        where: { id: existing.id },
         data: {
           ...validated,
         },
       });
+      if (tx.client?.updateMany) await tx.client.updateMany({
+        where: { id: updatedSchool.id, organizationId },
+        data: {
+          name: updatedSchool.name,
+          status: updatedSchool.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+          description: updatedSchool.notes,
+          email: updatedSchool.email,
+          phone: updatedSchool.phone,
+          address: [updatedSchool.area, updatedSchool.city].filter(Boolean).join(', ') || null,
+          logoKey: updatedSchool.logoKey,
+          logoProvider: updatedSchool.logoProvider || 'local',
+          updatedById: actorId,
+        },
+      });
       if (updatedSchool.responsibleEmployeeId) {
-        await this.createResponsibleEmployeeTicket(tx, updatedSchool, updatedSchool.responsibleEmployeeId, actorId);
+        await this.createResponsibleEmployeeTicket(tx, updatedSchool, updatedSchool.responsibleEmployeeId, actorId, organizationId);
       }
       return updatedSchool;
     });
@@ -264,7 +312,7 @@ export class SchoolService {
   }
 
   /** Creates the first active ticket when a school receives a responsible employee. */
-  private static async createResponsibleEmployeeTicket(tx: any, school: { id: string; name: string }, employeeId: string, actorId: string) {
+  private static async createResponsibleEmployeeTicket(tx: any, school: { id: string; name: string }, employeeId: string, actorId: string, organizationId: string) {
     const existingTicket = await tx.ticket.findFirst({
       where: {
         schoolId: school.id,
@@ -274,14 +322,14 @@ export class SchoolService {
     });
     if (existingTicket) return existingTicket;
 
-    const employee = await tx.user.findUnique({
-      where: { id: employeeId },
+    const employee = await tx.user.findFirst({
+      where: { id: employeeId, isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } },
       select: { id: true, name: true, isActive: true, departmentId: true },
     });
     if (!employee || !employee.isActive) throw new Error('The selected responsible employee is inactive or could not be found.');
 
     let sequence = 1000;
-    const lastTicket = await tx.ticket.findFirst({ orderBy: { createdAt: 'desc' }, select: { ticketNumber: true } });
+    const lastTicket = await tx.ticket.findFirst({ where: { organizationId }, orderBy: { createdAt: 'desc' }, select: { ticketNumber: true } });
     if (lastTicket?.ticketNumber.startsWith('CL-')) {
       const parsed = parseInt(lastTicket.ticketNumber.slice(3), 10);
       if (!Number.isNaN(parsed)) sequence = parsed;
@@ -290,6 +338,7 @@ export class SchoolService {
     const ticket = await tx.ticket.create({
       data: {
         ticketNumber: `CL-${sequence + 1}`,
+        organizationId,
         schoolId: school.id,
         departmentId: employee.departmentId,
         subject: `School follow-up: ${school.name}`,
@@ -312,6 +361,7 @@ export class SchoolService {
       data: {
         ticketId: ticket.id,
         actorId,
+        organizationId,
         type: 'CREATED',
         title: 'Ticket Created & Assigned',
         description: `Automatically created for ${employee.name} because they are responsible for ${school.name}.`,
@@ -320,6 +370,7 @@ export class SchoolService {
     await tx.notification.create({
       data: {
         userId: employee.id,
+        organizationId,
         type: 'TICKET_ASSIGNED',
         title: 'New school ticket assigned',
         message: `A new ticket for ${school.name} has been assigned to you.`,
@@ -335,8 +386,9 @@ export class SchoolService {
    * Safely deletes or archives a school depending on historical relation existence.
    */
   static async deleteSchool(id: string, actorId: string) {
-    const school = await prisma.school.findUnique({
-      where: { id },
+    const organizationId = await this.organizationForActor(actorId);
+    const school = await prisma.school.findFirst({
+      where: { id, organizationId },
       include: {
         _count: {
           select: { tickets: true },
@@ -379,7 +431,7 @@ export class SchoolService {
   /**
    * Parses and validates uploaded raw rows from CSV / Excel file.
    */
-  static async validateImportRows(rawRows: any[]): Promise<{
+  static async validateImportRows(rawRows: any[], organizationId = 'org_codeline_legacy'): Promise<{
     preview: ImportPreviewRow[];
     validCount: number;
     invalidCount: number;
@@ -400,10 +452,11 @@ export class SchoolService {
       throw new Error(`Duplicate column header: ${headerResolution.duplicates.join(', ')}.`);
     }
     const existingSchools = await prisma.school.findMany({
+      where: { organizationId },
       select: { name: true, phone: true },
     });
     const employees = await prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } },
       select: { id: true, name: true, email: true },
     });
 
@@ -506,10 +559,11 @@ export class SchoolService {
       throw new Error('No valid records to import');
     }
     if (validRows.length > 5000) throw new Error('The maximum allowed import size is 5,000 rows');
+    const organizationId = await this.organizationForActor(actorId);
     // The preview is client-visible and may contain the employee display name
     // instead of the internal id. Resolve both forms again at commit time.
     const activeEmployeesForMatching = await prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } },
       select: { id: true, name: true, email: true, departmentId: true },
     });
     const enrichedRows = validRows.map((row) => {
@@ -539,7 +593,7 @@ export class SchoolService {
     }
 
     const createdSchools = await prisma.$transaction(async (tx) => {
-      const existing = await tx.school.findMany({ select: { name: true, phone: true } });
+      const existing = await tx.school.findMany({ where: { organizationId }, select: { name: true, phone: true } });
       const names = new Set(existing.map((school) => school.name.trim().replace(/\s+/g, ' ').toLowerCase()));
       const phones = new Set(existing.filter((school) => school.phone).map((school) => normalizeImportPhone(school.phone)));
       const batchNames = new Set<string>();
@@ -570,6 +624,7 @@ export class SchoolService {
             classification: row.classification,
             responsibleEmployeeId: row.responsibleEmployeeId || null,
             createdById: actorId,
+            organizationId,
           },
         });
         createdSchools.push(school);
@@ -579,6 +634,7 @@ export class SchoolService {
       // outreach ticket created by this import.
       let ticketSequence = 1000;
       const lastTicket = await tx.ticket.findFirst({
+        where: { organizationId },
         orderBy: { createdAt: 'desc' },
         select: { ticketNumber: true },
       });
@@ -597,6 +653,7 @@ export class SchoolService {
         const ticket = await tx.ticket.create({
           data: {
             ticketNumber: `CL-${ticketSequence}`,
+            organizationId,
             schoolId: school.id,
             departmentId: employee.departmentId,
             subject: `School follow-up: ${school.name}`,
@@ -621,6 +678,7 @@ export class SchoolService {
           data: {
             ticketId: ticket.id,
             actorId,
+            organizationId,
             type: 'CREATED',
             title: 'Ticket Created & Assigned',
             description: `Automatically created for ${employee.name} from the school import.`,
@@ -629,6 +687,7 @@ export class SchoolService {
         await tx.notification.create({
           data: {
             userId: employee.id,
+            organizationId,
             type: 'TICKET_ASSIGNED',
             title: 'New school ticket assigned',
             message: `A new ticket for ${school.name} has been assigned to you.`,

@@ -20,7 +20,7 @@ export default async function ProposalsPage() {
     ProposalService.listProposals(user),
     ProposalTemplateService.listTemplates(user),
     prisma.school.findMany({
-      where: { isDeleted: false },
+      where: { isDeleted: false, organizationId: user.organizationId },
       select: { id: true, name: true, logoKey: true },
       orderBy: { name: 'asc' },
     }),

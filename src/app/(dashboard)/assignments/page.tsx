@@ -13,11 +13,12 @@ export default async function AssignmentsPage() {
   }
 
   const [taskTypes, departments, teamMembers, availableSchools] = await Promise.all([
-    prisma.taskType.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
-    prisma.department.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
+    prisma.taskType.findMany({ where: { isActive: true, organizationId: user.organizationId }, orderBy: { name: 'asc' } }),
+    prisma.department.findMany({ where: { isActive: true, organizationId: user.organizationId }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({
       where: {
         isActive: true,
+        organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } },
         OR: [
           { role: { rolePermissions: { some: { permission: { code: { in: ['tickets.view_assigned', 'tickets.view_all'] } } } } } },
           { userPermissions: { some: { permission: { code: { in: ['tickets.view_assigned', 'tickets.view_all'] } } } } },
@@ -34,7 +35,7 @@ export default async function AssignmentsPage() {
     prisma.school.findMany({
       // A responsible employee means the school was already distributed and
       // received its initial ticket during import. It must not be offered again.
-      where: { isDeleted: false, status: { not: 'INACTIVE' }, responsibleEmployeeId: null },
+      where: { isDeleted: false, organizationId: user.organizationId, status: { not: 'INACTIVE' }, responsibleEmployeeId: null },
       select: {
         id: true,
         name: true,

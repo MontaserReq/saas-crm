@@ -15,6 +15,10 @@ export interface BulkAssignmentInput {
 }
 
 export class AssignmentService {
+  private static async organizationForActor(actorId: string): Promise<string> {
+    const membership = await prisma.organizationMember.findFirst({ where: { userId: actorId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } });
+    return membership?.organizationId || 'org_codeline_legacy';
+  }
   /**
    * Distributes an array of schools across an array of assignee IDs equally.
    */
@@ -35,9 +39,9 @@ export class AssignmentService {
   /**
    * Generates a batch number and ticket numbers.
    */
-  static async generateBatchNumber(): Promise<string> {
+  static async generateBatchNumber(organizationId = 'org_codeline_legacy'): Promise<string> {
     const year = new Date().getFullYear();
-    const count = await prisma.schoolAssignment.count();
+    const count = await prisma.schoolAssignment.count({ where: { organizationId } });
     return `ASN-${year}-${String(count + 1).padStart(4, '0')}`;
   }
 
@@ -46,11 +50,12 @@ export class AssignmentService {
    */
   static async executeBulkAssignment(input: BulkAssignmentInput, actorId: string) {
     const validated = schoolAssignmentSchema.parse(input);
+    const organizationId = await this.organizationForActor(actorId);
 
     const schools = await prisma.school.findMany({
       // Schools with a responsible employee were already distributed (and get
       // an initial ticket on import), so reject them both in the UI and API.
-      where: { id: { in: validated.schoolIds }, isDeleted: false, status: { not: 'INACTIVE' }, responsibleEmployeeId: null },
+      where: { id: { in: validated.schoolIds }, organizationId, isDeleted: false, status: { not: 'INACTIVE' }, responsibleEmployeeId: null },
     });
 
     if (schools.length === 0) {
@@ -61,7 +66,7 @@ export class AssignmentService {
     }
 
     const assignees = await prisma.user.findMany({
-      where: { id: { in: validated.assigneeIds }, isActive: true },
+      where: { id: { in: validated.assigneeIds }, isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } },
       select: {
         id: true,
         name: true,
@@ -74,14 +79,15 @@ export class AssignmentService {
     if (assignees.length !== validated.assigneeIds.length) throw new Error('One or more selected assignees are inactive or invalid');
     if (assignees.some((assignee) => assignee.role.rolePermissions.length === 0 && assignee.userPermissions.length === 0)) throw new Error('One or more selected users are not eligible to receive tickets');
 
-    const taskType = await prisma.taskType.findUnique({
-      where: { id: validated.taskTypeId },
-    });
+    const department = await prisma.department.findFirst({ where: { id: validated.departmentId, organizationId }, select: { id: true } });
+    if (!department) throw new Error('Invalid department selected');
+
+    const taskType = await prisma.taskType.findFirst({ where: { id: validated.taskTypeId, organizationId } });
     if (!taskType) {
       throw new Error('Invalid task type selected');
     }
 
-    const batchNumber = await this.generateBatchNumber();
+    const batchNumber = `ASN-${new Date().getFullYear()}-${String(await prisma.schoolAssignment.count({ where: { organizationId } }) + 1).padStart(4, '0')}`;
     const distribution = this.distributeSchoolsEqually(
       schools.map((s) => s.id),
       assignees.map((a) => a.id)
@@ -89,6 +95,7 @@ export class AssignmentService {
 
     // Get current ticket counter base
     const lastTicket = await prisma.ticket.findFirst({
+      where: { organizationId },
       orderBy: { createdAt: 'desc' },
       select: { ticketNumber: true },
     });
@@ -114,6 +121,7 @@ export class AssignmentService {
           assignedCount: schools.length,
           notes: validated.notes || null,
           createdById: actorId,
+          organizationId,
         },
       });
 
@@ -142,6 +150,7 @@ export class AssignmentService {
               priority: validated.priority || 'MEDIUM',
               status: 'PENDING',
               createdById: actorId,
+              organizationId,
               dueDate: validated.dueDate ? new Date(validated.dueDate) : null,
             },
           });
@@ -172,6 +181,7 @@ export class AssignmentService {
             data: {
               ticketId: ticket.id,
               actorId,
+              organizationId,
               type: 'CREATED',
               title: 'Ticket Created & Assigned',
               description: `Generated from assignment batch ${batchNumber} and assigned to ${assignee.name}.`,
@@ -196,6 +206,7 @@ export class AssignmentService {
             message: `You have been assigned ${assignedSchoolIds.length} new schools in assignment batch ${batchNumber}.`,
             entityType: 'assignment',
             entityId: assignmentBatch.id,
+              organizationId,
           },
         });
       }
@@ -213,6 +224,7 @@ export class AssignmentService {
             assigneesCount: assignees.length,
             ticketsCount: createdTickets.length,
           }),
+          organizationId,
         },
       });
 
@@ -223,11 +235,12 @@ export class AssignmentService {
     });
   }
 
-  static async listAssignments(page = 1, pageSize = 15) {
+  static async listAssignments(page = 1, pageSize = 15, organizationId = 'org_codeline_legacy') {
     const skip = (page - 1) * pageSize;
     const [total, data] = await Promise.all([
-      prisma.schoolAssignment.count(),
+      prisma.schoolAssignment.count({ where: { organizationId } }),
       prisma.schoolAssignment.findMany({
+        where: { organizationId },
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },

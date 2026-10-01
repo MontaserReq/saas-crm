@@ -13,6 +13,7 @@ export default async function DepartmentsPage() {
 
   const [departments, users] = await Promise.all([
     prisma.department.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: { createdAt: 'asc' },
       include: {
         managers: {
@@ -29,7 +30,7 @@ export default async function DepartmentsPage() {
       },
     }),
     prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } } },
       select: { id: true, name: true, email: true, department: { select: { name: true } } },
       orderBy: { name: 'asc' },
     }),

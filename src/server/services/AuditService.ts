@@ -8,6 +8,7 @@ export interface LogAuditParams {
   metadata?: Record<string, any>;
   ipAddress?: string | null;
   userAgent?: string | null;
+  organizationId?: string | null;
 }
 
 export interface LogActivityParams {
@@ -17,6 +18,7 @@ export interface LogActivityParams {
   title: string;
   description?: string | null;
   metadata?: Record<string, any>;
+  organizationId?: string | null;
 }
 
 export class AuditService {
@@ -25,6 +27,7 @@ export class AuditService {
    */
   static async logAudit(params: LogAuditParams) {
     try {
+      const organizationId = params.organizationId || (params.actorId ? await this.organizationForActor(params.actorId) : null);
       return await prisma.auditLog.create({
         data: {
           actorId: params.actorId,
@@ -34,6 +37,7 @@ export class AuditService {
           metadata: params.metadata ? JSON.stringify(params.metadata) : null,
           ipAddress: params.ipAddress,
           userAgent: params.userAgent,
+          organizationId,
         },
       });
     } catch (err) {
@@ -46,6 +50,7 @@ export class AuditService {
    */
   static async logActivity(params: LogActivityParams) {
     try {
+      const organizationId = params.organizationId || await this.organizationForActor(params.actorId);
       return await prisma.activityEvent.create({
         data: {
           ticketId: params.ticketId,
@@ -54,10 +59,16 @@ export class AuditService {
           title: params.title,
           description: params.description,
           metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+          organizationId,
         },
       });
     } catch (err) {
       console.error('Failed to write activity event:', err);
     }
+  }
+
+  private static async organizationForActor(actorId: string) {
+    const membership = prisma.organizationMember?.findFirst ? await prisma.organizationMember.findFirst({ where: { userId: actorId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } }) : null;
+    return membership?.organizationId || 'org_codeline_legacy';
   }
 }

@@ -182,18 +182,18 @@ export async function closeTicketAction(ticketId: string, closingReason: string)
 export async function listTicketApprovalRequestsAction(status = 'PENDING') {
   const user = await requireAuth();
   if (!hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_VIEW) && !hasPermission(user, PERMISSIONS.TICKETS_CORRECTION_APPROVE) && !hasPermission(user, PERMISSIONS.TICKETS_RESUBMIT_APPROVE)) return [];
-  return TicketService.listTicketApprovalRequests(status);
+  return TicketService.listTicketApprovalRequests(user, status);
 }
 
 export async function decideTicketApprovalAction(requestId: string, approve: boolean, rejectionReason?: string) {
   try {
     const user = await requireAuth();
-    const requests = await TicketService.listTicketApprovalRequests('PENDING');
+    const requests = await TicketService.listTicketApprovalRequests(user, 'PENDING');
     const request = requests.find((item) => item.id === requestId);
     if (!request) return { success: false, error: 'Request not found' };
     const permission = request.type === 'CORRECTION' ? PERMISSIONS.TICKETS_CORRECTION_APPROVE : PERMISSIONS.TICKETS_RESUBMIT_APPROVE;
     if (!hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_DECIDE) && !hasPermission(user, permission)) return { success: false, error: 'Forbidden' };
-    const result = await TicketService.decideTicketApproval(requestId, user.id, approve, rejectionReason);
+    const result = await TicketService.decideTicketApproval(user, requestId, approve, rejectionReason);
     revalidatePath(`/tickets/${request.ticket.id}`);
     revalidatePath('/tickets');
     revalidatePath('/admin/approval-requests');
@@ -203,9 +203,9 @@ export async function decideTicketApprovalAction(requestId: string, approve: boo
 
 export async function createTicketAction(input: {
   schoolId?: string | null;
+  clientId?: string | null;
   taskTypeId?: string | null;
   departmentId?: string;
-  assignedToUserId?: string | null;
   subject?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate?: string | null;
@@ -217,20 +217,22 @@ export async function createTicketAction(input: {
     // The department defaults to the user's own department (not the first department in the DB).
     const departmentId = input.departmentId || user.departmentId;
 
-    const school = input.schoolId ? await prisma.school.findUnique({ where: { id: input.schoolId }, select: { name: true } }) : null;
-    const taskType = input.taskTypeId ? await prisma.taskType.findUnique({ where: { id: input.taskTypeId }, select: { name: true } }) : null;
-    const subject = input.subject?.trim() || `${taskType?.name || 'Task'} - ${school?.name || 'School'}`;
+    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const school = input.schoolId ? await prisma.school.findFirst({ where: { id: input.schoolId, organizationId }, select: { name: true } }) : null;
+    const client = input.clientId ? await prisma.client.findFirst({ where: { id: input.clientId, organizationId, deletedAt: null }, select: { name: true } }) : null;
+    const taskType = input.taskTypeId ? await prisma.taskType.findFirst({ where: { id: input.taskTypeId, organizationId }, select: { name: true } }) : null;
+    const subject = input.subject?.trim() || `${taskType?.name || 'Task'} - ${client?.name || school?.name || 'Client'}`;
 
     // The ticket is auto-assigned server-side to currentUser.reportsToUserId.
     const ticket = await TicketService.createTicket(user, {
       schoolId: input.schoolId || null,
+      clientId: input.clientId || input.schoolId || null,
       taskTypeId: input.taskTypeId || null,
       departmentId,
       subject,
       priority: input.priority,
       dueDate: input.dueDate,
       initialNote: input.initialNote,
-      assignedToUserId: input.assignedToUserId || null,
     });
 
     revalidatePath('/tickets');
@@ -243,6 +245,7 @@ export async function createTicketAction(input: {
 
 export async function createMeetingTicketAction(input: {
   schoolId?: string | null;
+  clientId?: string | null;
   taskTypeId?: string | null;
   departmentId?: string;
   subject: string;

@@ -155,7 +155,7 @@ export async function getJobUsageAction(jobId: string) {
     const job = await SchoolResearchService.getJobForUser(user, jobId);
     if (!job) return { success: false, error: 'Research job not found' };
 
-    const summary = await SchoolResearchService.getJobUsageSummary(jobId);
+    const summary = await SchoolResearchService.getJobUsageSummary(jobId, user.organizationId || 'org_codeline_legacy');
     return { success: true, summary };
   } catch (err: any) {
     return { success: false, error: err.message || 'Unable to load usage summary' };
@@ -169,7 +169,7 @@ export async function getJobAttemptsAction(jobId: string) {
     const job = await SchoolResearchService.getJobForUser(user, jobId);
     if (!job) return { success: false, error: 'Research job not found' };
 
-    const attempts = await SchoolResearchService.getJobAttempts(jobId);
+    const attempts = await SchoolResearchService.getJobAttempts(jobId, user.organizationId || 'org_codeline_legacy');
     return { success: true, attempts };
   } catch (err: any) {
     return { success: false, error: err.message || 'Unable to load research attempts' };

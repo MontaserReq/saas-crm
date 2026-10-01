@@ -12,12 +12,12 @@ export default async function TaskTypesPage() {
   }
 
   const [taskTypes, departments] = await Promise.all([
-    prisma.taskType.findMany({ orderBy: { createdAt: 'asc' }, include: {
+    prisma.taskType.findMany({ where: { organizationId: user.organizationId }, orderBy: { createdAt: 'asc' }, include: {
       department: { select: { id: true, name: true } },
       members: { include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { id: 'asc' } },
       _count: { select: { tickets: true } },
     } }),
-    prisma.department.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, include: {
+    prisma.department.findMany({ where: { organizationId: user.organizationId, isActive: true }, orderBy: { name: 'asc' }, include: {
       users: { where: { isActive: true }, select: { id: true, name: true, email: true }, orderBy: { name: 'asc' } },
     } }),
   ]);

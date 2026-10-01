@@ -20,6 +20,10 @@ export interface SendMessageInput {
 }
 
 export class MessageService {
+  private static async organizationForUser(userId: string): Promise<string> {
+    const membership = await prisma.organizationMember.findFirst({ where: { userId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } });
+    return membership?.organizationId || 'org_codeline_legacy';
+  }
   /**
    * List inbox messages for a user (messages where user is in TO or CC).
    */
@@ -30,9 +34,11 @@ export class MessageService {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const pageSize = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 20;
     const skip = (page - 1) * pageSize;
+    const organizationId = await this.organizationForUser(userId);
 
     const where: any = {
       userId,
+      message: { organizationId },
       isDeleted: false,
     };
 
@@ -123,9 +129,11 @@ export class MessageService {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const pageSize = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 20;
     const skip = (page - 1) * pageSize;
+    const organizationId = await this.organizationForUser(userId);
 
     const where: any = {
       senderId: userId,
+      organizationId,
     };
 
     if (filters.search && filters.search.trim()) {
@@ -203,8 +211,9 @@ export class MessageService {
    * If user is a recipient with isRead=false, automatically marks it as read.
    */
   static async getMessageById(user: UserSession, messageId: string) {
-    const message = await prisma.message.findUnique({
-      where: { id: messageId },
+    const organizationId = await this.organizationForUser(user.id);
+    const message = await prisma.message.findFirst({
+      where: { id: messageId, organizationId },
       include: {
         sender: {
           select: {
@@ -272,6 +281,7 @@ export class MessageService {
       subject: input.subject,
       content: input.content,
     });
+    const organizationId = await this.organizationForUser(user.id);
 
     // Deduplicate recipients: ensure TO takes precedence over CC, avoid sending to self multiple times
     const toSet = new Set(validated.toUserIds);
@@ -284,6 +294,8 @@ export class MessageService {
     if (recipientEntries.length === 0) {
       throw new Error('At least one recipient is required');
     }
+    const recipientCount = await prisma.organizationMember.count({ where: { organizationId, userId: { in: recipientEntries.map((r) => r.userId) }, status: 'ACTIVE' } });
+    if (recipientCount !== recipientEntries.length) throw new Error('All recipients must belong to the active organization');
 
     // Process file attachments if any
     const uploadedAttachments: Array<{
@@ -299,7 +311,7 @@ export class MessageService {
       const storage = getStorageProvider();
       try {
         for (const att of input.attachments) {
-          const uploadResult = await storage.upload(att.buffer, att.originalName, att.mimeType, { keyPrefix: 'messages' });
+          const uploadResult = await storage.upload(att.buffer, att.originalName, att.mimeType, { keyPrefix: `${organizationId}/messages` });
           uploadedAttachments.push({
             originalName: uploadResult.originalName,
             mimeType: uploadResult.mimeType,
@@ -322,6 +334,7 @@ export class MessageService {
       const message = await tx.message.create({
         data: {
           senderId: user.id,
+          organizationId,
           subject: validated.subject,
           content: validated.content,
           recipients: {
@@ -331,7 +344,7 @@ export class MessageService {
             })),
           },
           attachments: {
-            create: uploadedAttachments,
+            create: uploadedAttachments.map((attachment) => ({ ...attachment, organizationId })),
           },
         },
         include: {
@@ -359,6 +372,7 @@ export class MessageService {
           message: `${user.name}: ${validated.subject}`,
           entityType: 'message',
           entityId: createdMessage.id,
+          organizationId,
         }).catch((err) => console.error('Failed to create notification for message recipient:', err));
       }
     }
@@ -387,6 +401,7 @@ export class MessageService {
     return prisma.messageRecipient.count({
       where: {
         userId,
+        message: { organizationId: await this.organizationForUser(userId) },
         isRead: false,
         isDeleted: false,
       },
@@ -397,10 +412,12 @@ export class MessageService {
    * Soft delete a message from user's inbox.
    */
   static async deleteFromInbox(userId: string, messageId: string) {
+    const organizationId = await this.organizationForUser(userId);
     return prisma.messageRecipient.updateMany({
       where: {
         userId,
         messageId,
+        message: { organizationId },
       },
       data: {
         isDeleted: true,

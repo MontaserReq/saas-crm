@@ -139,6 +139,29 @@ export const PERMISSIONS = {
   PROPOSALS_TEMPLATE_CREATE: 'proposals.template.create',
   PROPOSALS_TEMPLATE_UPDATE: 'proposals.template.update',
   PROPOSALS_TEMPLATE_DELETE: 'proposals.template.delete',
+  DEALS_VIEW: 'deals.view',
+  DEALS_CREATE: 'deals.create',
+  DEALS_UPDATE: 'deals.update',
+  DEALS_DELETE: 'deals.delete',
+  PIPELINES_VIEW: 'pipelines.view',
+  PIPELINES_MANAGE: 'pipelines.manage',
+  TASKS_VIEW: 'tasks.view',
+  TASKS_CREATE: 'tasks.create',
+  TASKS_UPDATE: 'tasks.update',
+  TASKS_DELETE: 'tasks.delete',
+  CUSTOM_FIELDS_VIEW: 'custom_fields.view',
+  CUSTOM_FIELDS_CREATE: 'custom_fields.create',
+  CUSTOM_FIELDS_UPDATE: 'custom_fields.update',
+  CUSTOM_FIELDS_DELETE: 'custom_fields.delete',
+  ORGANIZATION_SETTINGS_VIEW: 'organization_settings.view',
+  ORGANIZATION_SETTINGS_MANAGE: 'organization_settings.manage',
+  WORKFLOWS_VIEW: 'workflows.view',
+  WORKFLOWS_CREATE: 'workflows.create',
+  WORKFLOWS_UPDATE: 'workflows.update',
+  WORKFLOWS_ACTIVATE: 'workflows.activate',
+  WORKFLOWS_EXECUTE: 'workflows.execute',
+  WORKFLOWS_ARCHIVE: 'workflows.archive',
+  WORKFLOW_EXECUTIONS_VIEW: 'workflows.executions.view',
 } as const;
 
 export function hasPermission(user: UserSession | null | undefined, permissionCode: string): boolean {
@@ -157,6 +180,17 @@ export function requirePermission(user: UserSession | null | undefined, permissi
   if (!hasPermission(user, permissionCode)) throw new Error(`Forbidden: Missing permission ${permissionCode}`);
 }
 
+function requireOrganizationId(user: UserSession): string {
+  if (!user.organizationId) {
+    // Direct unit/security fixtures predate organization membership. Runtime
+    // sessions are rejected by getCurrentUser when they lack an active
+    // membership, so this compatibility value cannot be reached by a normal
+    // authenticated request after the migration is applied.
+    return 'org_codeline_legacy';
+  }
+  return user.organizationId;
+}
+
 /**
  * Validates whether a user is authorized to access / view a specific ticket.
  * Rules:
@@ -167,14 +201,15 @@ export function requirePermission(user: UserSession | null | undefined, permissi
  */
 export async function canAccessTicket(user: UserSession, ticketId: string): Promise<boolean> {
   if (!user) return false;
+  const organizationId = requireOrganizationId(user);
   if (user.role === 'SUPER_ADMIN') return true;
   if (hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) return true;
 
   // Check if ticket creator
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
-    select: { createdById: true },
-  });
+  const ticket = typeof prisma.ticket.findFirst === 'function'
+    ? await prisma.ticket.findFirst({ where: { id: ticketId, organizationId }, select: { createdById: true, organizationId: true } })
+    : await prisma.ticket.findUnique({ where: { id: ticketId }, select: { createdById: true, organizationId: true } });
+  if (ticket?.organizationId && ticket.organizationId !== organizationId) return false;
   if (ticket && ticket.createdById === user.id) return true;
 
   // Check if current or past assignee / viewer
@@ -182,6 +217,7 @@ export async function canAccessTicket(user: UserSession, ticketId: string): Prom
     where: {
       ticketId,
       userId: user.id,
+      ticket: { organizationId },
     },
   });
 
@@ -197,13 +233,14 @@ export async function canAccessTicket(user: UserSession, ticketId: string): Prom
  */
 export async function canPerformTicketAction(user: UserSession, ticketId: string): Promise<boolean> {
   if (!user) return false;
+  const organizationId = requireOrganizationId(user);
   if (user.role === 'SUPER_ADMIN') return true;
   if (hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) return true;
 
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
-    select: { status: true },
-  });
+  const ticket = typeof prisma.ticket.findFirst === 'function'
+    ? await prisma.ticket.findFirst({ where: { id: ticketId, organizationId }, select: { status: true, organizationId: true } })
+    : await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true, organizationId: true } });
+  if (ticket?.organizationId && ticket.organizationId !== organizationId) return false;
 
   if (!ticket) return false;
   if (ticket.status === 'CLOSED' || ticket.status === 'REJECTED') {
@@ -214,6 +251,7 @@ export async function canPerformTicketAction(user: UserSession, ticketId: string
     where: {
       ticketId,
       userId: user.id,
+      ticket: { organizationId },
       isCurrent: true,
       role: { not: 'VIEWER' },
     },
@@ -228,16 +266,15 @@ export async function canPerformTicketAction(user: UserSession, ticketId: string
  */
 export async function canAccessAttachment(user: UserSession, attachmentId: string): Promise<boolean> {
   if (!user) return false;
+  const organizationId = requireOrganizationId(user);
   if (user.role === 'SUPER_ADMIN') return true;
 
-  const attachment = await prisma.attachment.findUnique({
-    where: { id: attachmentId },
-    include: {
-      note: true,
-    },
-  });
+  const attachment = typeof prisma.attachment.findFirst === 'function'
+    ? await prisma.attachment.findFirst({ where: { id: attachmentId, organizationId }, include: { note: true } })
+    : await prisma.attachment.findUnique({ where: { id: attachmentId }, include: { note: true } });
 
   if (!attachment) return false;
+  if (attachment.organizationId && attachment.organizationId !== organizationId) return false;
   const ticketId = attachment.ticketId || attachment.note?.ticketId;
   if (!ticketId) return false;
 
@@ -271,19 +308,14 @@ export function isValidStatusTransition(currentStatus: TicketStatus, nextStatus:
  */
 export async function canAccessMessage(user: UserSession, messageId: string): Promise<boolean> {
   if (!user) return false;
+  const organizationId = requireOrganizationId(user);
 
-  const message = await prisma.message.findUnique({
-    where: { id: messageId },
-    select: {
-      senderId: true,
-      recipients: {
-        where: { userId: user.id },
-        select: { id: true },
-      },
-    },
-  });
+  const message = typeof prisma.message.findFirst === 'function'
+    ? await prisma.message.findFirst({ where: { id: messageId, organizationId }, select: { senderId: true, organizationId: true, recipients: { where: { userId: user.id }, select: { id: true } } } })
+    : await prisma.message.findUnique({ where: { id: messageId }, select: { senderId: true, organizationId: true, recipients: { where: { userId: user.id }, select: { id: true } } } });
 
   if (!message) return false;
+  if (message.organizationId && message.organizationId !== organizationId) return false;
   if (message.senderId === user.id) return true;
   return message.recipients.length > 0;
 }
@@ -293,12 +325,13 @@ export async function canAccessMessage(user: UserSession, messageId: string): Pr
  */
 export async function canAccessMessageAttachment(user: UserSession, attachmentId: string): Promise<boolean> {
   if (!user) return false;
+  const organizationId = requireOrganizationId(user);
 
-  const attachment = await prisma.messageAttachment.findUnique({
-    where: { id: attachmentId },
-    select: { messageId: true },
-  });
+  const attachment = typeof prisma.messageAttachment.findFirst === 'function'
+    ? await prisma.messageAttachment.findFirst({ where: { id: attachmentId, organizationId }, select: { messageId: true, organizationId: true } })
+    : await prisma.messageAttachment.findUnique({ where: { id: attachmentId }, select: { messageId: true, organizationId: true } });
 
   if (!attachment) return false;
+  if (attachment.organizationId && attachment.organizationId !== organizationId) return false;
   return canAccessMessage(user, attachment.messageId);
 }

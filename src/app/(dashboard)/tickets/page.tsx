@@ -35,15 +35,16 @@ export default async function TicketsPage({
       assigneeId,
       search,
     }),
-    prisma.taskType.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
+    prisma.taskType.findMany({ where: { isActive: true, organizationId: user.organizationId }, orderBy: { name: 'asc' } }),
     prisma.school.findMany({
-      where: { isDeleted: false },
+      where: { isDeleted: false, organizationId: user.organizationId },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
     prisma.user.findMany({
       where: {
         isActive: true,
+        organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } },
         OR: [
           { role: { rolePermissions: { some: { permission: { code: { in: ['tickets.view_assigned', 'tickets.view_all'] } } } } } },
           { userPermissions: { some: { permission: { code: { in: ['tickets.view_assigned', 'tickets.view_all'] } } } } },
@@ -52,8 +53,8 @@ export default async function TicketsPage({
       select: { id: true, name: true, email: true, department: { select: { name: true } } },
       orderBy: { name: 'asc' },
     }),
-    prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    user.reportsToUserId ? prisma.user.findUnique({ where: { id: user.reportsToUserId }, select: { id: true, name: true, isActive: true } }) : Promise.resolve(null),
+    prisma.department.findMany({ where: { isActive: true, organizationId: user.organizationId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    user.reportsToUserId ? prisma.user.findFirst({ where: { id: user.reportsToUserId, organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } } }, select: { id: true, name: true, isActive: true } }) : Promise.resolve(null),
   ]);
 
   return (

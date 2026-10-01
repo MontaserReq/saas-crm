@@ -18,10 +18,12 @@ export default async function AuditLogsPage({
   const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
   const pageSize = 25;
   const skip = (page - 1) * pageSize;
+  const organizationId = user.organizationId || 'org_codeline_legacy';
 
   const [total, logs] = await Promise.all([
-    prisma.auditLog.count(),
+    prisma.auditLog.count({ where: { organizationId } }),
     prisma.auditLog.findMany({
+      where: { organizationId },
       skip,
       take: pageSize,
       orderBy: { createdAt: 'desc' },

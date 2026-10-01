@@ -50,7 +50,6 @@ export function TicketFormModal({
   const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
   const [dueDate, setDueDate] = useState("");
   const [initialNote, setInitialNote] = useState("");
-  const [assignedToUserId, setAssignedToUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -91,7 +90,6 @@ export function TicketFormModal({
       priority,
       dueDate: dueDate || null,
       initialNote: initialNote || null,
-      assignedToUserId: canAssign ? assignedToUserId || null : null,
     });
     setLoading(false);
     if (!result.success) {
@@ -129,13 +127,6 @@ export function TicketFormModal({
               {canAssign ? t("tickets.assignTicketTo") : t("tickets.directManager")}
             </h3>
           </div>
-
-          {canAssign && (
-            <select value={assignedToUserId} onChange={(e) => setAssignedToUserId(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
-              <option value="">{t("tickets.selectAssigneePrompt")}</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.name}{u.email ? ` (${u.email})` : ""}</option>)}
-            </select>
-          )}
 
           {!canAssign && status.kind === "no_manager" && (
             <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">

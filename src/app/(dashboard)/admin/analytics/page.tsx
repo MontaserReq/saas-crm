@@ -11,7 +11,7 @@ export default async function AdminAnalyticsPage() {
     redirect('/');
   }
 
-  const data = await AnalyticsService.getAdminAnalytics();
+  const data = await AnalyticsService.getAdminAnalytics(user);
 
   return <AnalyticsClientView data={data} />;
 }

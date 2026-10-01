@@ -11,6 +11,7 @@ const { prismaMock } = vi.hoisted(() => {
     notification: { create: vi.fn(), createMany: vi.fn() },
     user: { findMany: vi.fn().mockResolvedValue([]) },
   };
+  prismaMock.$transaction = vi.fn(async (fn: any) => fn(prismaMock));
   return { prismaMock };
 });
 

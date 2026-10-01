@@ -22,7 +22,7 @@ export default async function TicketDetailsPage({ params }: { params: { id: stri
 
   const [teamMembers, schools, taskTypes, departmentsWithUsers] = await Promise.all([
     prisma.user.findMany({
-      where: { isActive: true, id: { not: user.id } },
+      where: { isActive: true, id: { not: user.id }, organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } } },
       select: {
         id: true,
         name: true,
@@ -30,16 +30,16 @@ export default async function TicketDetailsPage({ params }: { params: { id: stri
         department: { select: { name: true } },
       },
     }),
-    prisma.school.findMany({ where: { isDeleted: false }, select: { id: true, name: true, contactPerson: true, phone: true, whatsapp: true, email: true, city: true, area: true }, orderBy: { name: 'asc' } }),
-    prisma.taskType.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.school.findMany({ where: { isDeleted: false, organizationId: user.organizationId }, select: { id: true, name: true, contactPerson: true, phone: true, whatsapp: true, email: true, city: true, area: true }, orderBy: { name: 'asc' } }),
+    prisma.taskType.findMany({ where: { isActive: true, organizationId: user.organizationId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     prisma.department.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationId: user.organizationId },
       select: {
         id: true,
         name: true,
         code: true,
         users: {
-          where: { isActive: true, id: { not: user.id } },
+          where: { isActive: true, id: { not: user.id }, organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } } },
           select: {
             id: true,
             name: true,
