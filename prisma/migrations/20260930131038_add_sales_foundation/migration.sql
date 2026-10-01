@@ -64,21 +64,6 @@ DROP INDEX "Todo_organizationId_createdAt_idx";
 -- AlterTable
 ALTER TABLE "CalendarEvent" ALTER COLUMN "type" SET DEFAULT 'MEETING';
 
--- AlterTable
-ALTER TABLE "Client" ALTER COLUMN "updatedAt" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "Contact" ALTER COLUMN "updatedAt" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "Lead" ALTER COLUMN "updatedAt" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "Proposal" ALTER COLUMN "updatedAt" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "ProposalTemplate" ALTER COLUMN "updatedAt" DROP DEFAULT;
-
 -- CreateTable
 CREATE TABLE "Pipeline" (
     "id" TEXT NOT NULL,
@@ -242,15 +227,6 @@ ALTER TABLE "PipelineStage" ADD CONSTRAINT "PipelineStage_pipelineId_fkey" FOREI
 ALTER TABLE "Deal" ADD CONSTRAINT "Deal_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Deal" ADD CONSTRAINT "Deal_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Deal" ADD CONSTRAINT "Deal_primaryContactId_fkey" FOREIGN KEY ("primaryContactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Deal" ADD CONSTRAINT "Deal_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "Deal" ADD CONSTRAINT "Deal_pipelineId_fkey" FOREIGN KEY ("pipelineId") REFERENCES "Pipeline"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -285,18 +261,6 @@ ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_assignedTeamId_fkey" FOREIGN KEY (
 
 -- AddForeignKey
 ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "Ticket"("id") ON DELETE SET NULL ON UPDATE CASCADE;

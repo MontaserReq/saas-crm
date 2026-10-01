@@ -23,6 +23,17 @@ RUN npx prisma generate
 RUN npm run build
 
 
+FROM base AS migrator
+
+ENV NODE_ENV=production
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma
+
+CMD ["npx", "prisma", "migrate", "deploy"]
+
+
 FROM base AS runner
 
 ENV NODE_ENV=production
