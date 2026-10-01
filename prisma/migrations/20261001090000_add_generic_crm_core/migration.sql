@@ -131,6 +131,15 @@ ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_clientId_fkey" FOREIGN KEY ("clientI
 ALTER TABLE "Proposal" ADD CONSTRAINT "Proposal_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "CalendarEvent" ADD CONSTRAINT "CalendarEvent_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+ALTER TABLE "Deal" ADD CONSTRAINT "Deal_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Deal" ADD CONSTRAINT "Deal_primaryContactId_fkey" FOREIGN KEY ("primaryContactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Deal" ADD CONSTRAINT "Deal_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "CrmTask" ADD CONSTRAINT "CrmTask_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
 CREATE INDEX "Client_organizationId_status_idx" ON "Client"("organizationId", "status");
 CREATE INDEX "Client_organizationId_type_idx" ON "Client"("organizationId", "type");
 CREATE INDEX "Client_organizationId_name_idx" ON "Client"("organizationId", "name");
@@ -144,3 +153,12 @@ CREATE INDEX "Contact_organizationId_assignedUserId_idx" ON "Contact"("organizat
 CREATE INDEX "Ticket_organizationId_clientId_idx" ON "Ticket"("organizationId", "clientId");
 CREATE INDEX "Proposal_organizationId_clientId_idx" ON "Proposal"("organizationId", "clientId");
 CREATE INDEX "CalendarEvent_organizationId_clientId_idx" ON "CalendarEvent"("organizationId", "clientId");
+
+-- These tables are created after the sales-foundation migration. Apply the
+-- Prisma schema's removal of database-side updatedAt defaults only after the
+-- referenced tables exist.
+ALTER TABLE "Client" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "Contact" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "Lead" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "Proposal" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "ProposalTemplate" ALTER COLUMN "updatedAt" DROP DEFAULT;

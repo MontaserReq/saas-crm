@@ -37,6 +37,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
 
     environment:
       NODE_ENV: production
@@ -91,6 +93,8 @@ services:
       target: migrator
 
     container_name: codeline-migrator
+
+    restart: "no"
 
     depends_on:
       db:
