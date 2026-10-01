@@ -2,6 +2,17 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { applySecurityHeaders, getConfiguredOrigin } from '@/lib/security/web';
 
+function relativeRedirect(path: string, request: NextRequest): NextResponse {
+  const response = new NextResponse(null, { status: 307, headers: { Location: path } });
+  return applySecurityHeaders(response, request);
+}
+
+export function authRedirect(path: string, request: NextRequest): NextResponse {
+  const origin = getConfiguredOrigin();
+  if (!origin) return relativeRedirect(path, request);
+  return applySecurityHeaders(NextResponse.redirect(new URL(path, origin)), request);
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get('codeline_session')?.value;
@@ -16,15 +27,12 @@ export function middleware(request: NextRequest) {
 
   // If user is accessing login page while already possessing session cookie
   if (isAuthPage && token) {
-    const origin = getConfiguredOrigin();
-    return applySecurityHeaders(NextResponse.redirect(origin ? new URL('/', origin) : new URL('/', request.url)), request);
+    return authRedirect('/', request);
   }
 
   // If user is accessing protected dashboard page without session cookie
   if (!isAuthPage && !isPublicPage && !token) {
-    const origin = getConfiguredOrigin();
-    const loginUrl = origin ? new URL('/login', origin) : new URL('/login', request.url);
-    return applySecurityHeaders(NextResponse.redirect(loginUrl), request);
+    return authRedirect('/login', request);
   }
 
   return applySecurityHeaders(NextResponse.next(), request);
