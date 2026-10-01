@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { SchoolService } from '@/server/services/SchoolService';
 import { requireOrganizationId } from '@/lib/auth/organization';
+import { rejectUntrustedMutation } from '@/lib/security/web';
 
 export const runtime = 'nodejs';
 
@@ -22,6 +23,8 @@ function errorResponse(message: string, status = 400) {
 
 export async function POST(request: Request) {
   try {
+    const originError = rejectUntrustedMutation(request);
+    if (originError) return originError;
     const user = await getCurrentUser();
     if (!user) return errorResponse('Unauthorized', 401);
     if (!hasPermission(user, PERMISSIONS.SCHOOLS_IMPORT)) return errorResponse('Forbidden: Insufficient permissions to import schools', 403);

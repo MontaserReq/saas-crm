@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n/context';
 import { getCandidateDetailAction } from '@/server/actions/ai-school-research';
 import { PhoneNumber } from '@/components/ui/PhoneNumber';
 import { CandidateStatusBadge } from './StatusBadge';
+import { safeExternalUrl } from '@/lib/security/url';
 
 interface CandidateDetailDrawerProps {
   candidateId: string;
@@ -102,8 +103,8 @@ export function CandidateDetailDrawer({ candidateId, onClose }: CandidateDetailD
                         <LinkIcon className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
                         <div className="min-w-0">
                           <p className="font-semibold text-slate-700 dark:text-slate-300">{source.field} — {source.sourceType === 'OFFICIAL_WEBSITE' ? 'Official Website' : 'Search Grounding'}</p>
-                          {source.sourceUrl && (
-                            <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-brand-600 dark:text-brand-400 hover:underline break-all">
+                          {safeExternalUrl(source.sourceUrl) && (
+                            <a href={safeExternalUrl(source.sourceUrl)!} target="_blank" rel="noopener noreferrer" className="text-brand-600 dark:text-brand-400 hover:underline break-all">
                               {source.sourceUrl}
                             </a>
                           )}

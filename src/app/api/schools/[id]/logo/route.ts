@@ -4,6 +4,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import prisma from '@/lib/db/prisma';
 import { getStorageProvider } from '@/lib/storage';
 import { ProposalService } from '@/server/services/ProposalService';
+import { rejectUntrustedMutation } from '@/lib/security/web';
 
 export async function GET(
   request: NextRequest,
@@ -27,6 +28,7 @@ export async function GET(
     }
 
     const storage = getStorageProvider(school.logoProvider as any);
+    if (/\.svg$/i.test(school.logoKey)) return new NextResponse('Unsupported image format', { status: 415 });
     if (school.logoProvider === 's3') {
       return NextResponse.redirect(await storage.getDownloadUrl(school.logoKey, 300));
     }
@@ -46,7 +48,8 @@ export async function GET(
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (err: any) {
@@ -60,6 +63,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const originError = rejectUntrustedMutation(request);
+    if (originError) return originError;
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

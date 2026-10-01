@@ -23,6 +23,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { JobStatusBadge, CandidateStatusBadge } from './StatusBadge';
 import { RejectDialog } from './RejectDialog';
 import { CandidateDetailDrawer } from './CandidateDetailDrawer';
+import { safeExternalUrl } from '@/lib/security/url';
 import { JobUsagePanel } from './JobUsagePanel';
 import {
   getResearchJobAction,
@@ -289,8 +290,8 @@ export function JobDetailView({ job, candidates, total, page, totalPages, summar
                 <td className="p-3"><PhoneNumber value={candidate.phone} className="text-slate-600 dark:text-slate-300" /></td>
                 <td className="p-3 text-slate-500 dark:text-slate-400 max-w-[160px] truncate">{candidate.email || '—'}</td>
                 <td className="p-3 max-w-[140px] truncate">
-                  {candidate.website ? (
-                    <a href={candidate.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:underline">
+                  {safeExternalUrl(candidate.website) ? (
+                    <a href={safeExternalUrl(candidate.website)!} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:underline">
                       <Globe2 className="w-3 h-3 shrink-0" /> <span className="truncate">{candidate.website}</span>
                     </a>
                   ) : '—'}

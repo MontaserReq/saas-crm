@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import { ProposalTemplateService } from '@/server/services/ProposalTemplateService';
+import { rejectUntrustedMutation } from '@/lib/security/web';
 
 export async function GET(
   request: NextRequest,
@@ -27,6 +28,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const originError = rejectUntrustedMutation(request);
+    if (originError) return originError;
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -79,6 +82,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const originError = rejectUntrustedMutation(request);
+    if (originError) return originError;
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

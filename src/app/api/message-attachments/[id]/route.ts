@@ -48,6 +48,8 @@ export async function GET(
         'Content-Type': attachment.mimeType || 'application/octet-stream',
         'Content-Disposition': `${dispositionType}; filename="${encodeURIComponent(attachment.originalName)}"`,
         'Content-Length': attachment.size.toString(),
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (err: any) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { applySecurityHeaders, getConfiguredOrigin } from '@/lib/security/web';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -10,31 +11,33 @@ export function middleware(request: NextRequest) {
   const isApiAuthOrAttachment = pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.includes('/favicon.ico');
 
   if (isApiAuthOrAttachment) {
-    return NextResponse.next();
+    return applySecurityHeaders(NextResponse.next(), request);
   }
 
   // If user is accessing login page while already possessing session cookie
   if (isAuthPage && token) {
-    return NextResponse.redirect(new URL('/', request.url));
+    const origin = getConfiguredOrigin();
+    return applySecurityHeaders(NextResponse.redirect(origin ? new URL('/', origin) : new URL('/', request.url)), request);
   }
 
   // If user is accessing protected dashboard page without session cookie
   if (!isAuthPage && !isPublicPage && !token) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    const origin = getConfiguredOrigin();
+    const loginUrl = origin ? new URL('/login', origin) : new URL('/login', request.url);
+    return applySecurityHeaders(NextResponse.redirect(loginUrl), request);
   }
 
-  return NextResponse.next();
+  return applySecurityHeaders(NextResponse.next(), request);
 }
 
 export const config = {
   matcher: [
     /*
      * Match all request paths except:
-     * - api routes
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
