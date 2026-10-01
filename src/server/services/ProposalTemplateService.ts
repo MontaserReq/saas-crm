@@ -44,6 +44,7 @@ export interface UpdateTemplateInput {
 }
 
 export class ProposalTemplateService {
+  static readonly MAX_TEMPLATE_BYTES = 10 * 1024 * 1024;
   static async listTemplates(user: UserSession, options?: { onlyActive?: boolean }) {
     if (
       !hasPermission(user, PERMISSIONS.PROPOSALS_VIEW) &&
@@ -102,6 +103,7 @@ export class ProposalTemplateService {
     if (!input.pdfBuffer || input.pdfBuffer.length === 0) {
       throw new Error('PDF file buffer is required');
     }
+    if (input.pdfBuffer.length > this.MAX_TEMPLATE_BYTES) throw new Error('PDF file exceeds the 10 MB limit');
 
     // Verify PDF header (%PDF-)
     const pdfHeader = input.pdfBuffer.slice(0, 5).toString('ascii');
@@ -184,6 +186,7 @@ export class ProposalTemplateService {
     }
 
     if (input.pdfBuffer && input.pdfBuffer.length > 0) {
+      if (input.pdfBuffer.length > this.MAX_TEMPLATE_BYTES) throw new Error('PDF file exceeds the 10 MB limit');
       const pdfHeader = input.pdfBuffer.slice(0, 5).toString('ascii');
       if (!pdfHeader.startsWith('%PDF-')) {
         throw new Error('Invalid file format. The uploaded file is not a valid PDF.');

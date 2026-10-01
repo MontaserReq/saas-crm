@@ -15,6 +15,7 @@ export async function GET(
       return new NextResponse('Unauthorized', { status: 401 });
     }
     if (!user.organizationId) return new NextResponse('Organization context required', { status: 403 });
+    if (!hasPermission(user, PERMISSIONS.SCHOOLS_VIEW)) return new NextResponse('Forbidden', { status: 403 });
 
     const school = await prisma.school.findFirst({
       where: { id: params.id, organizationId: user.organizationId },
@@ -88,6 +89,6 @@ export async function POST(
     return NextResponse.json({ success: true, ...result });
   } catch (err: any) {
     console.error('School logo upload error:', err);
-    return NextResponse.json({ success: false, error: err.message || 'Failed to upload logo' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Unable to upload logo' }, { status: 500 });
   }
 }

@@ -92,6 +92,6 @@ export async function POST(
     return NextResponse.json({ success: true, proposal: updated });
   } catch (err: any) {
     console.error('Proposal logo upload error:', err);
-    return NextResponse.json({ success: false, error: err.message || 'Failed to upload logo' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Unable to upload logo' }, { status: 500 });
   }
 }

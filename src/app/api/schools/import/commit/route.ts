@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     revalidatePath('/');
     return NextResponse.json({ success: true, importedCount: result.importedCount, ticketsCreated: result.ticketsCreated });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Bulk import failed';
-    return NextResponse.json({ success: false, error: { code: 'IMPORT_FAILED', message } }, { status: 400 });
+    console.error('School import commit error:', error);
+    return NextResponse.json({ success: false, error: { code: 'IMPORT_FAILED', message: 'Unable to complete the bulk import.' } }, { status: 400 });
   }
 }

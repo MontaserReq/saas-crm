@@ -16,7 +16,7 @@ export async function GET(
     return NextResponse.json({ success: true, template });
   } catch (err: any) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Template not found' },
+      { success: false, error: 'Template not found' },
       { status: 404 }
     );
   }
@@ -68,7 +68,7 @@ export async function PUT(
   } catch (err: any) {
     console.error('Template update error:', err);
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to update template' },
+      { success: false, error: 'Unable to update template' },
       { status: 500 }
     );
   }
@@ -88,7 +88,7 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to delete template' },
+      { success: false, error: 'Unable to delete template' },
       { status: 500 }
     );
   }

@@ -1,9 +1,10 @@
-const WIDGET_URL = 'https://3cf7-2a01-9700-6484-9f01-7971-de3b-d0d2-b07c.ngrok-free.app/widget.js';
+const WIDGET_URL = process.env.CHATBOT_WIDGET_URL;
 
 export async function GET() {
+  if (!WIDGET_URL) return new Response('Unable to load chatbot widget.', { status: 503 });
   const response = await fetch(WIDGET_URL, {
-    headers: { 'ngrok-skip-browser-warning': 'true' },
     cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) {
@@ -22,6 +23,7 @@ export async function GET() {
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',
       'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }

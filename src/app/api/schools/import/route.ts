@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     const preview = await SchoolService.validateImportRows(rows, requireOrganizationId(user));
     return NextResponse.json({ success: true, fileName: file.name, ...preview });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Excel validation failed';
-    return errorResponse(message);
+    console.error('School import preview error:', error);
+    return errorResponse('Unable to validate the import file.');
   }
 }
