@@ -4,10 +4,11 @@ import { ChatService } from '@/server/services/ChatService';
 import { PresenceService } from '@/server/services/PresenceService';
 import prisma from '@/lib/db/prisma';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { requireOrganizationId } from '@/lib/auth/organization';
 
 async function buildPayload(user: Awaited<ReturnType<typeof getCurrentUser>>) {
   if (!user) throw new Error('Unauthorized');
-  const organizationId = user.organizationId || 'org_codeline_legacy';
+  const organizationId = requireOrganizationId(user);
   const [conversations, activeUsers] = await Promise.all([
     ChatService.list(user),
     prisma.user.findMany({ where: { isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } }),

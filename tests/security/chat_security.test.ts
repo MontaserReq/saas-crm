@@ -7,6 +7,7 @@ const { prismaMock } = vi.hoisted(() => {
     chatParticipant: { findFirst: vi.fn(), updateMany: vi.fn() },
     chatMessage: { create: vi.fn() },
     user: { findFirst: vi.fn() },
+    organizationMember: { findMany: vi.fn() },
   };
   prismaMock.$transaction = vi.fn(async (fn: any) => fn(prismaMock));
   return { prismaMock };
@@ -39,6 +40,7 @@ function makeUser(overrides: Partial<UserSession> = {}): UserSession {
     departmentId: 'dept-1',
     departmentName: 'Dept',
     permissions: ['chat.view', 'chat.send'],
+    organizationId: 'org-a',
     ...overrides,
   };
 }
@@ -70,11 +72,11 @@ describe('Chat — access control (IDOR)', () => {
   it('a participant can read the conversation', async () => {
     currentUser = makeUser({ id: 'participant-1' });
     prismaMock.chatParticipant.findFirst.mockResolvedValue({ id: 'p1', conversationId: CONVERSATION_ID, userId: 'participant-1' });
-    prismaMock.chatConversation.findUnique.mockResolvedValue({ id: CONVERSATION_ID, participants: [], messages: [] });
+    prismaMock.chatConversation.findFirst.mockResolvedValue({ id: CONVERSATION_ID, participants: [], messages: [] });
 
     const result = await getChatConversationAction(CONVERSATION_ID);
     expect(result).toBeTruthy();
-    expect(prismaMock.chatConversation.findUnique).toHaveBeenCalled();
+    expect(prismaMock.chatConversation.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: CONVERSATION_ID, organizationId: 'org-a' } }));
   });
 
   it('a user cannot send a message into a conversation they do not belong to', async () => {
@@ -95,7 +97,7 @@ describe('Chat — access control (IDOR)', () => {
     currentUser = makeUser({ id: 'participant-1' });
     await markChatReadAction(CONVERSATION_ID);
     expect(prismaMock.chatParticipant.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { conversationId: CONVERSATION_ID, userId: 'participant-1' } })
+      expect.objectContaining({ where: { conversationId: CONVERSATION_ID, userId: 'participant-1', conversation: { organizationId: 'org-a' } } })
     );
   });
 

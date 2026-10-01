@@ -37,6 +37,7 @@ function makeUser(overrides: Partial<UserSession> = {}): UserSession {
     roleDisplayName: 'Member',
     departmentId: 'dept-1',
     departmentName: 'Dept',
+    organizationId: 'org-a',
     permissions: ['tickets.add_note', 'attachments.upload'],
     ...overrides,
   };

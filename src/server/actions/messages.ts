@@ -6,6 +6,7 @@ import prisma from '@/lib/db/prisma';
 import { revalidatePath } from 'next/cache';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
+import { requireOrganizationId } from '@/lib/auth/organization';
 
 export async function sendMessageAction(formData: FormData) {
   try {
@@ -105,7 +106,7 @@ export async function getTeamMembersForMessaging() {
     if (!hasPermission(user, PERMISSIONS.MESSAGES_SEND)) return { success: false, error: 'Forbidden' };
     // Return all active team members except maybe current user or including everyone
     const users = await prisma.user.findMany({
-      where: { isActive: true, organizationMemberships: { some: { organizationId: user.organizationId || 'org_codeline_legacy', status: 'ACTIVE' } } },
+      where: { isActive: true, organizationMemberships: { some: { organizationId: requireOrganizationId(user), status: 'ACTIVE' } } },
       select: {
         id: true,
         name: true,
@@ -139,7 +140,7 @@ export async function getMessageTemplatesAction() {
     const user = await requireAuth();
     if (!hasPermission(user, PERMISSIONS.MESSAGES_SEND)) return { success: false, error: 'Forbidden', templates: [] };
     const templates = await prisma.messageTemplate.findMany({
-      where: { isActive: true, organizationId: user.organizationId || 'org_codeline_legacy' },
+      where: { isActive: true, organizationId: requireOrganizationId(user) },
       orderBy: { createdAt: 'asc' },
     });
     return { success: true, templates };

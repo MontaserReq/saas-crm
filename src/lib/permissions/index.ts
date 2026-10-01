@@ -1,5 +1,6 @@
 import { UserSession, RoleName, TicketStatus } from '@/types';
 import prisma from '@/lib/db/prisma';
+import { requireOrganizationId as requireTenantOrganizationId } from '@/lib/auth/organization';
 
 export const PERMISSIONS = {
   // Users & Roles
@@ -180,17 +181,6 @@ export function requirePermission(user: UserSession | null | undefined, permissi
   if (!hasPermission(user, permissionCode)) throw new Error(`Forbidden: Missing permission ${permissionCode}`);
 }
 
-function requireOrganizationId(user: UserSession): string {
-  if (!user.organizationId) {
-    // Direct unit/security fixtures predate organization membership. Runtime
-    // sessions are rejected by getCurrentUser when they lack an active
-    // membership, so this compatibility value cannot be reached by a normal
-    // authenticated request after the migration is applied.
-    return 'org_codeline_legacy';
-  }
-  return user.organizationId;
-}
-
 /**
  * Validates whether a user is authorized to access / view a specific ticket.
  * Rules:
@@ -201,7 +191,7 @@ function requireOrganizationId(user: UserSession): string {
  */
 export async function canAccessTicket(user: UserSession, ticketId: string): Promise<boolean> {
   if (!user) return false;
-  const organizationId = requireOrganizationId(user);
+  const organizationId = requireTenantOrganizationId(user);
   if (user.role === 'SUPER_ADMIN') return true;
   if (hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) return true;
 
@@ -233,7 +223,7 @@ export async function canAccessTicket(user: UserSession, ticketId: string): Prom
  */
 export async function canPerformTicketAction(user: UserSession, ticketId: string): Promise<boolean> {
   if (!user) return false;
-  const organizationId = requireOrganizationId(user);
+  const organizationId = requireTenantOrganizationId(user);
   if (user.role === 'SUPER_ADMIN') return true;
   if (hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) return true;
 
@@ -266,7 +256,7 @@ export async function canPerformTicketAction(user: UserSession, ticketId: string
  */
 export async function canAccessAttachment(user: UserSession, attachmentId: string): Promise<boolean> {
   if (!user) return false;
-  const organizationId = requireOrganizationId(user);
+  const organizationId = requireTenantOrganizationId(user);
   if (user.role === 'SUPER_ADMIN') return true;
 
   const attachment = typeof prisma.attachment.findFirst === 'function'
@@ -308,7 +298,7 @@ export function isValidStatusTransition(currentStatus: TicketStatus, nextStatus:
  */
 export async function canAccessMessage(user: UserSession, messageId: string): Promise<boolean> {
   if (!user) return false;
-  const organizationId = requireOrganizationId(user);
+  const organizationId = requireTenantOrganizationId(user);
 
   const message = typeof prisma.message.findFirst === 'function'
     ? await prisma.message.findFirst({ where: { id: messageId, organizationId }, select: { senderId: true, organizationId: true, recipients: { where: { userId: user.id }, select: { id: true } } } })
@@ -325,7 +315,7 @@ export async function canAccessMessage(user: UserSession, messageId: string): Pr
  */
 export async function canAccessMessageAttachment(user: UserSession, attachmentId: string): Promise<boolean> {
   if (!user) return false;
-  const organizationId = requireOrganizationId(user);
+  const organizationId = requireTenantOrganizationId(user);
 
   const attachment = typeof prisma.messageAttachment.findFirst === 'function'
     ? await prisma.messageAttachment.findFirst({ where: { id: attachmentId, organizationId }, select: { messageId: true, organizationId: true } })

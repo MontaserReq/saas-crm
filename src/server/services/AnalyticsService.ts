@@ -1,5 +1,6 @@
 import prisma from '@/lib/db/prisma';
 import { UserSession } from '@/types';
+import { requireOrganizationId } from '@/lib/auth/organization';
 
 export class AnalyticsService {
   static async getDashboardMetrics(user?: UserSession | null) {
@@ -26,7 +27,7 @@ export class AnalyticsService {
 
     // Admins get a global operational overview; other accounts see only their
     // currently assigned tickets.
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     const isGlobalOverview = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
     const ticketFilter: any = isGlobalOverview
       ? { organizationId }
@@ -123,7 +124,8 @@ export class AnalyticsService {
   }
 
   static async getAdminAnalytics(user?: UserSession | null) {
-    const organizationId = user?.organizationId || 'org_codeline_legacy';
+    if (!user) throw new Error('Unauthorized: active organization context required');
+    const organizationId = requireOrganizationId(user);
     const [
       ticketsByDepartment,
       ticketsByTaskType,

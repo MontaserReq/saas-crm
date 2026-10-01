@@ -8,6 +8,7 @@ const { prismaMock } = vi.hoisted(() => {
     ticketAssignee: { groupBy: vi.fn().mockResolvedValue([]) },
     todo: { findMany: vi.fn().mockResolvedValue([]) },
     user: { findMany: vi.fn().mockResolvedValue([]) },
+    organizationMember: { findMany: vi.fn().mockResolvedValue([{ organizationId: 'org-a' }]) },
   };
   return { prismaMock };
 });
@@ -26,6 +27,7 @@ function makeUser(overrides: Partial<UserSession> = {}): UserSession {
     departmentId: 'dept-1',
     departmentName: 'Dept',
     permissions: [],
+    organizationId: 'org-a',
     ...overrides,
   };
 }
@@ -102,9 +104,9 @@ describe('AI Assistant tools — permission enforcement (server-side, not prompt
   });
 
   it('getMyTasks always queries the CALLER\'s own todos — an attacker cannot see another user\'s tasks by any argument, because no user id is ever accepted as an argument', async () => {
-    const attacker = makeUser({ id: ATTACKER_ID, permissions: ['todo.view'] });
+    const attacker = makeUser({ id: ATTACKER_ID, organizationId: 'org-a', permissions: ['todo.view'] });
     await AiAssistantToolService.getMyTasks(attacker);
-    expect(prismaMock.todo.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: ATTACKER_ID, organizationId: 'org_codeline_legacy' } }));
+    expect(prismaMock.todo.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: ATTACKER_ID, organizationId: 'org-a' } }));
   });
 
   it('getMyTasks is forbidden without todo.view or todo.manage_own', async () => {

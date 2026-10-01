@@ -1,5 +1,6 @@
 import prisma from '@/lib/db/prisma';
 import { UserSession } from '@/types';
+import { requireOrganizationId } from '@/lib/auth/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { SchoolService } from './SchoolService';
 import { TicketService } from './TicketService';
@@ -44,7 +45,7 @@ export class AiAssistantToolService {
       unassignedOnly: args.unassignedOnly,
       page: 1,
       pageSize: 10,
-    });
+    }, requireOrganizationId(user));
 
     return {
       ok: true,
@@ -66,7 +67,7 @@ export class AiAssistantToolService {
   private static async resolveSchoolId(user: UserSession, args: { schoolId?: string; name?: string }): Promise<string | null> {
     if (args.schoolId) return args.schoolId;
     if (!args.name) return null;
-    const result = await SchoolService.listSchools({ search: args.name, page: 1, pageSize: 1 });
+    const result = await SchoolService.listSchools({ search: args.name, page: 1, pageSize: 1 }, requireOrganizationId(user));
     return result.data[0]?.id || null;
   }
 
@@ -197,7 +198,7 @@ export class AiAssistantToolService {
     let ticketId = args.ticketId || null;
     if (!ticketId && args.ticketNumber) {
       const ticket = await prisma.ticket.findFirst({
-        where: { ticketNumber: args.ticketNumber, organizationId: user.organizationId || 'org_codeline_legacy' },
+        where: { ticketNumber: args.ticketNumber, organizationId: requireOrganizationId(user) },
         select: { id: true },
       });
       ticketId = ticket?.id || null;
@@ -249,7 +250,7 @@ export class AiAssistantToolService {
       where: {
         isCurrent: true,
         ticket: {
-          organizationId: user.organizationId || 'org_codeline_legacy',
+          organizationId: requireOrganizationId(user),
           status: { notIn: ['CLOSED', 'REJECTED', 'COMPLETED'] },
         },
       },

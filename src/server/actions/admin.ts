@@ -5,6 +5,7 @@ import { requireAuth, verifyPassword } from '@/lib/auth/session';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { departmentSchema, taskTypeSchema } from '@/lib/validation';
 import { AuditService } from '@/server/services/AuditService';
+import { requireOrganizationId } from '@/lib/auth/organization';
 import { revalidatePath } from 'next/cache';
 
 // ==========================================
@@ -50,7 +51,7 @@ export async function createDepartmentAction(data: any, managerUserIds: string[]
     }
 
     const validated = departmentSchema.parse(data);
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
 
     // Check duplicate code
     const existing = await prisma.department.findFirst({
@@ -108,7 +109,7 @@ export async function updateDepartmentAction(id: string, data: any, managerUserI
     }
 
     const validated = departmentSchema.parse(data);
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
 
     // Check if code taken by another department
     const existing = await prisma.department.findFirst({
@@ -171,7 +172,7 @@ export async function deleteDepartmentAction(id: string) {
       return { success: false, error: 'Forbidden: Only Super Admin can delete or archive departments' };
     }
 
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     const department = await prisma.department.findFirst({
       where: { id, organizationId },
       include: {
@@ -240,7 +241,7 @@ export async function toggleDepartmentStatusAction(id: string) {
       return { success: false, error: 'Forbidden: Only Super Admin can modify department status' };
     }
 
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     const department = await prisma.department.findFirst({ where: { id, organizationId } });
     if (!department) return { success: false, error: 'Department not found' };
 
@@ -276,7 +277,7 @@ export async function createTaskTypeAction(data: any) {
     }
 
     const validated = taskTypeSchema.parse(data);
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
 
     const memberIds = validated.members.map((member) => member.userId);
     if (new Set(memberIds).size !== memberIds.length) return { success: false, error: 'Duplicate team members are not allowed' };
@@ -327,7 +328,7 @@ export async function updateTaskTypeAction(id: string, data: any) {
     }
 
     const validated = taskTypeSchema.parse(data);
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
 
     const memberIds = validated.members.map((member) => member.userId);
     if (new Set(memberIds).size !== memberIds.length) return { success: false, error: 'Duplicate team members are not allowed' };
@@ -377,7 +378,7 @@ export async function deleteTaskTypeAction(id: string) {
       return { success: false, error: 'Forbidden: Only Super Admin can delete or archive task types' };
     }
 
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     const taskType = await prisma.taskType.findFirst({
       where: { id, organizationId },
       include: {
@@ -442,7 +443,7 @@ export async function toggleTaskTypeStatusAction(id: string) {
       return { success: false, error: 'Forbidden: Only Super Admin can modify task type status' };
     }
 
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     const taskType = await prisma.taskType.findFirst({ where: { id, organizationId } });
     if (!taskType) return { success: false, error: 'Task type not found' };
 
@@ -502,7 +503,7 @@ export async function updateRolePermissionsAction(roleId: string, permissionIds:
 export async function listUserPermissionsAction(userId: string) {
   try {
     const actor = await requireAuth();
-    const organizationId = actor.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(actor);
     if (!hasPermission(actor, PERMISSIONS.USERS_MANAGE_PERMISSIONS)) return { success: false, error: 'Forbidden' };
     const target = await prisma.user.findFirst({ where: { id: userId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
     if (!target) return { success: false, error: 'User not found' };
@@ -514,7 +515,7 @@ export async function listUserPermissionsAction(userId: string) {
 export async function updateUserPermissionsAction(userId: string, permissionIds: string[]) {
   try {
     const actor = await requireAuth();
-    const organizationId = actor.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(actor);
     if (!hasPermission(actor, PERMISSIONS.USERS_MANAGE_PERMISSIONS)) return { success: false, error: 'Forbidden' };
     if (userId === actor.id) return { success: false, error: 'You cannot change your own permissions' };
     const target = await prisma.user.findFirst({ where: { id: userId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });

@@ -2,6 +2,7 @@ import prisma from '@/lib/db/prisma';
 import { schoolAssignmentSchema } from '@/lib/validation';
 import { AuditService } from './AuditService';
 import { NotificationService } from './NotificationService';
+import { requireOrganizationIdForUserId } from '@/lib/auth/organization';
 
 export interface BulkAssignmentInput {
   taskTypeId: string;
@@ -16,8 +17,7 @@ export interface BulkAssignmentInput {
 
 export class AssignmentService {
   private static async organizationForActor(actorId: string): Promise<string> {
-    const membership = await prisma.organizationMember.findFirst({ where: { userId: actorId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } });
-    return membership?.organizationId || 'org_codeline_legacy';
+    return requireOrganizationIdForUserId(actorId);
   }
   /**
    * Distributes an array of schools across an array of assignee IDs equally.
@@ -39,7 +39,7 @@ export class AssignmentService {
   /**
    * Generates a batch number and ticket numbers.
    */
-  static async generateBatchNumber(organizationId = 'org_codeline_legacy'): Promise<string> {
+  static async generateBatchNumber(organizationId: string): Promise<string> {
     const year = new Date().getFullYear();
     const count = await prisma.schoolAssignment.count({ where: { organizationId } });
     return `ASN-${year}-${String(count + 1).padStart(4, '0')}`;
@@ -235,7 +235,7 @@ export class AssignmentService {
     });
   }
 
-  static async listAssignments(page = 1, pageSize = 15, organizationId = 'org_codeline_legacy') {
+  static async listAssignments(page = 1, pageSize = 15, organizationId: string) {
     const skip = (page - 1) * pageSize;
     const [total, data] = await Promise.all([
       prisma.schoolAssignment.count({ where: { organizationId } }),

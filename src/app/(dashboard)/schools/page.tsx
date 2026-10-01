@@ -1,4 +1,5 @@
 import { getCurrentUser } from '@/lib/auth/session';
+import { requireOrganizationId } from '@/lib/auth/organization';
 import { SchoolService } from '@/server/services/SchoolService';
 import { SchoolsClientView } from '@/components/schools/SchoolsClientView';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -30,7 +31,7 @@ export default async function SchoolsPage({
 
   // Registry visibility is governed by schools.view. Responsible employee and
   // ticket assignment are business data, not access filters.
-  const organizationId = user.organizationId || 'org_codeline_legacy';
+  const organizationId = requireOrganizationId(user);
   const schoolScope = { organizationId, isDeleted: false };
   const [result, totalAllSchools, totalAssignedSchools, totalClassA, users, pendingRequests] = await Promise.all([
     SchoolService.listSchools({

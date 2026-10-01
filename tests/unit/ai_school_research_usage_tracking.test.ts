@@ -401,7 +401,7 @@ describe('AI School Research: Usage Tracking & Observability', () => {
 
       vi.spyOn(prisma.schoolResearchAttempt, 'findMany').mockResolvedValueOnce(mockAttempts as any);
 
-      const summary = await SchoolResearchService.getJobUsageSummary('test-job-id');
+      const summary = await SchoolResearchService.getJobUsageSummary('test-job-id', 'org-test');
 
       expect(summary).not.toBeNull();
       expect(summary?.totalApiRequests).toBe(3);

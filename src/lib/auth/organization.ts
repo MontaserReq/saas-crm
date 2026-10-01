@@ -13,6 +13,26 @@ export type OrganizationContext = {
   roleId: string | null;
 };
 
+export function requireOrganizationId(user: Pick<UserSession, 'organizationId'>): string {
+  if (!user.organizationId) throw new Error('Unauthorized: active organization context required');
+  return user.organizationId;
+}
+
+export function requireOrganizationIdValue(organizationId: string | null | undefined): string {
+  if (!organizationId) throw new Error('Unauthorized: active organization context required');
+  return organizationId;
+}
+
+export async function requireOrganizationIdForUserId(userId: string): Promise<string> {
+  const memberships = await prisma.organizationMember.findMany({
+    where: { userId, status: 'ACTIVE', organization: { isActive: true } },
+    select: { organizationId: true },
+    take: 2,
+  });
+  if (memberships.length !== 1) throw new Error('Unauthorized: exactly one active organization membership required');
+  return memberships[0].organizationId;
+}
+
 /**
  * Resolves tenant context from the authenticated user's membership.
  * Never use an organization ID received from a form/query/body as the source
@@ -22,11 +42,12 @@ export type OrganizationContext = {
 export async function getOrganizationContext(
   user: Pick<UserSession, 'id' | 'organizationId'>,
 ): Promise<OrganizationContext | null> {
+  if (!user.organizationId) return null;
   const membership = await prisma.organizationMember.findFirst({
     where: {
       userId: user.id,
       status: 'ACTIVE',
-      ...(user.organizationId ? { organizationId: user.organizationId } : {}),
+      organizationId: user.organizationId,
       organization: { isActive: true },
     },
     orderBy: { createdAt: 'asc' },

@@ -1,4 +1,5 @@
 import prisma from '@/lib/db/prisma';
+import { requireOrganizationIdForUserId } from '@/lib/auth/organization';
 
 export interface LogAuditParams {
   actorId?: string | null;
@@ -68,7 +69,6 @@ export class AuditService {
   }
 
   private static async organizationForActor(actorId: string) {
-    const membership = prisma.organizationMember?.findFirst ? await prisma.organizationMember.findFirst({ where: { userId: actorId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } }) : null;
-    return membership?.organizationId || 'org_codeline_legacy';
+    return requireOrganizationIdForUserId(actorId);
   }
 }

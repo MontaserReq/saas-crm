@@ -3,11 +3,12 @@ import { requireAuth } from '@/lib/auth/session';
 import { ChatService } from '@/server/services/ChatService';
 import { PresenceService } from '@/server/services/PresenceService';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { requireOrganizationId } from '@/lib/auth/organization';
 
 export async function getChatDataAction() {
   const u = await requireAuth();
   if (!hasPermission(u, PERMISSIONS.CHAT_VIEW)) throw new Error('Forbidden');
-  const [users, conversations] = await Promise.all([prismaUsers(u.organizationId || 'org_codeline_legacy'), ChatService.list(u)]);
+  const [users, conversations] = await Promise.all([prismaUsers(requireOrganizationId(u)), ChatService.list(u)]);
   const presence = await PresenceService.getLastSeenMap(users.map((x) => x.id));
   return { users, conversations, presence };
 }

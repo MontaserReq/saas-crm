@@ -29,6 +29,7 @@ describe('Internal Messaging System - Unit & Security Tests', () => {
     roleDisplayName: 'PR Officer',
     departmentId: 'dept-pr',
     departmentName: 'PR',
+    organizationId: 'org-a',
     permissions: [],
   };
 
@@ -40,6 +41,7 @@ describe('Internal Messaging System - Unit & Security Tests', () => {
     roleDisplayName: 'Outreach Officer',
     departmentId: 'dept-outreach',
     departmentName: 'School Outreach',
+    organizationId: 'org-a',
     permissions: [],
   };
 
@@ -51,6 +53,7 @@ describe('Internal Messaging System - Unit & Security Tests', () => {
     roleDisplayName: 'Data Collector',
     departmentId: 'dept-data',
     departmentName: 'Data Collection',
+    organizationId: 'org-a',
     permissions: [],
   };
 

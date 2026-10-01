@@ -4,11 +4,10 @@ import bcrypt from 'bcryptjs';
 import { UserSession, RoleName } from '@/types';
 import prisma from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
+import { getAuthSecret } from '@/lib/auth/config';
 
 const COOKIE_NAME = 'codeline_session';
-const SECRET_KEY = new TextEncoder().encode(
-  process.env.AUTH_SECRET || 'codeline-super-secret-jwt-key-change-in-production-2026'
-);
+function secretKey() { return new TextEncoder().encode(getAuthSecret()); }
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
@@ -23,12 +22,12 @@ export async function signToken(payload: UserSession): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(SECRET_KEY);
+    .sign(secretKey());
 }
 
 export async function verifyToken(token: string): Promise<UserSession | null> {
   try {
-    const { payload } = await jwtVerify(token, SECRET_KEY);
+    const { payload } = await jwtVerify(token, secretKey());
     return payload as unknown as UserSession;
   } catch {
     return null;
@@ -60,12 +59,11 @@ export async function getCurrentUser(): Promise<UserSession | null> {
   const session = await verifyToken(token);
   if (!session) return null;
 
-  if (session.sessionId) {
-    const loginSession = await prisma.loginSession.findUnique({ where: { id: session.sessionId }, select: { userId: true, logoutAt: true, expiresAt: true } });
-    if (!loginSession || loginSession.userId !== session.id || loginSession.logoutAt || loginSession.expiresAt <= new Date()) {
-      if (loginSession && loginSession.expiresAt <= new Date() && !loginSession.logoutAt) await prisma.loginSession.update({ where: { id: session.sessionId }, data: { logoutAt: new Date() } });
-      return null;
-    }
+  if (!session.sessionId) return null;
+  const loginSession = await prisma.loginSession.findUnique({ where: { id: session.sessionId }, select: { userId: true, logoutAt: true, expiresAt: true } });
+  if (!loginSession || loginSession.userId !== session.id || loginSession.logoutAt || loginSession.expiresAt <= new Date()) {
+    if (loginSession && loginSession.expiresAt <= new Date() && !loginSession.logoutAt) await prisma.loginSession.update({ where: { id: session.sessionId }, data: { logoutAt: new Date() } });
+    return null;
   }
 
   // Verify user is still active in database
@@ -108,6 +106,13 @@ export async function getCurrentUser(): Promise<UserSession | null> {
         select: {
           organizationId: true,
           organization: { select: { name: true } },
+          role: {
+            select: {
+              name: true,
+              displayName: true,
+              rolePermissions: { select: { permission: { select: { code: true } } } },
+            },
+          },
         },
       },
     },
@@ -123,9 +128,10 @@ export async function getCurrentUser(): Promise<UserSession | null> {
   const activeMemberships = dbUser.organizationMemberships;
   if (activeMemberships.length !== 1) return null;
   const activeOrganization = activeMemberships[0];
+  const activeRole = activeOrganization.role || dbUser.role;
 
   const permissions = Array.from(new Set([
-    ...dbUser.role.rolePermissions.map((rp) => rp.permission.code),
+    ...activeRole.rolePermissions.map((rp) => rp.permission.code),
     ...dbUser.userPermissions.map((up) => up.permission.code),
   ]));
 
@@ -135,8 +141,8 @@ export async function getCurrentUser(): Promise<UserSession | null> {
     email: dbUser.email,
     phone: dbUser.phone,
     avatar: dbUser.avatar,
-    role: dbUser.role.name as RoleName,
-    roleDisplayName: dbUser.role.displayName,
+    role: activeRole.name as RoleName,
+    roleDisplayName: activeRole.displayName,
     departmentId: dbUser.department.id,
     departmentName: dbUser.department.name,
     reportsToUserId: dbUser.reportsToUserId,

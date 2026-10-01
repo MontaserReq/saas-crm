@@ -5,6 +5,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { SchoolService } from '@/server/services/SchoolService';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/db/prisma';
+import { requireOrganizationId } from '@/lib/auth/organization';
 
 export async function createSchoolAction(data: any) {
   try {
@@ -46,7 +47,7 @@ export async function validateSchoolImportAction(rawRows: any[]) {
       return { success: false, error: 'Forbidden: Insufficient permissions to import schools' };
     }
 
-    const previewResult = await SchoolService.validateImportRows(rawRows, user.organizationId || 'org_codeline_legacy');
+    const previewResult = await SchoolService.validateImportRows(rawRows, requireOrganizationId(user));
     return { success: true, ...previewResult };
   } catch (err: any) {
     return { success: false, error: err.message || 'Validation failed' };
@@ -76,7 +77,7 @@ export async function exportSchoolsAction(filters: SchoolExportFilters = {}) {
       search: filters.search || '',
       classification: filters.classification || undefined,
       city: filters.city || undefined,
-    }, user.organizationId || 'org_codeline_legacy');
+    }, requireOrganizationId(user));
 
     return {
       success: true as const,
@@ -116,14 +117,14 @@ export async function listSchoolApprovalRequestsAction(status = 'PENDING') {
   const canEdit = canDecide || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_EDIT);
   const canDelete = canDecide || hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_DELETE);
   const typeFilter = canEdit && canDelete ? {} : canEdit ? { type: 'EDIT' } : canDelete ? { type: 'DELETE' } : {};
-  const requests = await prisma.schoolApprovalRequest.findMany({ where: { organizationId: user.organizationId || 'org_codeline_legacy', status, ...typeFilter }, orderBy: { createdAt: 'desc' }, include: { school: { select: { id: true, name: true } }, requester: { select: { name: true } } } });
+  const requests = await prisma.schoolApprovalRequest.findMany({ where: { organizationId: requireOrganizationId(user), status, ...typeFilter }, orderBy: { createdAt: 'desc' }, include: { school: { select: { id: true, name: true } }, requester: { select: { name: true } } } });
   return requests;
 }
 
 export async function decideSchoolApprovalAction(requestId: string, approve: boolean, rejectionReason?: string) {
   try {
     const user = await requireAuth();
-    const request = await prisma.schoolApprovalRequest.findFirst({ where: { id: requestId, organizationId: user.organizationId || 'org_codeline_legacy' }, select: { type: true } });
+    const request = await prisma.schoolApprovalRequest.findFirst({ where: { id: requestId, organizationId: requireOrganizationId(user) }, select: { type: true } });
     if (!request) return { success: false, error: 'Request not found' };
     const permission = request.type === 'EDIT' ? PERMISSIONS.SCHOOLS_APPROVE_EDIT : PERMISSIONS.SCHOOLS_APPROVE_DELETE;
     if (!hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_DECIDE) && !hasPermission(user, permission)) return { success: false, error: 'Forbidden' };

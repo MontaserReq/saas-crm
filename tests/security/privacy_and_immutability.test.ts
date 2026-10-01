@@ -12,6 +12,7 @@ describe('Data Privacy, Immutability & Access Control Security Tests', () => {
     roleDisplayName: 'Member',
     departmentId: 'dept-1',
     departmentName: 'PR',
+    organizationId: 'org-a',
     permissions: ['tickets.view_assigned'],
   };
 
@@ -23,6 +24,7 @@ describe('Data Privacy, Immutability & Access Control Security Tests', () => {
     roleDisplayName: 'Admin',
     departmentId: 'dept-1',
     departmentName: 'Management',
+    organizationId: 'org-a',
     permissions: ['tickets.view_all'],
   };
 
@@ -40,6 +42,7 @@ describe('Data Privacy, Immutability & Access Control Security Tests', () => {
       roleDisplayName: 'Super Admin',
       departmentId: 'dept-1',
       departmentName: 'Management',
+      organizationId: 'org-a',
       permissions: [],
     };
     const isAllowed = await canAccessTicket(superAdmin, 'any-ticket-id');

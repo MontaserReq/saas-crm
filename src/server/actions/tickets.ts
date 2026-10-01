@@ -7,6 +7,7 @@ import { TicketStatus } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
+import { requireOrganizationId } from '@/lib/auth/organization';
 
 function ticketPermission(user: Awaited<ReturnType<typeof requireAuth>>, permission: string) {
   if (!hasPermission(user, permission)) throw new Error(`Forbidden: missing ${permission}`);
@@ -217,7 +218,7 @@ export async function createTicketAction(input: {
     // The department defaults to the user's own department (not the first department in the DB).
     const departmentId = input.departmentId || user.departmentId;
 
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     const school = input.schoolId ? await prisma.school.findFirst({ where: { id: input.schoolId, organizationId }, select: { name: true } }) : null;
     const client = input.clientId ? await prisma.client.findFirst({ where: { id: input.clientId, organizationId, deletedAt: null }, select: { name: true } }) : null;
     const taskType = input.taskTypeId ? await prisma.taskType.findFirst({ where: { id: input.taskTypeId, organizationId }, select: { name: true } }) : null;

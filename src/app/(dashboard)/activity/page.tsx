@@ -1,4 +1,5 @@
 import { getCurrentUser } from '@/lib/auth/session';
+import { requireOrganizationId } from '@/lib/auth/organization';
 import prisma from '@/lib/db/prisma';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { ActivityClientView } from '@/components/activity/ActivityClientView';
@@ -7,7 +8,7 @@ export default async function ActivityPage() {
   const user = (await getCurrentUser())!;
   if (!hasPermission(user, PERMISSIONS.ACTIVITY_VIEW)) return null;
   const isFullView = hasPermission(user, PERMISSIONS.ACTIVITY_VIEW_ALL);
-  const organizationId = user.organizationId || 'org_codeline_legacy';
+  const organizationId = requireOrganizationId(user);
 
   const [activities, assignments, auditLogs] = await Promise.all([prisma.activityEvent.findMany({
     where: isFullView

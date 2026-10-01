@@ -10,6 +10,7 @@ import { normalizeSchoolName, normalizeResearchPhone, normalizeResearchEmail, ex
 import { computeConfidence, determineInitialCandidateStatus } from '@/lib/ai-school-research/confidence';
 import { isLikelyDuplicate } from '@/lib/ai-school-research/duplicate';
 import { isValidJobTransition, ResearchJobStatus } from '@/lib/ai-school-research/stateMachine';
+import { requireOrganizationId, requireOrganizationIdForUserId, requireOrganizationIdValue } from '@/lib/auth/organization';
 
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_EXTRACTION_ROUNDS = 3;
@@ -23,10 +24,7 @@ export interface CreateResearchJobInput {
 }
 
 export class SchoolResearchService {
-  private static async organizationForActor(actorId: string): Promise<string> {
-    const membership = prisma.organizationMember?.findFirst ? await prisma.organizationMember.findFirst({ where: { userId: actorId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } }) : null;
-    return membership?.organizationId || 'org_codeline_legacy';
-  }
+  private static async organizationForActor(actorId: string): Promise<string> { return requireOrganizationIdForUserId(actorId); }
   /**
    * A user with ai_research.approve (admin-tier) can see every job, matching
    * the existing pattern where a broader permission implies broader
@@ -143,7 +141,7 @@ export class SchoolResearchService {
       }
 
       const existingSchools = await prisma.school.findMany({
-        where: { organizationId: job.organizationId || 'org_codeline_legacy', isDeleted: false },
+        where: { organizationId: requireOrganizationIdValue(job.organizationId), isDeleted: false },
         select: { id: true, name: true, city: true, phone: true },
       });
 
@@ -266,10 +264,8 @@ export class SchoolResearchService {
   }
 
   static async getJobForUser(user: UserSession, jobId: string) {
-    const job = !user.organizationId && prisma.schoolResearchJob.findUnique
-      ? await prisma.schoolResearchJob.findUnique({ where: { id: jobId }, include: { createdBy: { select: { id: true, name: true } } } })
-      : await prisma.schoolResearchJob.findFirst({
-      where: { id: jobId, organizationId: user.organizationId || 'org_codeline_legacy' },
+    const job = await prisma.schoolResearchJob.findFirst({
+        where: { id: jobId, organizationId: requireOrganizationId(user) },
       include: { createdBy: { select: { id: true, name: true } } },
     });
     if (!job) return null;
@@ -278,7 +274,7 @@ export class SchoolResearchService {
   }
 
   static async listJobs(user: UserSession, page = 1, pageSize = 15) {
-    const where: any = { organizationId: user.organizationId || 'org_codeline_legacy' };
+    const where: any = { organizationId: requireOrganizationId(user) };
     if (!this.canViewAllJobs(user)) where.createdById = user.id;
     const skip = (page - 1) * pageSize;
     const [total, data] = await Promise.all([
@@ -330,10 +326,8 @@ export class SchoolResearchService {
   }
 
   static async getCandidateDetail(user: UserSession, candidateId: string) {
-    const candidate = !user.organizationId && prisma.schoolResearchCandidate.findUnique
-      ? await prisma.schoolResearchCandidate.findUnique({ where: { id: candidateId }, include: { sources: true, matchedSchool: { select: { id: true, name: true, city: true, phone: true, email: true } }, researchJob: { select: { id: true, createdById: true, location: true, area: true } }, decidedBy: { select: { id: true, name: true } } } })
-      : await prisma.schoolResearchCandidate.findFirst({
-      where: { id: candidateId, researchJob: { organizationId: user.organizationId || 'org_codeline_legacy' } },
+    const candidate = await prisma.schoolResearchCandidate.findFirst({
+        where: { id: candidateId, researchJob: { organizationId: requireOrganizationId(user) } },
       include: {
         sources: true,
         matchedSchool: { select: { id: true, name: true, city: true, phone: true, email: true } },
@@ -354,7 +348,7 @@ export class SchoolResearchService {
    * Returns raw per-attempt rows for a job. The job ownership check is the
    * caller's responsibility (see getJobForUser).
    */
-  static async getJobAttempts(jobId: string, organizationId = 'org_codeline_legacy') {
+  static async getJobAttempts(jobId: string, organizationId: string) {
     return prisma.schoolResearchAttempt.findMany({
       where: { jobId, job: { organizationId } },
       orderBy: { attemptNumber: 'asc' },
@@ -365,7 +359,7 @@ export class SchoolResearchService {
    * Aggregates all SchoolResearchAttempt rows for a job into a JobUsageSummary.
    * Returns null if no attempts have been recorded yet.
    */
-  static async getJobUsageSummary(jobId: string, organizationId = 'org_codeline_legacy'): Promise<JobUsageSummary | null> {
+  static async getJobUsageSummary(jobId: string, organizationId: string): Promise<JobUsageSummary | null> {
     const attempts = await prisma.schoolResearchAttempt.findMany({
       where: { jobId, job: { organizationId } },
       select: {

@@ -1,5 +1,6 @@
 import prisma from '@/lib/db/prisma';
 import { UserSession, TicketStatus, PaginationParams, PaginatedResult } from '@/types';
+import { requireOrganizationId } from '@/lib/auth/organization';
 import {
   hasPermission,
   canAccessTicket,
@@ -30,7 +31,7 @@ export class TicketService {
     // Authenticated runtime sessions always carry this value. The fallback is
     // retained only for legacy unit fixtures while the ownership migration is
     // being rolled out.
-    return user.organizationId || 'org_codeline_legacy';
+    return requireOrganizationId(user);
   }
 
   private static async validateTicketRelations(user: UserSession, input: { schoolId?: string | null; clientId?: string | null; taskTypeId?: string | null; departmentId: string }) {

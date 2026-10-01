@@ -4,6 +4,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { schoolSchema, schoolImportRowSchema } from '@/lib/validation';
 import { AuditService } from './AuditService';
 import { mapSchoolImportRow, matchImportEmployee, normalizeImportPhone, resolveImportHeaders } from '@/lib/schools/import';
+import { requireOrganizationId, requireOrganizationIdForUserId } from '@/lib/auth/organization';
 
 export interface SchoolFilters extends PaginationParams {
   city?: string;
@@ -34,10 +35,7 @@ export interface ImportPreviewRow {
 }
 
 export class SchoolService {
-  private static async organizationForActor(actorId: string): Promise<string> {
-    const membership = prisma.organizationMember?.findFirst ? await prisma.organizationMember.findFirst({ where: { userId: actorId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } }) : null;
-    return membership?.organizationId || 'org_codeline_legacy';
-  }
+  private static async organizationForActor(actorId: string): Promise<string> { return requireOrganizationIdForUserId(actorId); }
 
   private static scopedSchoolWhere(organizationId: string, id: string) {
     return { id, organizationId };
@@ -98,7 +96,7 @@ export class SchoolService {
     });
     return result;
   }
-  static async listSchools(filters: SchoolFilters, organizationId = 'org_codeline_legacy'): Promise<PaginatedResult<any>> {
+  static async listSchools(filters: SchoolFilters, organizationId: string): Promise<PaginatedResult<any>> {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const pageSize = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : 15;
     const skip = (page - 1) * pageSize;
@@ -133,7 +131,7 @@ export class SchoolService {
    * Single source of truth for the Schools Registry filter clause so the paged
    * view and the export always return the same result set.
    */
-  private static buildSchoolWhere(filters: SchoolFilters, organizationId = 'org_codeline_legacy') {
+  private static buildSchoolWhere(filters: SchoolFilters, organizationId: string) {
     const where: any = { organizationId, isDeleted: false };
     if (filters.search && filters.search.trim() !== '') {
       const q = filters.search.trim();
@@ -185,7 +183,7 @@ export class SchoolService {
    * classification, then city, then school name so the exported sheet reads like
    * an organized directory.
    */
-  static async listSchoolsForExport(filters: Omit<SchoolFilters, 'page' | 'pageSize'>, organizationId = 'org_codeline_legacy') {
+  static async listSchoolsForExport(filters: Omit<SchoolFilters, 'page' | 'pageSize'>, organizationId: string) {
     return prisma.school.findMany({
       where: this.buildSchoolWhere(filters as SchoolFilters, organizationId),
       orderBy: [{ classification: 'asc' }, { city: 'asc' }, { name: 'asc' }],
@@ -204,7 +202,7 @@ export class SchoolService {
     }
 
     return prisma.school.findFirst({
-      where: { id, organizationId: user.organizationId || 'org_codeline_legacy' },
+      where: { id, organizationId: requireOrganizationId(user) },
       include: {
         createdBy: { select: { id: true, name: true } },
         responsibleEmployee: { select: { id: true, name: true, email: true } },
@@ -431,7 +429,7 @@ export class SchoolService {
   /**
    * Parses and validates uploaded raw rows from CSV / Excel file.
    */
-  static async validateImportRows(rawRows: any[], organizationId = 'org_codeline_legacy'): Promise<{
+  static async validateImportRows(rawRows: any[], organizationId: string): Promise<{
     preview: ImportPreviewRow[];
     validCount: number;
     invalidCount: number;

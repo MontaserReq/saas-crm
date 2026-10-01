@@ -1,13 +1,10 @@
 import prisma from '@/lib/db/prisma';
 import { todoSchema } from '@/lib/validation';
+import { requireOrganizationIdForUserId } from '@/lib/auth/organization';
 
 export class TodoService {
   private static async organizationForUser(userId: string) {
-    const membershipModel = (prisma as any).organizationMember;
-    const membership = membershipModel?.findFirst
-      ? await membershipModel.findFirst({ where: { userId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } })
-      : null;
-    return membership?.organizationId || 'org_codeline_legacy';
+    return requireOrganizationIdForUserId(userId);
   }
   /**
    * Returns personal To-Do notes strictly filtered by the authenticated user's ID.

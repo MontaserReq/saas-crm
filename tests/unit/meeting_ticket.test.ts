@@ -39,6 +39,7 @@ function makeUser(overrides: Partial<UserSession> = {}): UserSession {
     roleDisplayName: 'Member',
     departmentId: 'dept-1',
     departmentName: 'Dept',
+    organizationId: 'org-a',
     reportsToUserId: 'manager-1',
     permissions: ['tickets.create'],
     ...overrides,

@@ -6,6 +6,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { userCreateSchema, userUpdateSchema } from '@/lib/validation';
 import { AuditService } from '@/server/services/AuditService';
 import { revalidatePath } from 'next/cache';
+import { requireOrganizationId } from '@/lib/auth/organization';
 
 async function validateReportingManager(userId: string | null | undefined, managerId: string | null | undefined, organizationId: string) {
   if (!managerId) return;
@@ -28,7 +29,7 @@ async function validateReportingManager(userId: string | null | undefined, manag
 export async function createUserAction(data: any) {
   try {
     const user = await requireAuth();
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     if (!hasPermission(user, PERMISSIONS.USERS_CREATE)) {
       return { success: false, error: 'Forbidden' };
     }
@@ -77,7 +78,7 @@ export async function createUserAction(data: any) {
 export async function getUserForEditAction(id: string) {
   try {
     const actor = await requireAuth();
-    const organizationId = actor.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(actor);
     if (!hasPermission(actor, PERMISSIONS.USERS_UPDATE)) return { success: false, error: 'Forbidden' };
 
     const target = await prisma.user.findUnique({
@@ -106,7 +107,7 @@ export async function getUserForEditAction(id: string) {
 
 export async function getLoginSessionsAction(targetUserId: string) {
   const user = await requireAuth();
-  const organizationId = user.organizationId || 'org_codeline_legacy';
+  const organizationId = requireOrganizationId(user);
   if (!hasPermission(user, PERMISSIONS.USERS_VIEW_SESSIONS)) return { success: false, error: 'Forbidden' };
   const target = await prisma.user.findFirst({ where: { id: targetUserId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
   if (!target) return { success: false, error: 'User not found' };
@@ -117,7 +118,7 @@ export async function getLoginSessionsAction(targetUserId: string) {
 export async function updateUserAction(id: string, data: any) {
   try {
     const user = await requireAuth();
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     if (!hasPermission(user, PERMISSIONS.USERS_UPDATE)) {
       return { success: false, error: 'Forbidden' };
     }
@@ -206,7 +207,7 @@ export async function updateUserAction(id: string, data: any) {
 export async function disableUserAction(id: string) {
   try {
     const user = await requireAuth();
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     if (!hasPermission(user, PERMISSIONS.USERS_DISABLE)) {
       return { success: false, error: 'Forbidden: Insufficient permissions to disable user' };
     }
@@ -235,7 +236,7 @@ export async function disableUserAction(id: string) {
 export async function enableUserAction(id: string) {
   try {
     const user = await requireAuth();
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     if (!hasPermission(user, PERMISSIONS.USERS_ENABLE)) return { success: false, error: 'Forbidden: Insufficient permissions to enable user' };
     const target = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
     if (!target) return { success: false, error: 'User not found' };
@@ -249,7 +250,7 @@ export async function enableUserAction(id: string) {
 export async function deleteUserAction(id: string) {
   try {
     const user = await requireAuth();
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     if (user.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Forbidden: Super Admin access required' };
     }
@@ -319,7 +320,7 @@ export async function transferUserWorkAction(data: {
 }) {
   try {
     const user = await requireAuth();
-    const organizationId = user.organizationId || 'org_codeline_legacy';
+    const organizationId = requireOrganizationId(user);
     if (!hasPermission(user, PERMISSIONS.USERS_TRANSFER_WORK)) {
       return { success: false, error: 'Forbidden: Admin access required for work transfer' };
     }
@@ -529,6 +530,13 @@ export async function updateUserCredentialsAction(data: {
       data: updateData,
     });
 
+    if (updateData.passwordHash) {
+      await prisma.loginSession.updateMany({
+        where: { userId: user.id, logoutAt: null, ...(user.sessionId ? { id: { not: user.sessionId } } : {}) },
+        data: { logoutAt: new Date() },
+      });
+    }
+
     await AuditService.logAudit({
       actorId: user.id,
       action: 'CREDENTIALS_UPDATED',
@@ -538,18 +546,17 @@ export async function updateUserCredentialsAction(data: {
     });
 
     // Re-issue updated session cookie
-    const permissions = dbUser.role.rolePermissions.map((rp) => rp.permission.code);
     await createSession({
       id: updated.id,
       name: updated.name,
       email: updated.email,
       phone: updated.phone,
       avatar: updated.avatar,
-      role: dbUser.role.name as any,
-      roleDisplayName: dbUser.role.displayName,
+      role: user.role,
+      roleDisplayName: user.roleDisplayName,
       departmentId: dbUser.department.id,
       departmentName: dbUser.department.name,
-      permissions,
+      permissions: user.permissions,
       sessionId: user.sessionId,
     });
 

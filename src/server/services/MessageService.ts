@@ -4,6 +4,7 @@ import { createMessageSchema } from '@/lib/validation';
 import { getStorageProvider } from '@/lib/storage';
 import { NotificationService } from './NotificationService';
 import { AuditService } from './AuditService';
+import { requireOrganizationIdForUserId } from '@/lib/auth/organization';
 
 export interface SendMessageAttachmentInput {
   originalName: string;
@@ -21,8 +22,7 @@ export interface SendMessageInput {
 
 export class MessageService {
   private static async organizationForUser(userId: string): Promise<string> {
-    const membership = await prisma.organizationMember.findFirst({ where: { userId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } });
-    return membership?.organizationId || 'org_codeline_legacy';
+    return requireOrganizationIdForUserId(userId);
   }
   /**
    * List inbox messages for a user (messages where user is in TO or CC).

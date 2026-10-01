@@ -1,4 +1,5 @@
 import prisma from '@/lib/db/prisma';
+import { requireOrganizationIdForUserId, requireOrganizationIdValue } from '@/lib/auth/organization';
 
 export interface CreateNotificationParams {
   userId: string;
@@ -12,7 +13,7 @@ export interface CreateNotificationParams {
 
 export class NotificationService {
   static async create(params: CreateNotificationParams) {
-    const organizationId = params.organizationId || (await this.organizationForUser(params.userId));
+    const organizationId = params.organizationId ? requireOrganizationIdValue(params.organizationId) : await this.organizationForUser(params.userId);
     return prisma.notification.create({
       data: {
         userId: params.userId,
@@ -65,7 +66,6 @@ export class NotificationService {
   }
 
   private static async organizationForUser(userId: string) {
-    const membership = await prisma.organizationMember.findFirst({ where: { userId, status: 'ACTIVE', organization: { isActive: true } }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } });
-    return membership?.organizationId || 'org_codeline_legacy';
+    return requireOrganizationIdForUserId(userId);
   }
 }
