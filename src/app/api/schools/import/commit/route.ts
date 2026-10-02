@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     }
     const ownerToken = execution.execution.ownerToken!;
     try {
-      const result = await SchoolService.executeBulkImport(body.rows, user.id, body.metadata);
+      const result = await SchoolService.executeBulkImport(body.rows, user.id, body.metadata, { id: execution.execution.id, ownerToken });
       await finishOperation(execution.execution.id, ownerToken, 'SUCCEEDED', { resultPayload: JSON.stringify({ importedCount: result.importedCount, ticketsCreated: result.ticketsCreated }) });
       revalidatePath('/schools');
       revalidatePath('/tickets');

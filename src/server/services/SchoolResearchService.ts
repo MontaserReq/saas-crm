@@ -11,7 +11,7 @@ import { computeConfidence, determineInitialCandidateStatus } from '@/lib/ai-sch
 import { isLikelyDuplicate } from '@/lib/ai-school-research/duplicate';
 import { isValidJobTransition, ResearchJobStatus } from '@/lib/ai-school-research/stateMachine';
 import { requireOrganizationId, requireOrganizationIdForUserId, requireOrganizationIdValue } from '@/lib/auth/organization';
-import { acquireOperation, finishOperation, RESOURCE_LIMITS } from '@/lib/security/resourceGuard';
+import { acquireOperation, assertOperationOwner, finishOperation, RESOURCE_LIMITS, StaleOperationError, withOperationOwner } from '@/lib/security/resourceGuard';
 
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_EXTRACTION_ROUNDS = 3;
@@ -89,6 +89,7 @@ export class SchoolResearchService {
       limits: RESOURCE_LIMITS.AI_RESEARCH,
     });
     if (!execution.acquired || !execution.execution) {
+      if (execution.reason !== 'BUSY') return;
       const message = execution.reason === 'BUSY'
         ? 'Research concurrency limit reached. Please try again shortly.'
         : 'Research execution is already in progress or has completed.';
@@ -100,6 +101,7 @@ export class SchoolResearchService {
     }
 
     const ownerToken = execution.execution.ownerToken!;
+    await assertOperationOwner(execution.execution.id, ownerToken);
     await prisma.schoolResearchJob.updateMany({ where: { id: jobId, status: 'PENDING' }, data: { status: 'RUNNING', startedAt: new Date() } });
     await AuditService.logAudit({ actorId: job.createdById, action: 'AI_RESEARCH_JOB_STARTED', entityType: 'SchoolResearchJob', entityId: jobId });
 
@@ -109,8 +111,7 @@ export class SchoolResearchService {
     // Each callback invocation is fire-and-forget: a DB logging failure must
     // never cause a successful research result to be discarded.
     const onAttempt = (usage: ResearchUsage) => {
-      prisma.schoolResearchAttempt
-        .create({
+      void withOperationOwner(execution.execution!.id, ownerToken, (tx) => tx.schoolResearchAttempt.create({
           data: {
             jobId,
             provider: usage.provider,
@@ -131,9 +132,11 @@ export class SchoolResearchService {
             errorCode: usage.errorCode ?? null,
             errorMessage: usage.errorMessage ?? null,
           },
-        })
+        }))
         .catch((err) => {
-          console.warn(`[SchoolResearchService] usage tracking write failed for job ${jobId}:`, err?.message ?? err);
+          if (!(err instanceof StaleOperationError)) {
+            console.warn(`[SchoolResearchService] usage tracking write failed for job ${jobId}:`, err?.message ?? err);
+          }
         });
     };
 
@@ -153,6 +156,7 @@ export class SchoolResearchService {
             requiredFields,
             excludeNames: collected.map((item) => item.name),
           });
+          await assertOperationOwner(execution.execution.id, ownerToken);
           aiCallCount++;
           if (!result.schools.length) break;
           collected.push(...result.schools);
@@ -170,6 +174,7 @@ export class SchoolResearchService {
       const createdInThisJob: { id: string; name: string; city: string | null; phone: string | null; website: string | null }[] = [];
 
       for (const raw of collected.slice(0, job.requestedCount)) {
+        await assertOperationOwner(execution.execution.id, ownerToken);
         const name = raw.name.trim();
         if (!name) continue;
         const normalizedName = normalizeSchoolName(name);
@@ -209,7 +214,7 @@ export class SchoolResearchService {
         });
         if (matchedSchool || matchedCandidate) status = 'DUPLICATE';
 
-        const candidate = await prisma.schoolResearchCandidate.create({
+        const candidate = await withOperationOwner(execution.execution.id, ownerToken, (tx) => tx.schoolResearchCandidate.create({
           data: {
             researchJobId: jobId,
             name,
@@ -233,15 +238,16 @@ export class SchoolResearchService {
               })),
             },
           },
-        });
+        }));
 
         createdInThisJob.push({ id: candidate.id, name, city, phone: phone || null, website });
       }
 
-      await prisma.schoolResearchJob.update({
+      await assertOperationOwner(execution.execution.id, ownerToken);
+      await withOperationOwner(execution.execution.id, ownerToken, (tx) => tx.schoolResearchJob.update({
         where: { id: jobId },
         data: { status: 'COMPLETED', completedAt: new Date(), aiCallCount, sourceCount },
-      });
+      }));
 
       const counts = await prisma.schoolResearchCandidate.groupBy({ by: ['status'], where: { researchJobId: jobId }, _count: true });
       const summary = Object.fromEntries(counts.map((c) => [c.status, c._count]));
@@ -257,13 +263,20 @@ export class SchoolResearchService {
       });
       await finishOperation(execution.execution.id, ownerToken, 'SUCCEEDED', { resultPayload: JSON.stringify({ candidateCount: createdInThisJob.length }) });
     } catch (err: any) {
+      if (err instanceof StaleOperationError) return;
       const message = err instanceof AiNotConfiguredError
         ? err.message
         : err instanceof AiExtractionError
           ? `AI extraction failed: ${err.message}`
           : 'Research could not be completed. Please try again.';
 
-      await prisma.schoolResearchJob.update({ where: { id: jobId }, data: { status: 'FAILED', completedAt: new Date(), error: message, aiCallCount } });
+      try {
+        await assertOperationOwner(execution.execution.id, ownerToken);
+        await withOperationOwner(execution.execution.id, ownerToken, (tx) => tx.schoolResearchJob.update({ where: { id: jobId }, data: { status: 'FAILED', completedAt: new Date(), error: message, aiCallCount } }));
+      } catch (ownershipError) {
+        if (ownershipError instanceof StaleOperationError) return;
+        throw ownershipError;
+      }
       await AuditService.logAudit({ actorId: job.createdById, action: 'AI_RESEARCH_JOB_FAILED', entityType: 'SchoolResearchJob', entityId: jobId, metadata: { error: message } });
       await NotificationService.create({
         userId: job.createdById,
@@ -293,7 +306,7 @@ export class SchoolResearchService {
       if (claimed.count !== 1 || !operation.idempotencyKey) continue;
       const job = await prisma.schoolResearchJob.updateMany({
         where: { id: operation.idempotencyKey, status: 'RUNNING' },
-        data: { status: 'FAILED', completedAt: now, error: 'Research execution lease expired. Please start a new job.' },
+        data: { status: 'PENDING', startedAt: null, completedAt: null, error: null },
       });
       recoveredJobs += job.count;
     }

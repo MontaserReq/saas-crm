@@ -7,7 +7,7 @@ import { ProposalTemplateService, TemplateConfig } from './ProposalTemplateServi
 import { applyProposalOverlay } from '@/lib/pdf/proposalOverlay';
 import { formatProposalCode } from '@/lib/proposals/proposalUtils';
 import { requireOrganizationContext } from '@/lib/auth/organization';
-import { acquireOperation, finishOperation, RESOURCE_LIMITS } from '@/lib/security/resourceGuard';
+import { acquireOperation, assertOperationOwner, finishOperation, RESOURCE_LIMITS, withOperationOwner } from '@/lib/security/resourceGuard';
 
 export interface ProposalServiceItem {
   id?: string;
@@ -461,6 +461,7 @@ export class ProposalService {
     let uploadedKey: string | null = null;
 
     try {
+      await assertOperationOwner(execution.execution.id, ownerToken);
       let finalPdfBuffer: Buffer;
 
     if (proposal.template) {
@@ -512,6 +513,7 @@ export class ProposalService {
     }
 
     const proposalCode = formatProposalCode(proposal);
+    await assertOperationOwner(execution.execution.id, ownerToken);
     // 5. Store generated PDF on storage
     const storage = getStorageProvider();
     const fileName = `Proposal_${proposalCode}_${proposal.title.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]+/g, '_')}.pdf`;
@@ -521,7 +523,7 @@ export class ProposalService {
     uploadedKey = uploadRes.storageKey;
 
     // 6. Update Proposal status and pdf reference
-    await prisma.proposal.update({
+    await withOperationOwner(execution.execution.id, ownerToken, (tx) => tx.proposal.update({
       where: { id: proposalId },
       data: {
         status: 'GENERATED',
@@ -529,7 +531,7 @@ export class ProposalService {
         generatedPdfProvider: storage.providerId,
         generatedAt: new Date(),
       },
-    });
+    }));
 
     await AuditService.logAudit({
       actorId: user.id,

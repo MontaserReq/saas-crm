@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db/prisma';
 
 export type ResourceOperationType = 'AI_RESEARCH' | 'AI_ASSISTANT' | 'PROPOSAL_GENERATION' | 'SCHOOL_IMPORT';
@@ -49,6 +50,59 @@ export interface AcquireOperationInput {
   operationType: ResourceOperationType;
   idempotencyKey: string;
   limits?: ResourceLimits;
+}
+
+export class StaleOperationError extends Error {
+  readonly code = 'STALE_OPERATION';
+
+  constructor() {
+    super('Operation lease is no longer owned by this executor');
+    this.name = 'StaleOperationError';
+  }
+}
+
+/**
+ * Fences an executor using PostgreSQL's clock. The check is deliberately
+ * performed in the database so an application clock cannot extend a lease
+ * that PostgreSQL already considers expired.
+ */
+export async function assertOperationOwner(id: string, ownerToken: string): Promise<void> {
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"
+    FROM "OperationExecution"
+    WHERE "id" = ${id}
+      AND "ownerToken" = ${ownerToken}
+      AND "status" = 'RUNNING'
+      AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+    LIMIT 1
+  `;
+  if (rows.length !== 1) throw new StaleOperationError();
+}
+
+/**
+ * Runs one authoritative mutation while fencing the operation row. The row
+ * lock makes recovery/takeover serialize with the ownership check and the
+ * mutation, so a stale executor cannot pass the check and then write after a
+ * newer owner has taken over.
+ */
+export async function withOperationOwner<T>(
+  id: string,
+  ownerToken: string,
+  mutation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "OperationExecution"
+      WHERE "id" = ${id}
+        AND "ownerToken" = ${ownerToken}
+        AND "status" = 'RUNNING'
+        AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      FOR UPDATE
+    `;
+    if (rows.length !== 1) throw new StaleOperationError();
+    return mutation(tx);
+  });
 }
 
 export async function acquireOperation(input: AcquireOperationInput) {
@@ -136,10 +190,15 @@ export async function acquireOperation(input: AcquireOperationInput) {
 
 export async function renewOperation(id: string, ownerToken: string, leaseMs: number) {
   const leaseExpiresAt = new Date(Date.now() + leaseMs);
-  return prisma.operationExecution.updateMany({
-    where: { id, ownerToken, status: 'RUNNING' },
-    data: { leaseExpiresAt },
-  });
+  const count = await prisma.$executeRaw`
+    UPDATE "OperationExecution"
+    SET "leaseExpiresAt" = ${leaseExpiresAt}, "updatedAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+    WHERE "id" = ${id}
+      AND "ownerToken" = ${ownerToken}
+      AND "status" = 'RUNNING'
+      AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+  `;
+  return { count };
 }
 
 export async function finishOperation(
@@ -148,17 +207,21 @@ export async function finishOperation(
   status: Extract<OperationStatus, 'SUCCEEDED' | 'FAILED' | 'CANCELLED'>,
   details?: { resultPayload?: string; failureReason?: string },
 ) {
-  return prisma.operationExecution.updateMany({
-    where: { id, ownerToken, status: 'RUNNING' },
-    data: {
-      status,
-      completedAt: new Date(),
-      leaseExpiresAt: null,
-      ownerToken: null,
-      resultPayload: details?.resultPayload,
-      failureReason: details?.failureReason,
-    },
-  });
+  const count = await prisma.$executeRaw`
+    UPDATE "OperationExecution"
+    SET "status" = ${status},
+        "completedAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
+        "leaseExpiresAt" = NULL,
+        "ownerToken" = NULL,
+        "resultPayload" = ${details?.resultPayload ?? null},
+        "failureReason" = ${details?.failureReason ?? null},
+        "updatedAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+    WHERE "id" = ${id}
+      AND "ownerToken" = ${ownerToken}
+      AND "status" = 'RUNNING'
+      AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+  `;
+  return { count };
 }
 
 export async function recoverExpiredOperations(operationType: ResourceOperationType, now = new Date()) {

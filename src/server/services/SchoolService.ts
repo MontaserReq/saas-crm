@@ -5,6 +5,7 @@ import { schoolSchema, schoolImportRowSchema } from '@/lib/validation';
 import { AuditService } from './AuditService';
 import { mapSchoolImportRow, matchImportEmployee, normalizeImportPhone, resolveImportHeaders } from '@/lib/schools/import';
 import { requireOrganizationId, requireOrganizationIdForUserId } from '@/lib/auth/organization';
+import { StaleOperationError } from '@/lib/security/resourceGuard';
 
 export interface SchoolFilters extends PaginationParams {
   city?: string;
@@ -552,7 +553,7 @@ export class SchoolService {
   /**
    * Performs bulk insertion of validated rows in a transaction.
    */
-  static async executeBulkImport(validRows: any[], actorId: string, metadata?: { fileName?: string; skippedCount?: number; failedCount?: number; duplicateCount?: number }) {
+  static async executeBulkImport(validRows: any[], actorId: string, metadata?: { fileName?: string; skippedCount?: number; failedCount?: number; duplicateCount?: number }, operationOwner?: { id: string; ownerToken: string }) {
     if (validRows.length === 0) {
       throw new Error('No valid records to import');
     }
@@ -591,6 +592,18 @@ export class SchoolService {
     }
 
     const createdSchools = await prisma.$transaction(async (tx) => {
+      if (operationOwner) {
+        const owned = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT "id"
+          FROM "OperationExecution"
+          WHERE "id" = ${operationOwner.id}
+            AND "ownerToken" = ${operationOwner.ownerToken}
+            AND "status" = 'RUNNING'
+            AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+          FOR UPDATE
+        `;
+        if (owned.length !== 1) throw new StaleOperationError();
+      }
       const existing = await tx.school.findMany({ where: { organizationId }, select: { name: true, phone: true } });
       const names = new Set(existing.map((school) => school.name.trim().replace(/\s+/g, ' ').toLowerCase()));
       const phones = new Set(existing.filter((school) => school.phone).map((school) => normalizeImportPhone(school.phone)));
