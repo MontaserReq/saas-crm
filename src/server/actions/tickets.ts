@@ -6,7 +6,7 @@ import { TicketService } from '@/server/services/TicketService';
 import { TicketStatus } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
+import { validateAttachmentBatch, validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
 import { requireOrganizationId } from '@/lib/auth/organization';
 
 function ticketPermission(user: Awaited<ReturnType<typeof requireAuth>>, permission: string) {
@@ -65,6 +65,8 @@ export async function addNoteAction(formData: FormData) {
     const transferToUserId = formData.get('transferToUserId') as string | null;
 
     const files = formData.getAll('attachments') as File[];
+    const batchError = validateAttachmentBatch(files);
+    if (batchError) throw new Error(batchError);
     if (files.some((file) => file instanceof File && file.size > 0) && !hasPermission(user, PERMISSIONS.ATTACHMENTS_UPLOAD)) throw new Error('Forbidden: attachment upload permission required');
     const attachmentBuffers: Array<{ originalName: string; mimeType: string; buffer: Buffer }> = [];
 

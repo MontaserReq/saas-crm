@@ -3,6 +3,8 @@
 // between features and can never be bypassed by trusting the client-reported MIME type.
 
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB
+export const MAX_ATTACHMENTS_PER_REQUEST = 10;
+export const MAX_ATTACHMENT_BYTES_PER_REQUEST = 25 * 1024 * 1024;
 
 export const ALLOWED_ATTACHMENT_MIME_TYPES = [
   'image/jpeg',
@@ -44,5 +46,12 @@ export function validateAttachmentFile(file: { name: string; type: string; size:
     return `File type "${file.type || ext || 'unknown'}" is not allowed. Supported formats: Images, PDF, Word, Excel, PowerPoint, Text`;
   }
 
+  return null;
+}
+
+export function validateAttachmentBatch(files: Array<{ name: string; type: string; size: number }>): string | null {
+  const active = files.filter((file) => file && file.size > 0);
+  if (active.length > MAX_ATTACHMENTS_PER_REQUEST) return `A maximum of ${MAX_ATTACHMENTS_PER_REQUEST} attachments is allowed per request`;
+  if (active.reduce((total, file) => total + file.size, 0) > MAX_ATTACHMENT_BYTES_PER_REQUEST) return 'Attachments exceed the maximum combined request size of 25MB';
   return null;
 }

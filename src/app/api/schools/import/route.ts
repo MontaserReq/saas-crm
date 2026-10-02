@@ -9,6 +9,8 @@ import { rejectUntrustedMutation } from '@/lib/security/web';
 export const runtime = 'nodejs';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_COLUMNS = 100;
+const MAX_CELLS = 250_000;
 const allowedMimeTypes = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
@@ -51,6 +53,8 @@ export async function POST(request: Request) {
     const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: true });
     const headerRow = matrix[0];
     if (!Array.isArray(headerRow) || headerRow.length === 0) return errorResponse('The worksheet has no header row');
+    if (headerRow.length > MAX_COLUMNS) return errorResponse('The worksheet has too many columns');
+    if (matrix.length > 5001 || matrix.length * headerRow.length > MAX_CELLS) return errorResponse('The worksheet exceeds the maximum allowed dimensions');
     const headers = headerRow.map((header, index) => {
       const label = String(header ?? '').trim();
       return label || `__EMPTY_${index + 1}`;

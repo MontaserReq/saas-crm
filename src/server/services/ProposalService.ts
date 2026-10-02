@@ -7,6 +7,7 @@ import { ProposalTemplateService, TemplateConfig } from './ProposalTemplateServi
 import { applyProposalOverlay } from '@/lib/pdf/proposalOverlay';
 import { formatProposalCode } from '@/lib/proposals/proposalUtils';
 import { requireOrganizationContext } from '@/lib/auth/organization';
+import { acquireOperation, finishOperation, RESOURCE_LIMITS } from '@/lib/security/resourceGuard';
 
 export interface ProposalServiceItem {
   id?: string;
@@ -39,6 +40,7 @@ const proposalInclude = {
       originalFileName: true,
       config: true,
       isActive: true,
+      updatedAt: true,
     },
   },
   school: {
@@ -434,7 +436,32 @@ export class ProposalService {
 
     if (!proposal) throw new Error('Proposal not found');
 
-    let finalPdfBuffer: Buffer;
+    const operationKey = [
+      proposal.id,
+      proposal.updatedAt.toISOString(),
+      proposal.templateId || 'no-template',
+      proposal.logoKey || 'no-logo',
+    ].join(':');
+    const execution = await acquireOperation({
+      organizationId,
+      userId: user.id,
+      operationType: 'PROPOSAL_GENERATION',
+      idempotencyKey: operationKey,
+      limits: RESOURCE_LIMITS.PROPOSAL_GENERATION,
+    });
+    if (!execution.acquired || !execution.execution) {
+      if (execution.reason === 'COMPLETED' && proposal.generatedPdfKey) {
+        const existingStorage = getStorageProvider(proposal.generatedPdfProvider as any);
+        const existingBuffer = await existingStorage.download(proposal.generatedPdfKey);
+        if (existingBuffer) return existingBuffer;
+      }
+      throw new Error('Proposal generation is already in progress. Please try again shortly.');
+    }
+    const ownerToken = execution.execution.ownerToken!;
+    let uploadedKey: string | null = null;
+
+    try {
+      let finalPdfBuffer: Buffer;
 
     if (proposal.template) {
       // 1. Fetch template PDF
@@ -491,6 +518,7 @@ export class ProposalService {
     const uploadRes = await storage.upload(finalPdfBuffer, fileName, 'application/pdf', {
       keyPrefix: `${organizationId}/proposals/generated`,
     });
+    uploadedKey = uploadRes.storageKey;
 
     // 6. Update Proposal status and pdf reference
     await prisma.proposal.update({
@@ -511,7 +539,15 @@ export class ProposalService {
       metadata: { title: proposal.title, templateId: proposal.templateId, fileSize: finalPdfBuffer.length },
     });
 
-    return finalPdfBuffer;
+      await finishOperation(execution.execution.id, ownerToken, 'SUCCEEDED', { resultPayload: JSON.stringify({ storageKey: uploadRes.storageKey }) });
+      return finalPdfBuffer;
+    } catch (error) {
+      if (uploadedKey) {
+        await getStorageProvider().delete(uploadedKey).catch(() => false);
+      }
+      await finishOperation(execution.execution.id, ownerToken, 'FAILED', { failureReason: error instanceof Error ? error.message : 'Proposal generation failed' });
+      throw error;
+    }
   }
 
   /**

@@ -7,6 +7,9 @@ import { classifyIntent } from '@/lib/ai-assistant/classify';
 import { routeTool } from '@/lib/ai-assistant/router';
 import { composeAnswer } from '@/lib/ai-assistant/compose';
 import { checkRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
+import { acquireOperation, finishOperation, RESOURCE_LIMITS } from '@/lib/security/resourceGuard';
+import { requireOrganizationId } from '@/lib/auth/organization';
+import { randomUUID } from 'crypto';
 
 const MAX_MESSAGE_LENGTH = 1000;
 const MAX_TURNS = 4;
@@ -59,7 +62,19 @@ export async function askAssistantAction(input: AskAssistantInput): Promise<AskA
       };
     }
 
-    const language = input.language === 'ar' ? 'ar' : 'en';
+    const execution = await acquireOperation({
+      organizationId: requireOrganizationId(user),
+      userId: user.id,
+      operationType: 'AI_ASSISTANT',
+      idempotencyKey: randomUUID(),
+      limits: RESOURCE_LIMITS.AI_ASSISTANT,
+    });
+    if (!execution.acquired || !execution.execution) {
+      return { success: true, reply: languageForLimit(input.language), resultSummary: null };
+    }
+
+    try {
+      const language = input.language === 'ar' ? 'ar' : 'en';
 
     if (ACTION_REQUEST_PATTERN.test(message) && !HOW_TO_QUESTION_PATTERN.test(message)) {
       const reply =
@@ -94,8 +109,15 @@ export async function askAssistantAction(input: AskAssistantInput): Promise<AskA
       metadata: { tool, ok: result?.ok ?? null },
     });
 
-    return { success: true, reply: composed.reply, resultSummary: composed.resultSummary };
+      return { success: true, reply: composed.reply, resultSummary: composed.resultSummary };
+    } finally {
+      await finishOperation(execution.execution.id, execution.execution.ownerToken!, 'SUCCEEDED');
+    }
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to answer' };
   }
+}
+
+function languageForLimit(language: 'ar' | 'en') {
+  return language === 'ar' ? 'طلبات كثيرة في وقت قصير، يرجى المحاولة لاحقاً.' : 'Too many AI requests are currently running. Please try again shortly.';
 }

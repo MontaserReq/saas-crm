@@ -19,12 +19,14 @@ export function SchoolImportModal({ isOpen, onClose, onSuccess }: SchoolImportMo
   const [previewData, setPreviewData] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<any | null>(null);
+  const [operationId, setOperationId] = useState<string | null>(null);
   const { t, language } = useI18n();
 
   const analyzeFile = async (uploadedFile: File) => {
     if (!uploadedFile) return;
 
     setFile(uploadedFile);
+    setOperationId(crypto.randomUUID());
     setError(null);
     setPreviewData(null);
     setSummary(null);
@@ -71,6 +73,7 @@ export function SchoolImportModal({ isOpen, onClose, onSuccess }: SchoolImportMo
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        operationId,
         rows: validRowsToImport,
         metadata: {
           fileName: file?.name,
@@ -93,6 +96,7 @@ export function SchoolImportModal({ isOpen, onClose, onSuccess }: SchoolImportMo
 
   const handleReset = () => {
     setFile(null);
+    setOperationId(null);
     setPreviewData(null);
     setSummary(null);
     setError(null);

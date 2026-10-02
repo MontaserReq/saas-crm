@@ -630,6 +630,10 @@ export class SchoolService {
 
       // A school responsible employee is also the initial owner of the
       // outreach ticket created by this import.
+      // Serialize import-generated ticket allocation per organization. The
+      // lock is transaction-scoped and prevents two imports from observing
+      // the same latest ticket number.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ticket-sequence:${organizationId}`}))`;
       let ticketSequence = 1000;
       const lastTicket = await tx.ticket.findFirst({
         where: { organizationId },

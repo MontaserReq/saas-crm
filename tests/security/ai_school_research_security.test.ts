@@ -11,6 +11,7 @@ const { prismaMock } = vi.hoisted(() => {
     notification: { create: vi.fn(), createMany: vi.fn() },
     user: { findMany: vi.fn().mockResolvedValue([]) },
     organizationMember: { findMany: vi.fn().mockResolvedValue([{ organizationId: 'org-a' }]) },
+    operationExecution: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
   };
   prismaMock.$transaction = vi.fn(async (fn: any) => fn(prismaMock));
   return { prismaMock };
@@ -21,6 +22,12 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/security/rateLimiter', () => ({
   checkRateLimit: vi.fn().mockResolvedValue({ status: 'allowed', allowed: true }),
   RATE_LIMIT_POLICY_CONFIG: { ai_research: { limit: 5, windowSeconds: 900 } },
+}));
+vi.mock('@/lib/security/resourceGuard', () => ({
+  RESOURCE_LIMITS: { AI_RESEARCH: { global: 2, organization: 1, user: 1, leaseMs: 1200000 } },
+  acquireOperation: vi.fn().mockResolvedValue({ acquired: true, reason: 'ACQUIRED', execution: { id: 'op-1', ownerToken: 'owner-1' } }),
+  finishOperation: vi.fn().mockResolvedValue({ count: 1 }),
+  recoverExpiredOperations: vi.fn().mockResolvedValue({ count: 0 }),
 }));
 
 let currentUser: UserSession | null = null;

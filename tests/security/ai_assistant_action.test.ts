@@ -18,6 +18,11 @@ vi.mock('@/lib/security/rateLimiter', () => ({
   checkRateLimit: rateLimitMock,
   RATE_LIMIT_POLICY_CONFIG: { ai: { limit: 20, windowSeconds: 300 } },
 }));
+vi.mock('@/lib/security/resourceGuard', () => ({
+  RESOURCE_LIMITS: { AI_ASSISTANT: { global: 8, organization: 3, user: 1, leaseMs: 120000 } },
+  acquireOperation: vi.fn().mockResolvedValue({ acquired: true, reason: 'ACQUIRED', execution: { id: 'op-1', ownerToken: 'owner-1' } }),
+  finishOperation: vi.fn().mockResolvedValue({ count: 1 }),
+}));
 
 let currentUser: UserSession | null = null;
 vi.mock('@/lib/auth/session', () => ({
@@ -38,6 +43,7 @@ function makeUser(overrides: Partial<UserSession> = {}): UserSession {
     role: 'MEMBER',
     roleDisplayName: 'Member',
     departmentId: 'dept-1',
+    organizationId: 'org-a',
     departmentName: 'Dept',
     permissions: ['ai_assistant.view'],
     ...overrides,

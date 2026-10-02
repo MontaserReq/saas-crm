@@ -5,7 +5,7 @@ import { MessageService, SendMessageAttachmentInput } from '@/server/services/Me
 import prisma from '@/lib/db/prisma';
 import { revalidatePath } from 'next/cache';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
+import { validateAttachmentBatch, validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
 import { requireOrganizationId } from '@/lib/auth/organization';
 
 export async function sendMessageAction(formData: FormData) {
@@ -55,6 +55,8 @@ export async function sendMessageAction(formData: FormData) {
     // Process file attachments
     const attachments: SendMessageAttachmentInput[] = [];
     const files = formData.getAll('attachments') as File[];
+    const batchError = validateAttachmentBatch(files);
+    if (batchError) return { success: false, error: batchError };
     if (files.some((file) => file instanceof File && file.size > 0) && !hasPermission(user, PERMISSIONS.MESSAGES_ATTACHMENTS)) return { success: false, error: 'Forbidden: message attachment permission required' };
 
     for (const file of files) {

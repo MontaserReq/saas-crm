@@ -11,6 +11,7 @@ import { computeConfidence, determineInitialCandidateStatus } from '@/lib/ai-sch
 import { isLikelyDuplicate } from '@/lib/ai-school-research/duplicate';
 import { isValidJobTransition, ResearchJobStatus } from '@/lib/ai-school-research/stateMachine';
 import { requireOrganizationId, requireOrganizationIdForUserId, requireOrganizationIdValue } from '@/lib/auth/organization';
+import { acquireOperation, finishOperation, RESOURCE_LIMITS } from '@/lib/security/resourceGuard';
 
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_EXTRACTION_ROUNDS = 3;
@@ -37,6 +38,7 @@ export class SchoolResearchService {
   }
 
   static async createJob(input: CreateResearchJobInput, actorId: string) {
+    await this.recoverStaleExecutions();
     const validated = schoolResearchJobSchema.parse({ mode: 'FIND_NEW', ...input });
     const config = getAiResearchConfig();
 
@@ -64,9 +66,9 @@ export class SchoolResearchService {
       metadata: { location: job.location, area: job.area, requestedCount: job.requestedCount },
     });
 
-    // Fire-and-forget: this process is a long-running container (not
-    // serverless), so the async job keeps running after the action returns.
-    // The UI polls getJobStatus for progress (see JobProgress component).
+    // Preserve the existing asynchronous API, but execution ownership is now
+    // durable in PostgreSQL. The job row and operation lease are the source of
+    // truth; a process restart cannot silently authorize a second executor.
     void this.runJob(job.id).catch((err) => {
       console.error(`AI School Research job ${job.id} crashed unexpectedly:`, err);
     });
@@ -78,7 +80,27 @@ export class SchoolResearchService {
     const job = await prisma.schoolResearchJob.findUnique({ where: { id: jobId } });
     if (!job || !isValidJobTransition(job.status as ResearchJobStatus, 'RUNNING')) return;
 
-    await prisma.schoolResearchJob.update({ where: { id: jobId }, data: { status: 'RUNNING', startedAt: new Date() } });
+    const organizationId = requireOrganizationIdValue(job.organizationId);
+    const execution = await acquireOperation({
+      organizationId,
+      userId: job.createdById,
+      operationType: 'AI_RESEARCH',
+      idempotencyKey: job.id,
+      limits: RESOURCE_LIMITS.AI_RESEARCH,
+    });
+    if (!execution.acquired || !execution.execution) {
+      const message = execution.reason === 'BUSY'
+        ? 'Research concurrency limit reached. Please try again shortly.'
+        : 'Research execution is already in progress or has completed.';
+      await prisma.schoolResearchJob.updateMany({
+        where: { id: jobId, status: 'PENDING' },
+        data: { status: 'FAILED', completedAt: new Date(), error: message },
+      });
+      return;
+    }
+
+    const ownerToken = execution.execution.ownerToken!;
+    await prisma.schoolResearchJob.updateMany({ where: { id: jobId, status: 'PENDING' }, data: { status: 'RUNNING', startedAt: new Date() } });
     await AuditService.logAudit({ actorId: job.createdById, action: 'AI_RESEARCH_JOB_STARTED', entityType: 'SchoolResearchJob', entityId: jobId });
 
     const requiredFields: string[] = JSON.parse(job.requiredFields || '[]');
@@ -233,6 +255,7 @@ export class SchoolResearchService {
         entityType: 'schoolResearchJob',
         entityId: jobId,
       });
+      await finishOperation(execution.execution.id, ownerToken, 'SUCCEEDED', { resultPayload: JSON.stringify({ candidateCount: createdInThisJob.length }) });
     } catch (err: any) {
       const message = err instanceof AiNotConfiguredError
         ? err.message
@@ -250,7 +273,31 @@ export class SchoolResearchService {
         entityType: 'schoolResearchJob',
         entityId: jobId,
       });
+      await finishOperation(execution.execution.id, ownerToken, 'FAILED', { failureReason: message });
     }
+  }
+
+  /** Recover expired execution leases without requiring a user to open a job. */
+  static async recoverStaleExecutions() {
+    const now = new Date();
+    const expired = await prisma.operationExecution.findMany({
+      where: { operationType: 'AI_RESEARCH', status: 'RUNNING', leaseExpiresAt: { lt: now } },
+      select: { id: true, idempotencyKey: true },
+    });
+    let recoveredJobs = 0;
+    for (const operation of expired) {
+      const claimed = await prisma.operationExecution.updateMany({
+        where: { id: operation.id, status: 'RUNNING', leaseExpiresAt: { lt: now } },
+        data: { status: 'EXPIRED', completedAt: now, ownerToken: null, failureReason: 'Execution lease expired' },
+      });
+      if (claimed.count !== 1 || !operation.idempotencyKey) continue;
+      const job = await prisma.schoolResearchJob.updateMany({
+        where: { id: operation.idempotencyKey, status: 'RUNNING' },
+        data: { status: 'FAILED', completedAt: now, error: 'Research execution lease expired. Please start a new job.' },
+      });
+      recoveredJobs += job.count;
+    }
+    return recoveredJobs;
   }
 
   /** Self-heals a job stuck in RUNNING (e.g. the app container restarted mid-job). */
