@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 import prisma from '@/lib/db/prisma';
-import { checkRateLimit, rateLimitStorageKey, resetRateLimiterCleanupCounterForTests } from '@/lib/security/rateLimiter';
+import { checkRateLimit, consumeRateLimit, peekRateLimit, rateLimitStorageKey, resetRateLimiterCleanupCounterForTests } from '@/lib/security/rateLimiter';
 
 const secret = 'rate-limiter-test-secret-with-more-than-32-characters';
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
@@ -66,6 +66,28 @@ describe.skipIf(!databaseAvailable)('PostgreSQL distributed rate limiter', () =>
     expect(key).not.toContain('198.51.100.20');
     expect(key).not.toContain('secret-token');
     expect(key).toMatch(/^password_reset:[a-f0-9]{64}$/);
+    await prisma.$executeRaw`DELETE FROM "RateLimitCounter" WHERE "key" = ${key}`;
+  });
+
+  it('peeks without consuming, then atomically consumes only when requested', async () => {
+    const peekIdentity = `login-peek-${crypto.randomUUID()}`;
+    const key = rateLimitStorageKey('login', peekIdentity);
+    const policy = { policy: 'login' as const, identity: peekIdentity, limit: 1, windowSeconds: 60, now };
+    const before = await peekRateLimit(policy);
+    const beforeRows = await prisma.$queryRaw<Array<{ count: number }>>`
+      SELECT "count" FROM "RateLimitCounter"
+      WHERE "key" = ${key} AND "windowStart" = ${new Date('2026-10-02T10:00:00.000Z')}
+    `;
+    expect(before.allowed).toBe(true);
+    expect(beforeRows).toHaveLength(0);
+
+    const consumed = await consumeRateLimit(policy);
+    const afterRows = await prisma.$queryRaw<Array<{ count: number }>>`
+      SELECT "count" FROM "RateLimitCounter"
+      WHERE "key" = ${key} AND "windowStart" = ${new Date('2026-10-02T10:00:00.000Z')}
+    `;
+    expect(consumed.allowed).toBe(true);
+    expect(afterRows[0]?.count).toBe(1);
     await prisma.$executeRaw`DELETE FROM "RateLimitCounter" WHERE "key" = ${key}`;
   });
 });

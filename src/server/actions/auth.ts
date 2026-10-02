@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto';
 import { createHash, randomBytes } from 'crypto';
 import { sendTransactionalEmail } from '@/lib/email';
 import { getRequestContext, parseAllowedIps } from '@/lib/security/request';
-import { checkRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
+import { checkRateLimit, consumeRateLimit, peekRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
 
 const RESET_TTL_MS = 3 * 60 * 1000;
 const RESET_GENERIC_MESSAGE = 'If an account exists for this email address, a password reset link will be sent.';
@@ -168,10 +168,17 @@ export async function loginAction(formData: { email: string; password: string })
     const request = getRequestContext();
     const policy = RATE_LIMIT_POLICY_CONFIG.login;
     const [ipLimit, accountLimit] = await Promise.all([
-      checkRateLimit({ policy: 'login', identity: `login-ip:${request.ipAddress}`, ...policy }),
-      checkRateLimit({ policy: 'login', identity: `login-account:${normalizedEmail}`, ...policy }),
+      peekRateLimit({ policy: 'login', identity: `login-ip:${request.ipAddress}`, ...policy }),
+      peekRateLimit({ policy: 'login', identity: `login-account:${normalizedEmail}`, ...policy }),
     ]);
     if (!ipLimit.allowed || !accountLimit.allowed) return { success: false, error: 'Invalid email or password' };
+
+    const consumeFailedLogin = async () => {
+      await Promise.all([
+        consumeRateLimit({ policy: 'login', identity: `login-ip:${request.ipAddress}`, ...policy }),
+        consumeRateLimit({ policy: 'login', identity: `login-account:${normalizedEmail}`, ...policy }),
+      ]);
+    };
 
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -189,12 +196,14 @@ export async function loginAction(formData: { email: string; password: string })
     });
 
     if (!user || !user.isActive) {
+      await consumeFailedLogin();
       await AuditService.logAudit({ action: 'AUTH_LOGIN_FAILED', entityType: 'User', metadata: { email: validated.email }, ipAddress: request.ipAddress, userAgent: request.userAgent });
       return { success: false, error: 'Invalid email or password' };
     }
 
     const isValid = await verifyPassword(validated.password, user.passwordHash);
     if (!isValid) {
+      await consumeFailedLogin();
       await AuditService.logAudit({ actorId: user.id, action: 'AUTH_LOGIN_FAILED', entityType: 'User', entityId: user.id, metadata: { reason: 'invalid_password' }, ipAddress: request.ipAddress, userAgent: request.userAgent });
       return { success: false, error: 'Invalid email or password' };
     }

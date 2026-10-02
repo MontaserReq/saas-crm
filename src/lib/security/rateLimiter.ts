@@ -82,7 +82,56 @@ async function cleanupExpiredCounters(): Promise<void> {
   `;
 }
 
-export async function checkRateLimit(input: RateLimitCheckInput): Promise<RateLimitResult> {
+/**
+ * Reads the current fixed-window counter without creating or incrementing it.
+ * This is used for pre-authentication gates where a successful operation must
+ * not consume an abuse counter.
+ */
+export async function peekRateLimit(input: RateLimitCheckInput): Promise<RateLimitResult> {
+  validateInput(input);
+  const failureMode = input.failureMode ?? 'closed';
+  const now = input.now ?? new Date();
+  const windowMs = input.windowSeconds * 1000;
+  const windowStart = new Date(Math.floor(now.getTime() / windowMs) * windowMs);
+  const resetAt = new Date(windowStart.getTime() + windowMs);
+  const key = rateLimitStorageKey(input.policy, input.identity);
+
+  if (++cleanupCounter % CLEANUP_EVERY === 0) {
+    void cleanupExpiredCounters().catch(() => undefined);
+  }
+
+  try {
+    const rows = await prisma.$queryRaw<Array<{ count: number }>>`
+      SELECT "count"
+      FROM "RateLimitCounter"
+      WHERE "key" = ${key} AND "windowStart" = ${windowStart}
+      LIMIT 1
+    `;
+    const count = Number(rows[0]?.count ?? 0);
+    const allowed = count < input.limit;
+    const retryAfterSeconds = Math.max(1, Math.ceil((resetAt.getTime() - now.getTime()) / 1000));
+    return {
+      status: allowed ? 'allowed' : 'blocked',
+      allowed,
+      limit: input.limit,
+      remaining: Math.max(0, input.limit - count),
+      resetAt,
+      retryAfterSeconds: allowed ? 0 : retryAfterSeconds,
+    };
+  } catch {
+    return {
+      status: 'unavailable',
+      allowed: failureMode === 'open',
+      limit: input.limit,
+      remaining: null,
+      resetAt,
+      retryAfterSeconds: null,
+    };
+  }
+}
+
+/** Atomically consumes one request in the current fixed window. */
+export async function consumeRateLimit(input: RateLimitCheckInput): Promise<RateLimitResult> {
   validateInput(input);
   const failureMode = input.failureMode ?? 'closed';
   const now = input.now ?? new Date();
@@ -128,6 +177,11 @@ export async function checkRateLimit(input: RateLimitCheckInput): Promise<RateLi
     };
   }
 }
+
+// Backwards-compatible consuming API used by the existing wired operations.
+// Login uses peekRateLimit() before authentication and consumeRateLimit() only
+// after authentication fails.
+export const checkRateLimit = consumeRateLimit;
 
 export function resetRateLimiterCleanupCounterForTests(): void {
   cleanupCounter = 0;
