@@ -101,8 +101,7 @@ export class SchoolResearchService {
     }
 
     const ownerToken = execution.execution.ownerToken!;
-    await assertOperationOwner(execution.execution.id, ownerToken);
-    await prisma.schoolResearchJob.updateMany({ where: { id: jobId, status: 'PENDING' }, data: { status: 'RUNNING', startedAt: new Date() } });
+    await this.claimResearchJobStartup(jobId, execution.execution.id, ownerToken);
     await AuditService.logAudit({ actorId: job.createdById, action: 'AI_RESEARCH_JOB_STARTED', entityType: 'SchoolResearchJob', entityId: jobId });
 
     const requiredFields: string[] = JSON.parse(job.requiredFields || '[]');
@@ -288,6 +287,26 @@ export class SchoolResearchService {
       });
       await finishOperation(execution.execution.id, ownerToken, 'FAILED', { failureReason: message });
     }
+  }
+
+  /** Atomically claims the pending job while verifying the current operation owner. */
+  static async claimResearchJobStartup(jobId: string, operationId: string, ownerToken: string): Promise<void> {
+    const count = await prisma.$executeRaw`
+      UPDATE "SchoolResearchJob" AS job
+      SET "status" = 'RUNNING', "startedAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      WHERE job."id" = ${jobId}
+        AND job."status" = 'PENDING'
+        AND EXISTS (
+          SELECT 1
+          FROM "OperationExecution" AS operation
+          WHERE operation."id" = ${operationId}
+            AND operation."organizationId" = job."organizationId"
+            AND operation."status" = 'RUNNING'
+            AND operation."ownerToken" = ${ownerToken}
+            AND operation."leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+        )
+    `;
+    if (count !== 1) throw new StaleOperationError();
   }
 
   /** Recover expired execution leases without requiring a user to open a job. */

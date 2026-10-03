@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import prisma from '@/lib/db/prisma';
 import { acquireOperation, assertOperationOwner, finishOperation, recoverExpiredOperations, renewOperation, withOperationOwner } from '@/lib/security/resourceGuard';
+import { SchoolResearchService } from '@/server/services/SchoolResearchService';
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
 
@@ -19,6 +20,7 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
     if (!user?.organizationMemberships[0]) throw new Error('A seeded active organization member is required for resource guard tests');
     userId = user.id;
     organizationId = user.organizationMemberships[0].organizationId;
+    await prisma.operationExecution.deleteMany({ where: { operationType: { in: ['SCHOOL_IMPORT', 'AI_RESEARCH', 'PROPOSAL_GENERATION', 'AI_ASSISTANT'] } } });
   });
 
   afterAll(async () => {
@@ -158,6 +160,46 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
       }));
       expect(await prisma.schoolResearchCandidate.count({ where: { researchJobId: job.id } })).toBe(1);
       await finishOperation(ownerB.execution!.id, ownerB.execution!.ownerToken!, 'SUCCEEDED');
+    } finally {
+      await prisma.schoolResearchJob.delete({ where: { id: job.id } });
+    }
+  });
+
+  it('rejects stale research startup and allows the recovered owner to claim the pending job', async () => {
+    const job = await prisma.schoolResearchJob.create({
+      data: { organizationId, createdById: userId, location: 'Startup fencing', requestedCount: 1, requiredFields: '[]' },
+    });
+    try {
+      const ownerA = await acquireOperation({ organizationId, userId, operationType: 'AI_RESEARCH', idempotencyKey: job.id, limits: { global: 10, organization: 10, user: 10, leaseMs: 20 } });
+      expect(ownerA.acquired).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const ownerB = await acquireOperation({ organizationId, userId, operationType: 'AI_RESEARCH', idempotencyKey: job.id, limits: { global: 10, organization: 10, user: 10, leaseMs: 60_000 } });
+      expect(ownerB.acquired).toBe(true);
+
+      await expect(SchoolResearchService.claimResearchJobStartup(job.id, ownerA.execution!.id, ownerA.execution!.ownerToken!)).rejects.toThrow('no longer owned');
+      expect((await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('PENDING');
+      await SchoolResearchService.claimResearchJobStartup(job.id, ownerB.execution!.id, ownerB.execution!.ownerToken!);
+      expect((await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('RUNNING');
+      await finishOperation(ownerB.execution!.id, ownerB.execution!.ownerToken!, 'SUCCEEDED');
+    } finally {
+      await prisma.schoolResearchJob.delete({ where: { id: job.id } });
+    }
+  });
+
+  it('allows only one valid owner to claim a pending research job', async () => {
+    const job = await prisma.schoolResearchJob.create({
+      data: { organizationId, createdById: userId, location: 'Concurrent startup', requestedCount: 1, requiredFields: '[]' },
+    });
+    try {
+      const owner = await acquireOperation({ organizationId, userId, operationType: 'AI_RESEARCH', idempotencyKey: job.id, limits: { global: 10, organization: 10, user: 10, leaseMs: 60_000 } });
+      expect(owner.acquired).toBe(true);
+      const results = await Promise.allSettled([
+        SchoolResearchService.claimResearchJobStartup(job.id, owner.execution!.id, owner.execution!.ownerToken!),
+        SchoolResearchService.claimResearchJobStartup(job.id, owner.execution!.id, owner.execution!.ownerToken!),
+      ]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect((await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('RUNNING');
+      await finishOperation(owner.execution!.id, owner.execution!.ownerToken!, 'SUCCEEDED');
     } finally {
       await prisma.schoolResearchJob.delete({ where: { id: job.id } });
     }
