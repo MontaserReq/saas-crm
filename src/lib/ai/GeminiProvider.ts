@@ -2,6 +2,7 @@ import { AiExtractionError, AiNotConfiguredError, AiProvider, SchoolExtractionIn
 import { AiResearchConfig } from './config';
 import { buildExtractionPrompt, parseExtractionResponseText } from './shared';
 import { OnAttemptCallback, ResearchUsage, sanitizeErrorMessage } from './usage';
+import { ResearchBudgetExceededError } from '@/lib/security/resourceGuard';
 
 // Re-exported for backward compatibility — some tests import extractJsonPayload from this file directly.
 export { extractJsonPayload } from './shared';
@@ -33,6 +34,7 @@ export class GeminiProvider implements AiProvider {
 
     let response: Response;
     try {
+      await input.beforeRequest?.(false);
       response = await fetch(
         `${GEMINI_API_BASE}/${encodeURIComponent(this.config.geminiModel)}:generateContent?key=${encodeURIComponent(this.config.geminiApiKey)}`,
         {
@@ -51,7 +53,7 @@ export class GeminiProvider implements AiProvider {
       const completedAt = new Date();
       const isTimeout = controller.signal.aborted;
 
-      this.emitUsage({
+      await this.emitUsage({
         attemptNumber: attemptNum,
         status: 'FAILED',
         durationMs,
@@ -87,7 +89,7 @@ export class GeminiProvider implements AiProvider {
         // ignore
       }
 
-      this.emitUsage({
+      await this.emitUsage({
         attemptNumber: attemptNum,
         status: response.status === 429 ? 'RATE_LIMITED' : 'FAILED',
         durationMs,
@@ -112,7 +114,7 @@ export class GeminiProvider implements AiProvider {
     try {
       payload = await response.json();
     } catch (err) {
-      this.emitUsage({
+      await this.emitUsage({
         attemptNumber: attemptNum,
         status: 'FAILED',
         durationMs,
@@ -150,7 +152,7 @@ export class GeminiProvider implements AiProvider {
     try {
       const result = parseExtractionResponseText(text);
 
-      this.emitUsage({
+      await this.emitUsage({
         attemptNumber: attemptNum,
         status: 'SUCCESS',
         durationMs,
@@ -170,7 +172,7 @@ export class GeminiProvider implements AiProvider {
 
       return result;
     } catch (err) {
-      this.emitUsage({
+      await this.emitUsage({
         attemptNumber: attemptNum,
         status: 'FAILED',
         durationMs,
@@ -192,15 +194,16 @@ export class GeminiProvider implements AiProvider {
   }
 
   /** Emits a usage record to the onAttempt callback (if installed). Never throws. */
-  private emitUsage(fields: Omit<ResearchUsage, 'provider' | 'model'>): void {
+  private async emitUsage(fields: Omit<ResearchUsage, 'provider' | 'model'>): Promise<void> {
     if (!this.onAttempt) return;
     try {
-      this.onAttempt({
+      await this.onAttempt({
         provider: 'gemini',
         model: this.config.geminiModel,
         ...fields,
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ResearchBudgetExceededError) throw error;
       // Usage callback errors must never surface to research logic
     }
   }

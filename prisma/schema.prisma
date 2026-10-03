@@ -1519,6 +1519,18 @@ model OperationExecution {
   ownerToken     String?
   resultPayload  String?
   failureReason  String?
+  researchMaxProviderRequests Int?
+  researchMaxSourceRequests Int?
+  researchMaxSourceRequestsPerSchool Int?
+  researchMaxRetries Int?
+  researchMaxTokens Int?
+  researchMaxDurationMs Int?
+  researchProviderRequests Int @default(0)
+  researchSourceRequests Int @default(0)
+  researchRetryAttempts Int @default(0)
+  researchInputTokens Int @default(0)
+  researchOutputTokens Int @default(0)
+  researchTotalTokens Int @default(0)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

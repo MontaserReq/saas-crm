@@ -11,7 +11,7 @@ import { computeConfidence, determineInitialCandidateStatus } from '@/lib/ai-sch
 import { isLikelyDuplicate } from '@/lib/ai-school-research/duplicate';
 import { isValidJobTransition, ResearchJobStatus } from '@/lib/ai-school-research/stateMachine';
 import { requireOrganizationId, requireOrganizationIdForUserId, requireOrganizationIdValue } from '@/lib/auth/organization';
-import { acquireOperation, assertResearchJobOwner, finishOperation, RESOURCE_LIMITS, StaleOperationError, withResearchJobOwner } from '@/lib/security/resourceGuard';
+import { acquireOperation, assertResearchJobOwner, consumeResearchBudget, finishOperation, RESOURCE_LIMITS, ResearchBudgetExceededError, StaleOperationError, withResearchJobOwner } from '@/lib/security/resourceGuard';
 
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_EXTRACTION_ROUNDS = 3;
@@ -81,12 +81,21 @@ export class SchoolResearchService {
     if (!job || !isValidJobTransition(job.status as ResearchJobStatus, 'RUNNING')) return;
 
     const organizationId = requireOrganizationIdValue(job.organizationId);
+    const config = getAiResearchConfig();
     const execution = await acquireOperation({
       organizationId,
       userId: job.createdById,
       operationType: 'AI_RESEARCH',
       idempotencyKey: job.id,
       limits: RESOURCE_LIMITS.AI_RESEARCH,
+      researchBudget: {
+        maxProviderRequests: config.maxProviderRequests ?? 24,
+        maxSourceRequests: Math.min(config.maxSourceRequests ?? 60, job.requestedCount * config.maxSourceRequestsPerSchool),
+        maxSourceRequestsPerSchool: config.maxSourceRequestsPerSchool,
+        maxRetries: config.maxRetries ?? 8,
+        maxTokens: config.maxTokens ?? 100_000,
+        maxDurationMs: config.maxDurationMs ?? 15 * 60 * 1000,
+      },
     });
     if (!execution.acquired || !execution.execution) {
       if (execution.reason !== 'BUSY') return;
@@ -106,11 +115,16 @@ export class SchoolResearchService {
 
     const requiredFields: string[] = JSON.parse(job.requiredFields || '[]');
 
-    // Usage tracking: install the onAttempt callback.
-    // Each callback invocation is fire-and-forget: a DB logging failure must
-    // never cause a successful research result to be discarded.
-    const onAttempt = (usage: ResearchUsage) => {
-      void withResearchJobOwner(jobId, execution.execution!.id, ownerToken, (tx) => tx.schoolResearchAttempt.create({
+    // Usage tracking is awaited so durable consumption is complete before the
+    // provider can begin another attempt or the operation can finish.
+    const onAttempt = async (usage: ResearchUsage) => {
+      await consumeResearchBudget(jobId, execution.execution!.id, ownerToken, {
+        sourceRequests: usage.webSearches,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+      });
+      await withResearchJobOwner(jobId, execution.execution!.id, ownerToken, (tx) => tx.schoolResearchAttempt.create({
           data: {
             jobId,
             provider: usage.provider,
@@ -131,12 +145,7 @@ export class SchoolResearchService {
             errorCode: usage.errorCode ?? null,
             errorMessage: usage.errorMessage ?? null,
           },
-        }))
-        .catch((err) => {
-          if (!(err instanceof StaleOperationError)) {
-            console.warn(`[SchoolResearchService] usage tracking write failed for job ${jobId}:`, err?.message ?? err);
-          }
-        });
+        }));
     };
 
     const provider = getAiProvider(onAttempt);
@@ -154,6 +163,7 @@ export class SchoolResearchService {
             requestedCount: job.requestedCount - collected.length,
             requiredFields,
             excludeNames: collected.map((item) => item.name),
+            beforeRequest: async (isRetry = false) => { await consumeResearchBudget(jobId, execution.execution!.id, ownerToken, { providerRequests: 1, retryAttempts: isRetry ? 1 : 0 }); },
           });
           await assertResearchJobOwner(jobId, execution.execution.id, ownerToken);
           aiCallCount++;
@@ -263,7 +273,9 @@ export class SchoolResearchService {
       await finishOperation(execution.execution.id, ownerToken, 'SUCCEEDED', { resultPayload: JSON.stringify({ candidateCount: createdInThisJob.length }) });
     } catch (err: any) {
       if (err instanceof StaleOperationError) return;
-      const message = err instanceof AiNotConfiguredError
+      const message = err instanceof ResearchBudgetExceededError
+        ? 'Research budget exhausted. Please start a new research job with a smaller scope.'
+        : err instanceof AiNotConfiguredError
         ? err.message
         : err instanceof AiExtractionError
           ? `AI extraction failed: ${err.message}`

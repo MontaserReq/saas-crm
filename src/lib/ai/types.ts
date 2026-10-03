@@ -14,6 +14,7 @@ export interface SchoolExtractionInput {
   requiredFields: string[];
   /** Names already collected in this job, to reduce duplicate search hits. */
   excludeNames?: string[];
+  beforeRequest?: (isRetry?: boolean) => Promise<void>;
 }
 
 export const schoolExtractionEvidenceSchema = z.object({

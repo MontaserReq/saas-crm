@@ -15,6 +15,11 @@ export interface AiResearchConfig {
   groqBatchSize: number;
   maxSchoolsPerJob: number;
   maxSourceRequestsPerSchool: number;
+  maxProviderRequests?: number;
+  maxSourceRequests?: number;
+  maxRetries?: number;
+  maxTokens?: number;
+  maxDurationMs?: number;
 }
 
 export function getAiResearchConfig(): AiResearchConfig {
@@ -40,5 +45,10 @@ export function getAiResearchConfig(): AiResearchConfig {
     groqBatchSize: parsePositiveInt(process.env.GROQ_BATCH_SIZE, 5),
     maxSchoolsPerJob: parsePositiveInt(process.env.AI_RESEARCH_MAX_SCHOOLS, 100),
     maxSourceRequestsPerSchool: parsePositiveInt(process.env.AI_RESEARCH_MAX_SOURCE_REQUESTS_PER_SCHOOL, 3),
+    maxProviderRequests: parsePositiveInt(process.env.AI_RESEARCH_MAX_PROVIDER_REQUESTS, 24),
+    maxSourceRequests: parsePositiveInt(process.env.AI_RESEARCH_MAX_SOURCE_REQUESTS, 60),
+    maxRetries: parsePositiveInt(process.env.AI_RESEARCH_MAX_RETRIES, 8),
+    maxTokens: parsePositiveInt(process.env.AI_RESEARCH_MAX_TOKENS, 100_000),
+    maxDurationMs: parsePositiveInt(process.env.AI_RESEARCH_MAX_DURATION_MS, 15 * 60 * 1000),
   };
 }

@@ -12,6 +12,24 @@ export interface ResourceLimits {
   leaseMs: number;
 }
 
+export interface ResearchBudgetLimits {
+  maxProviderRequests: number;
+  maxSourceRequests: number;
+  maxSourceRequestsPerSchool: number;
+  maxRetries: number;
+  maxTokens: number;
+  maxDurationMs: number;
+}
+
+export interface ResearchBudgetConsumption {
+  providerRequests?: number;
+  sourceRequests?: number;
+  retryAttempts?: number;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+}
+
 const positiveInt = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -50,6 +68,7 @@ export interface AcquireOperationInput {
   operationType: ResourceOperationType;
   idempotencyKey: string;
   limits?: ResourceLimits;
+  researchBudget?: ResearchBudgetLimits;
 }
 
 export class StaleOperationError extends Error {
@@ -58,6 +77,15 @@ export class StaleOperationError extends Error {
   constructor() {
     super('Operation lease is no longer owned by this executor');
     this.name = 'StaleOperationError';
+  }
+}
+
+export class ResearchBudgetExceededError extends Error {
+  readonly code = 'RESEARCH_BUDGET_EXCEEDED';
+
+  constructor() {
+    super('Research budget has been exhausted');
+    this.name = 'ResearchBudgetExceededError';
   }
 }
 
@@ -193,6 +221,14 @@ export async function acquireOperation(input: AcquireOperationInput) {
           completedAt: null,
           failureReason: null,
           attemptCount: { increment: 1 },
+          ...(input.researchBudget ? {
+            researchMaxProviderRequests: input.researchBudget.maxProviderRequests,
+            researchMaxSourceRequests: input.researchBudget.maxSourceRequests,
+            researchMaxSourceRequestsPerSchool: input.researchBudget.maxSourceRequestsPerSchool,
+            researchMaxRetries: input.researchBudget.maxRetries,
+            researchMaxTokens: input.researchBudget.maxTokens,
+            researchMaxDurationMs: input.researchBudget.maxDurationMs,
+          } : {}),
         },
       });
       if (recovered.count !== 1) return { acquired: false, reason: 'IN_PROGRESS' as const, execution: existing };
@@ -220,10 +256,63 @@ export async function acquireOperation(input: AcquireOperationInput) {
         leaseExpiresAt,
         startedAt: now,
         attemptCount: 1,
+        ...(input.researchBudget ? {
+          researchMaxProviderRequests: input.researchBudget.maxProviderRequests,
+          researchMaxSourceRequests: input.researchBudget.maxSourceRequests,
+          researchMaxSourceRequestsPerSchool: input.researchBudget.maxSourceRequestsPerSchool,
+          researchMaxRetries: input.researchBudget.maxRetries,
+          researchMaxTokens: input.researchBudget.maxTokens,
+          researchMaxDurationMs: input.researchBudget.maxDurationMs,
+        } : {}),
       },
     });
     return { acquired: true, reason: 'ACQUIRED' as const, execution };
   });
+}
+
+/** Atomically consumes durable research budget while retaining operation authority. */
+export async function consumeResearchBudget(
+  jobId: string,
+  operationId: string,
+  ownerToken: string,
+  consumption: ResearchBudgetConsumption,
+) {
+  const providerRequests = consumption.providerRequests ?? 0;
+  const sourceRequests = consumption.sourceRequests ?? 0;
+  const retryAttempts = consumption.retryAttempts ?? 0;
+  const inputTokens = consumption.inputTokens ?? 0;
+  const outputTokens = consumption.outputTokens ?? 0;
+  const totalTokens = consumption.totalTokens ?? 0;
+  const rows = await prisma.$executeRaw`
+    UPDATE "OperationExecution"
+    SET "researchProviderRequests" = "researchProviderRequests" + ${providerRequests},
+        "researchSourceRequests" = "researchSourceRequests" + ${sourceRequests},
+        "researchRetryAttempts" = "researchRetryAttempts" + ${retryAttempts},
+        "researchInputTokens" = "researchInputTokens" + ${inputTokens},
+        "researchOutputTokens" = "researchOutputTokens" + ${outputTokens},
+        "researchTotalTokens" = "researchTotalTokens" + ${totalTokens},
+        "updatedAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+    WHERE "id" = ${operationId}
+      AND "ownerToken" = ${ownerToken}
+      AND "status" = 'RUNNING'
+      AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      AND EXISTS (
+        SELECT 1 FROM "SchoolResearchJob" AS job
+        WHERE job."id" = ${jobId}
+          AND job."currentOperationId" = "OperationExecution"."id"
+          AND job."organizationId" = "OperationExecution"."organizationId"
+      )
+      AND ("researchMaxProviderRequests" IS NULL OR "researchProviderRequests" + ${providerRequests} <= "researchMaxProviderRequests")
+      AND ("researchMaxSourceRequests" IS NULL OR "researchSourceRequests" + ${sourceRequests} <= "researchMaxSourceRequests")
+      AND ("researchMaxRetries" IS NULL OR "researchRetryAttempts" + ${retryAttempts} <= "researchMaxRetries")
+      AND ("researchMaxTokens" IS NULL OR "researchTotalTokens" + ${totalTokens} <= "researchMaxTokens")
+      AND ("researchMaxDurationMs" IS NULL OR "startedAt" IS NULL OR "startedAt" + ("researchMaxDurationMs" * INTERVAL '1 millisecond') > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))
+  `;
+  if (rows !== 1) {
+    await assertResearchJobOwner(jobId, operationId, ownerToken);
+    throw new ResearchBudgetExceededError();
+  }
+  return { count: rows };
 }
 
 export async function renewOperation(id: string, ownerToken: string, leaseMs: number) {

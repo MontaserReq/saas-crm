@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import prisma from '@/lib/db/prisma';
-import { acquireOperation, assertOperationOwner, finishOperation, recoverExpiredOperations, renewOperation, withResearchJobOwner } from '@/lib/security/resourceGuard';
+import { acquireOperation, assertOperationOwner, consumeResearchBudget, finishOperation, recoverExpiredOperations, renewOperation, ResearchBudgetExceededError, withResearchJobOwner } from '@/lib/security/resourceGuard';
 import { SchoolResearchService } from '@/server/services/SchoolResearchService';
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
@@ -73,6 +73,52 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
     const winners = results.filter((result) => result.acquired);
     expect(winners).toHaveLength(2);
     await Promise.all(winners.map((winner) => finishOperation(winner.execution!.id, winner.execution!.ownerToken!, 'SUCCEEDED')));
+  });
+
+  it('atomically consumes a durable research provider budget', async () => {
+    const job = await prisma.schoolResearchJob.create({
+      data: { organizationId, createdById: userId, location: 'Budget concurrency', requestedCount: 1, requiredFields: '[]' },
+    });
+    try {
+      const owner = await acquireOperation({
+        organizationId,
+        userId,
+        operationType: 'AI_RESEARCH',
+        idempotencyKey: job.id,
+        limits: { global: 10, organization: 10, user: 10, leaseMs: 60_000 },
+        researchBudget: { maxProviderRequests: 2, maxSourceRequests: 10, maxSourceRequestsPerSchool: 3, maxRetries: 5, maxTokens: 1000, maxDurationMs: 60_000 },
+      });
+      await SchoolResearchService.claimResearchJobStartup(job.id, owner.execution!.id, owner.execution!.ownerToken!);
+      const results = await Promise.allSettled(Array.from({ length: 3 }, () => consumeResearchBudget(job.id, owner.execution!.id, owner.execution!.ownerToken!, { providerRequests: 1 })));
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2);
+      expect(results.filter((result) => result.status === 'rejected' && result.reason instanceof ResearchBudgetExceededError)).toHaveLength(1);
+      const row = await prisma.operationExecution.findUniqueOrThrow({ where: { id: owner.execution!.id } });
+      expect(row.researchProviderRequests).toBe(2);
+    } finally {
+      await prisma.schoolResearchJob.delete({ where: { id: job.id } });
+    }
+  });
+
+  it('preserves remaining budget across takeover and fences the stale owner', async () => {
+    const job = await prisma.schoolResearchJob.create({
+      data: { organizationId, createdById: userId, location: 'Budget takeover', requestedCount: 1, requiredFields: '[]' },
+    });
+    try {
+      const ownerA = await acquireOperation({ organizationId, userId, operationType: 'AI_RESEARCH', idempotencyKey: job.id, limits: { global: 10, organization: 10, user: 10, leaseMs: 100 }, researchBudget: { maxProviderRequests: 3, maxSourceRequests: 10, maxSourceRequestsPerSchool: 3, maxRetries: 5, maxTokens: 1000, maxDurationMs: 60_000 } });
+      await SchoolResearchService.claimResearchJobStartup(job.id, ownerA.execution!.id, ownerA.execution!.ownerToken!);
+      await consumeResearchBudget(job.id, ownerA.execution!.id, ownerA.execution!.ownerToken!, { providerRequests: 1 });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await SchoolResearchService.recoverStaleExecutions();
+      const ownerB = await acquireOperation({ organizationId, userId, operationType: 'AI_RESEARCH', idempotencyKey: job.id, limits: { global: 10, organization: 10, user: 10, leaseMs: 60_000 }, researchBudget: { maxProviderRequests: 3, maxSourceRequests: 10, maxSourceRequestsPerSchool: 3, maxRetries: 5, maxTokens: 1000, maxDurationMs: 60_000 } });
+      await SchoolResearchService.claimResearchJobStartup(job.id, ownerB.execution!.id, ownerB.execution!.ownerToken!);
+      await expect(consumeResearchBudget(job.id, ownerA.execution!.id, ownerA.execution!.ownerToken!, { providerRequests: 1 })).rejects.toThrow('no longer owned');
+      await consumeResearchBudget(job.id, ownerB.execution!.id, ownerB.execution!.ownerToken!, { providerRequests: 1 });
+      const row = await prisma.operationExecution.findUniqueOrThrow({ where: { id: ownerB.execution!.id } });
+      expect(row.researchProviderRequests).toBe(2);
+      await finishOperation(ownerB.execution!.id, ownerB.execution!.ownerToken!, 'SUCCEEDED');
+    } finally {
+      await prisma.schoolResearchJob.delete({ where: { id: job.id } });
+    }
   });
 
   it('enforces organization and user limits independently under concurrent acquisition', async () => {

@@ -87,7 +87,7 @@ export interface ResearchUsage {
  * The callback MUST be non-throwing — any error it raises is the caller's
  * responsibility to catch.
  */
-export type OnAttemptCallback = (usage: ResearchUsage) => void;
+export type OnAttemptCallback = (usage: ResearchUsage) => unknown | Promise<unknown>;
 
 /**
  * Job-level aggregation of all ResearchAttempt records.

@@ -10,6 +10,7 @@ import {
 import { AiResearchConfig } from './config';
 import { buildCompactRetryInstruction, buildExtractionPrompt, parseExtractionResponseText } from './shared';
 import { OnAttemptCallback, ResearchUsage, sanitizeErrorMessage } from './usage';
+import { ResearchBudgetExceededError } from '@/lib/security/resourceGuard';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const REQUEST_TIMEOUT_MS = 45_000;
@@ -171,7 +172,7 @@ export class GroqProvider implements AiProvider {
 
       let callResult: GroqCallResult;
       try {
-        callResult = await this.callGroq(prompt);
+        callResult = await this.callGroq(prompt, input.beforeRequest ? (rateRetry) => input.beforeRequest!(attempt > 1 || Boolean(rateRetry)) : undefined);
       } catch (err) {
         // callGroq itself emits usage for HTTP-level failures (429, other errors).
         // Re-throw so extractBatch/extractSchools handles it normally.
@@ -188,7 +189,7 @@ export class GroqProvider implements AiProvider {
       if (!usedWebSearch(message)) {
         this.logIssue({ reason: 'no-web-search', attempt, finishReason });
         // Emit a FAILED usage record — no web search means we refuse the result
-        this.emitUsage({
+        await this.emitUsage({
           attemptNumber: attemptNum,
           status: 'FAILED',
           durationMs,
@@ -223,7 +224,7 @@ export class GroqProvider implements AiProvider {
       // compact-instruction prompt rather than wasting a parse attempt on it.
       if (contentLength === 0 && hasMoreAttempts) {
         this.logIssue({ reason: 'empty-response', attempt, finishReason });
-        this.emitUsage({
+        await this.emitUsage({
           attemptNumber: attemptNum,
           status: 'FAILED',
           durationMs,
@@ -246,7 +247,7 @@ export class GroqProvider implements AiProvider {
       try {
         const result = parseExtractionResponseText(content);
         // Success — emit usage
-        this.emitUsage({
+        await this.emitUsage({
           attemptNumber: attemptNum,
           status: 'SUCCESS',
           durationMs,
@@ -276,7 +277,7 @@ export class GroqProvider implements AiProvider {
           parseErrorName: err instanceof Error ? err.name : typeof err,
         });
 
-        this.emitUsage({
+        await this.emitUsage({
           attemptNumber: attemptNum,
           status: 'FAILED',
           durationMs,
@@ -315,10 +316,11 @@ export class GroqProvider implements AiProvider {
    * Usage records for HTTP-level failures (429, other errors) are emitted
    * here because callGroq has direct access to HTTP status codes.
    */
-  private async callGroq(prompt: string): Promise<GroqCallResult> {
+  private async callGroq(prompt: string, beforeRequest?: (isRetry?: boolean) => Promise<void>): Promise<GroqCallResult> {
     for (let attempt = 1; attempt <= MAX_RATE_LIMIT_ATTEMPTS; attempt++) {
       const startedAt = new Date();
       const t0 = performance.now();
+      await beforeRequest?.(attempt > 1);
       const response = await this.sendRequest(prompt);
       const durationMs = Math.round(performance.now() - t0);
       const completedAt = new Date();
@@ -332,7 +334,7 @@ export class GroqProvider implements AiProvider {
         }
 
         const attemptNum = ++this.attemptNumber;
-        this.emitUsage({
+        await this.emitUsage({
           attemptNumber: attemptNum,
           status: 'RATE_LIMITED',
           durationMs,
@@ -374,7 +376,7 @@ export class GroqProvider implements AiProvider {
         this.logIssue({ reason: 'http-error', status: response.status });
 
         const attemptNum = ++this.attemptNumber;
-        this.emitUsage({
+        await this.emitUsage({
           attemptNumber: attemptNum,
           status: 'FAILED',
           durationMs,
@@ -450,15 +452,16 @@ export class GroqProvider implements AiProvider {
   }
 
   /** Emits a usage record to the onAttempt callback (if installed). Never throws. */
-  private emitUsage(fields: Omit<ResearchUsage, 'provider' | 'model'>): void {
+  private async emitUsage(fields: Omit<ResearchUsage, 'provider' | 'model'>): Promise<void> {
     if (!this.onAttempt) return;
     try {
-      this.onAttempt({
+      await this.onAttempt({
         provider: 'groq',
         model: this.config.groqModel,
         ...fields,
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ResearchBudgetExceededError) throw error;
       // Usage callback errors must never surface to research logic
     }
   }
