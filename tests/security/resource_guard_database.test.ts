@@ -186,21 +186,63 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
     }
   });
 
-  it('allows only one valid owner to claim a pending research job', async () => {
+  it('allows exactly one of two distinct concurrent executors to claim a pending research job', async () => {
     const job = await prisma.schoolResearchJob.create({
       data: { organizationId, createdById: userId, location: 'Concurrent startup', requestedCount: 1, requiredFields: '[]' },
     });
+    const executorA = { operationId: '', ownerToken: crypto.randomUUID() };
+    const executorB = { operationId: '', ownerToken: crypto.randomUUID() };
     try {
-      const owner = await acquireOperation({ organizationId, userId, operationType: 'AI_RESEARCH', idempotencyKey: job.id, limits: { global: 10, organization: 10, user: 10, leaseMs: 60_000 } });
-      expect(owner.acquired).toBe(true);
+      const [operationA, operationB] = await Promise.all([
+        prisma.operationExecution.create({
+          data: {
+            organizationId,
+            userId,
+            operationType: 'AI_RESEARCH',
+            idempotencyKey: `${job.id}-executor-a`,
+            status: 'RUNNING',
+            ownerToken: executorA.ownerToken,
+            leaseExpiresAt: new Date(Date.now() + 60_000),
+            startedAt: new Date(),
+            attemptCount: 1,
+          },
+        }),
+        prisma.operationExecution.create({
+          data: {
+            organizationId,
+            userId,
+            operationType: 'AI_RESEARCH',
+            idempotencyKey: `${job.id}-executor-b`,
+            status: 'RUNNING',
+            ownerToken: executorB.ownerToken,
+            leaseExpiresAt: new Date(Date.now() + 60_000),
+            startedAt: new Date(),
+            attemptCount: 1,
+          },
+        }),
+      ]);
+      executorA.operationId = operationA.id;
+      executorB.operationId = operationB.id;
+
       const results = await Promise.allSettled([
-        SchoolResearchService.claimResearchJobStartup(job.id, owner.execution!.id, owner.execution!.ownerToken!),
-        SchoolResearchService.claimResearchJobStartup(job.id, owner.execution!.id, owner.execution!.ownerToken!),
+        SchoolResearchService.claimResearchJobStartup(job.id, executorA.operationId, executorA.ownerToken),
+        SchoolResearchService.claimResearchJobStartup(job.id, executorB.operationId, executorB.ownerToken),
       ]);
       expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-      expect((await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('RUNNING');
-      await finishOperation(owner.execution!.id, owner.execution!.ownerToken!, 'SUCCEEDED');
+      expect(results.filter((result) => result.status === 'rejected').every((result) => String((result as PromiseRejectedResult).reason).includes('no longer owned'))).toBe(true);
+
+      const runningJob = await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } });
+      expect(runningJob.status).toBe('RUNNING');
+      const operations = await prisma.operationExecution.findMany({ where: { id: { in: [executorA.operationId, executorB.operationId] } } });
+      const winningOperationId = results[0].status === 'fulfilled' ? executorA.operationId : executorB.operationId;
+      const winner = operations.find((operation) => operation.id === winningOperationId);
+      expect(winner).toBeDefined();
+      expect(winner!.status).toBe('RUNNING');
+      expect(winner!.ownerToken).toBe(winner!.id === executorA.operationId ? executorA.ownerToken : executorB.ownerToken);
+      expect(operations).toHaveLength(2);
+      await finishOperation(winner!.id, winner!.ownerToken!, 'SUCCEEDED');
     } finally {
+      await prisma.operationExecution.deleteMany({ where: { id: { in: [executorA.operationId, executorB.operationId] } } });
       await prisma.schoolResearchJob.delete({ where: { id: job.id } });
     }
   });
