@@ -314,7 +314,7 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
     const fixture = await createTakeoverFixture();
     try {
       await expect(withResearchJobOwner(fixture.job.id, fixture.ownerA.execution!.id, fixture.ownerA.execution!.ownerToken!, (tx) => tx.schoolResearchAttempt.create({
-        data: { jobId: fixture.job.id, provider: 'stale-provider', model: 'stale-model', attemptNumber: 1, status: 'FAILED' },
+        data: { jobId: fixture.job.id, provider: 'stale-provider', model: 'stale-model', attemptNumber: 1, status: 'FAILED', durationMs: 1_000, startedAt: new Date(Date.now() - 1_000), completedAt: new Date() },
       }))).rejects.toThrow('no longer owned');
       expect(await prisma.schoolResearchAttempt.count({ where: { jobId: fixture.job.id } })).toBe(0);
     } finally {
@@ -326,7 +326,7 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
     const fixture = await createTakeoverFixture();
     try {
       await expect(withResearchJobOwner(fixture.job.id, fixture.ownerA.execution!.id, fixture.ownerA.execution!.ownerToken!, (tx) => tx.schoolResearchAttempt.create({
-        data: { jobId: fixture.job.id, provider: 'stale-provider-result', model: 'stale-model', attemptNumber: 1, status: 'SUCCEEDED', inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        data: { jobId: fixture.job.id, provider: 'stale-provider-result', model: 'stale-model', attemptNumber: 1, status: 'SUCCEEDED', durationMs: 1_000, startedAt: new Date(Date.now() - 1_000), completedAt: new Date(), inputTokens: 1, outputTokens: 1, totalTokens: 2 },
       }))).rejects.toThrow('no longer owned');
       expect(await prisma.schoolResearchAttempt.count({ where: { jobId: fixture.job.id } })).toBe(0);
     } finally {
