@@ -28,6 +28,27 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
     await prisma.$disconnect();
   });
 
+  const createTakeoverFixture = async () => {
+    const job = await prisma.schoolResearchJob.create({
+      data: { organizationId, createdById: userId, location: 'Stale mutation coverage', requestedCount: 1, requiredFields: '[]' },
+    });
+    const ownerA = await acquireOperation({ organizationId, userId, operationType: 'AI_RESEARCH', idempotencyKey: job.id, limits: { global: 10, organization: 10, user: 10, leaseMs: 20 } });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const ownerB = await acquireOperation({ organizationId, userId, operationType: 'AI_RESEARCH', idempotencyKey: job.id, limits: { global: 10, organization: 10, user: 10, leaseMs: 60_000 } });
+    expect(ownerA.acquired).toBe(true);
+    expect(ownerB.acquired).toBe(true);
+    await SchoolResearchService.claimResearchJobStartup(job.id, ownerB.execution!.id, ownerB.execution!.ownerToken!);
+    const authoritative = await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } });
+    expect(authoritative.currentOperationId).toBe(ownerB.execution!.id);
+    return { job, ownerA, ownerB };
+  };
+
+  const cleanupTakeoverFixture = async (fixture: Awaited<ReturnType<typeof createTakeoverFixture>>) => {
+    await finishOperation(fixture.ownerB.execution!.id, fixture.ownerB.execution!.ownerToken!, 'SUCCEEDED');
+    await prisma.operationExecution.delete({ where: { id: fixture.ownerB.execution!.id } });
+    await prisma.schoolResearchJob.delete({ where: { id: fixture.job.id } });
+  };
+
   it('allows only one concurrent operation for a one-slot user/org budget', async () => {
     const results = await Promise.all(Array.from({ length: 3 }, (_, i) => acquireOperation({
       organizationId,
@@ -255,6 +276,105 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
     } finally {
       await prisma.operationExecution.deleteMany({ where: { id: { in: [executorA.operationId, executorB.operationId] } } });
       await prisma.schoolResearchJob.delete({ where: { id: job.id } });
+    }
+  });
+
+  it('rejects an operation from another organization during research startup', async () => {
+    const job = await prisma.schoolResearchJob.create({
+      data: { organizationId, createdById: userId, location: 'Tenant authority', requestedCount: 1, requiredFields: '[]' },
+    });
+    const organizationB = await prisma.organization.findFirst({ where: { id: { not: organizationId } }, select: { id: true } });
+    if (!organizationB) throw new Error('A second organization is required for tenant authority coverage');
+    const operationB = await prisma.operationExecution.create({
+      data: {
+        organizationId: organizationB.id,
+        userId,
+        operationType: 'AI_RESEARCH',
+        idempotencyKey: `${prefix}-tenant-b-${job.id}`,
+        status: 'RUNNING',
+        ownerToken: crypto.randomUUID(),
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+        startedAt: new Date(),
+        attemptCount: 1,
+      },
+    });
+    try {
+      await expect(SchoolResearchService.claimResearchJobStartup(job.id, operationB.id, operationB.ownerToken!)).rejects.toThrow('no longer owned');
+      const persistedJob = await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } });
+      const persistedOperation = await prisma.operationExecution.findUniqueOrThrow({ where: { id: operationB.id } });
+      expect(persistedJob.currentOperationId).toBeNull();
+      expect(persistedOperation.status).toBe('CANCELLED');
+    } finally {
+      await prisma.operationExecution.delete({ where: { id: operationB.id } });
+      await prisma.schoolResearchJob.delete({ where: { id: job.id } });
+    }
+  });
+
+  it('rejects stale attempt persistence after takeover', async () => {
+    const fixture = await createTakeoverFixture();
+    try {
+      await expect(withResearchJobOwner(fixture.job.id, fixture.ownerA.execution!.id, fixture.ownerA.execution!.ownerToken!, (tx) => tx.schoolResearchAttempt.create({
+        data: { jobId: fixture.job.id, provider: 'stale-provider', model: 'stale-model', attemptNumber: 1, status: 'FAILED' },
+      }))).rejects.toThrow('no longer owned');
+      expect(await prisma.schoolResearchAttempt.count({ where: { jobId: fixture.job.id } })).toBe(0);
+    } finally {
+      await cleanupTakeoverFixture(fixture);
+    }
+  });
+
+  it('rejects stale provider-result persistence after takeover', async () => {
+    const fixture = await createTakeoverFixture();
+    try {
+      await expect(withResearchJobOwner(fixture.job.id, fixture.ownerA.execution!.id, fixture.ownerA.execution!.ownerToken!, (tx) => tx.schoolResearchAttempt.create({
+        data: { jobId: fixture.job.id, provider: 'stale-provider-result', model: 'stale-model', attemptNumber: 1, status: 'SUCCEEDED', inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      }))).rejects.toThrow('no longer owned');
+      expect(await prisma.schoolResearchAttempt.count({ where: { jobId: fixture.job.id } })).toBe(0);
+    } finally {
+      await cleanupTakeoverFixture(fixture);
+    }
+  });
+
+  it('rejects stale progress mutation after takeover', async () => {
+    const fixture = await createTakeoverFixture();
+    try {
+      await expect(withResearchJobOwner(fixture.job.id, fixture.ownerA.execution!.id, fixture.ownerA.execution!.ownerToken!, (tx) => tx.schoolResearchJob.update({
+        where: { id: fixture.job.id }, data: { aiCallCount: 99, sourceCount: 99 },
+      }))).rejects.toThrow('no longer owned');
+      const persistedJob = await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: fixture.job.id } });
+      expect(persistedJob.aiCallCount).toBe(0);
+      expect(persistedJob.sourceCount).toBe(0);
+      expect(persistedJob.currentOperationId).toBe(fixture.ownerB.execution!.id);
+    } finally {
+      await cleanupTakeoverFixture(fixture);
+    }
+  });
+
+  it('rejects stale completion after takeover', async () => {
+    const fixture = await createTakeoverFixture();
+    try {
+      await expect(withResearchJobOwner(fixture.job.id, fixture.ownerA.execution!.id, fixture.ownerA.execution!.ownerToken!, (tx) => tx.schoolResearchJob.update({
+        where: { id: fixture.job.id }, data: { status: 'COMPLETED', completedAt: new Date() },
+      }))).rejects.toThrow('no longer owned');
+      const persistedJob = await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: fixture.job.id } });
+      expect(persistedJob.status).toBe('RUNNING');
+      expect(persistedJob.currentOperationId).toBe(fixture.ownerB.execution!.id);
+    } finally {
+      await cleanupTakeoverFixture(fixture);
+    }
+  });
+
+  it('rejects stale failure after takeover', async () => {
+    const fixture = await createTakeoverFixture();
+    try {
+      await expect(withResearchJobOwner(fixture.job.id, fixture.ownerA.execution!.id, fixture.ownerA.execution!.ownerToken!, (tx) => tx.schoolResearchJob.update({
+        where: { id: fixture.job.id }, data: { status: 'FAILED', completedAt: new Date(), error: 'stale failure' },
+      }))).rejects.toThrow('no longer owned');
+      const persistedJob = await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: fixture.job.id } });
+      expect(persistedJob.status).toBe('RUNNING');
+      expect(persistedJob.error).toBeNull();
+      expect(persistedJob.currentOperationId).toBe(fixture.ownerB.execution!.id);
+    } finally {
+      await cleanupTakeoverFixture(fixture);
     }
   });
 
