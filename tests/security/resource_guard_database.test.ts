@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import prisma from '@/lib/db/prisma';
-import { acquireOperation, assertOperationOwner, finishOperation, recoverExpiredOperations, renewOperation, withOperationOwner } from '@/lib/security/resourceGuard';
+import { acquireOperation, assertOperationOwner, finishOperation, recoverExpiredOperations, renewOperation, withResearchJobOwner } from '@/lib/security/resourceGuard';
 import { SchoolResearchService } from '@/server/services/SchoolResearchService';
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
@@ -150,12 +150,14 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
       expect(ownerA.acquired).toBe(true);
       expect(ownerB.acquired).toBe(true);
 
-      await expect(withOperationOwner(ownerA.execution!.id, ownerA.execution!.ownerToken!, (tx) => tx.schoolResearchCandidate.create({
+      await SchoolResearchService.claimResearchJobStartup(job.id, ownerB.execution!.id, ownerB.execution!.ownerToken!);
+
+      await expect(withResearchJobOwner(job.id, ownerA.execution!.id, ownerA.execution!.ownerToken!, (tx) => tx.schoolResearchCandidate.create({
         data: { researchJobId: job.id, name: 'Stale result', normalizedName: 'stale-result' },
       }))).rejects.toThrow('no longer owned');
       expect(await prisma.schoolResearchCandidate.count({ where: { researchJobId: job.id } })).toBe(0);
 
-      await withOperationOwner(ownerB.execution!.id, ownerB.execution!.ownerToken!, (tx) => tx.schoolResearchCandidate.create({
+      await withResearchJobOwner(job.id, ownerB.execution!.id, ownerB.execution!.ownerToken!, (tx) => tx.schoolResearchCandidate.create({
         data: { researchJobId: job.id, name: 'Authoritative result', normalizedName: 'authoritative-result' },
       }));
       expect(await prisma.schoolResearchCandidate.count({ where: { researchJobId: job.id } })).toBe(1);
@@ -179,7 +181,9 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
       await expect(SchoolResearchService.claimResearchJobStartup(job.id, ownerA.execution!.id, ownerA.execution!.ownerToken!)).rejects.toThrow('no longer owned');
       expect((await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('PENDING');
       await SchoolResearchService.claimResearchJobStartup(job.id, ownerB.execution!.id, ownerB.execution!.ownerToken!);
-      expect((await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('RUNNING');
+      const recoveredJob = await prisma.schoolResearchJob.findUniqueOrThrow({ where: { id: job.id } });
+      expect(recoveredJob.status).toBe('RUNNING');
+      expect(recoveredJob.currentOperationId).toBe(ownerB.execution!.id);
       await finishOperation(ownerB.execution!.id, ownerB.execution!.ownerToken!, 'SUCCEEDED');
     } finally {
       await prisma.schoolResearchJob.delete({ where: { id: job.id } });
@@ -235,11 +239,18 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
       expect(runningJob.status).toBe('RUNNING');
       const operations = await prisma.operationExecution.findMany({ where: { id: { in: [executorA.operationId, executorB.operationId] } } });
       const winningOperationId = results[0].status === 'fulfilled' ? executorA.operationId : executorB.operationId;
+      expect(runningJob.currentOperationId).toBe(winningOperationId);
       const winner = operations.find((operation) => operation.id === winningOperationId);
       expect(winner).toBeDefined();
       expect(winner!.status).toBe('RUNNING');
       expect(winner!.ownerToken).toBe(winner!.id === executorA.operationId ? executorA.ownerToken : executorB.ownerToken);
       expect(operations).toHaveLength(2);
+      const losingOperationId = winningOperationId === executorA.operationId ? executorB.operationId : executorA.operationId;
+      const loser = operations.find((operation) => operation.id === losingOperationId)!;
+      expect(loser.status).toBe('CANCELLED');
+      await expect(withResearchJobOwner(job.id, loser.id, loser.ownerToken || 'stale-owner', (tx) => tx.schoolResearchCandidate.create({
+        data: { researchJobId: job.id, name: 'Losing result', normalizedName: 'losing-result' },
+      }))).rejects.toThrow('no longer owned');
       await finishOperation(winner!.id, winner!.ownerToken!, 'SUCCEEDED');
     } finally {
       await prisma.operationExecution.deleteMany({ where: { id: { in: [executorA.operationId, executorB.operationId] } } });

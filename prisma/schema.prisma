@@ -728,12 +728,15 @@ model SchoolResearchJob {
   startedAt   DateTime?
   completedAt DateTime?
   createdAt   DateTime  @default(now())
+  currentOperationId String?
+  currentOperation   OperationExecution? @relation("ResearchJobCurrentOperation", fields: [currentOperationId], references: [id], onDelete: SetNull)
 
   candidates SchoolResearchCandidate[]
   attempts   SchoolResearchAttempt[]
 
   @@index([createdById, createdAt])
   @@index([status])
+  @@unique([currentOperationId])
 }
 
 model SchoolResearchCandidate {
@@ -1518,6 +1521,8 @@ model OperationExecution {
   failureReason  String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+
+  authoritativeResearchJob SchoolResearchJob? @relation("ResearchJobCurrentOperation")
 
   @@unique([organizationId, operationType, idempotencyKey])
   @@index([operationType, status, leaseExpiresAt])

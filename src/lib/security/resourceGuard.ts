@@ -79,6 +79,21 @@ export async function assertOperationOwner(id: string, ownerToken: string): Prom
   if (rows.length !== 1) throw new StaleOperationError();
 }
 
+export async function assertResearchJobOwner(jobId: string, operationId: string, ownerToken: string): Promise<void> {
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT job."id"
+    FROM "SchoolResearchJob" AS job
+    JOIN "OperationExecution" AS operation ON operation."id" = job."currentOperationId"
+    WHERE job."id" = ${jobId}
+      AND job."currentOperationId" = ${operationId}
+      AND operation."ownerToken" = ${ownerToken}
+      AND operation."status" = 'RUNNING'
+      AND operation."leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+    LIMIT 1
+  `;
+  if (rows.length !== 1) throw new StaleOperationError();
+}
+
 /**
  * Runs one authoritative mutation while fencing the operation row. The row
  * lock makes recovery/takeover serialize with the ownership check and the
@@ -99,6 +114,29 @@ export async function withOperationOwner<T>(
         AND "status" = 'RUNNING'
         AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
       FOR UPDATE
+    `;
+    if (rows.length !== 1) throw new StaleOperationError();
+    return mutation(tx);
+  });
+}
+
+export async function withResearchJobOwner<T>(
+  jobId: string,
+  operationId: string,
+  ownerToken: string,
+  mutation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT job."id"
+      FROM "SchoolResearchJob" AS job
+      JOIN "OperationExecution" AS operation ON operation."id" = job."currentOperationId"
+      WHERE job."id" = ${jobId}
+        AND job."currentOperationId" = ${operationId}
+        AND operation."ownerToken" = ${ownerToken}
+        AND operation."status" = 'RUNNING'
+        AND operation."leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      FOR UPDATE OF job, operation
     `;
     if (rows.length !== 1) throw new StaleOperationError();
     return mutation(tx);
