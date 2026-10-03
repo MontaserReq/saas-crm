@@ -63,6 +63,8 @@ async function clearDatabase() {
   await prisma.todo.deleteMany();
   await prisma.passwordResetToken.deleteMany();
   await prisma.loginSession.deleteMany();
+  await prisma.proposal.deleteMany();
+  await prisma.proposalTemplate.deleteMany();
   await prisma.departmentManager.deleteMany();
   await prisma.userPermission.deleteMany();
   await prisma.user.deleteMany();
@@ -104,6 +106,19 @@ async function main() {
     const user = await prisma.user.create({ data: { name: data.name, email: data.email.toLowerCase(), passwordHash, roleId: roles.get(data.role)!, departmentId: departments.get(data.department)! } });
     users.set(user.email, user.id);
   }
+  const organization = await prisma.organization.upsert({
+    where: { slug: 'codeline-local' },
+    update: { name: 'CodeLine Local', isActive: true },
+    create: { name: 'CodeLine Local', slug: 'codeline-local' },
+  });
+  await prisma.organizationMember.createMany({
+    data: usersData.map((data) => ({
+      organizationId: organization.id,
+      userId: users.get(data.email.toLowerCase())!,
+      roleId: roles.get(data.role)!,
+      status: 'ACTIVE',
+    })),
+  });
   for (const email of ['hamzaalnajjar382@gmail.com', 'zujsara@gmail.com']) for (const code of ['schools.view', 'schools.create', 'schools.import']) await prisma.userPermission.create({ data: { userId: users.get(email)!, permissionId: permissions.get(code)! } });
   console.log('Clean account/RBAC seed completed', { users: await prisma.user.count(), roles: await prisma.role.count(), permissions: await prisma.permission.count(), departments: await prisma.department.count(), taskTypes: await prisma.taskType.count(), schools: await prisma.school.count(), tickets: await prisma.ticket.count(), todos: await prisma.todo.count(), notifications: await prisma.notification.count() });
 }
