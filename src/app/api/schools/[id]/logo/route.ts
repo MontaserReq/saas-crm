@@ -5,6 +5,7 @@ import prisma from '@/lib/db/prisma';
 import { getStorageProvider } from '@/lib/storage';
 import { ProposalService } from '@/server/services/ProposalService';
 import { rejectUntrustedMutation } from '@/lib/security/web';
+import { parseBoundedMultipart, uploadErrorResponse, UPLOAD_LIMITS } from '@/lib/security/multipart';
 
 export async function GET(
   request: NextRequest,
@@ -71,28 +72,27 @@ export async function POST(
     }
     if (!user.organizationId) return NextResponse.json({ success: false, error: 'Organization context required' }, { status: 403 });
 
-    const formData = await request.formData();
-    const file = formData.get('logo') as File | null;
-    const proposalId = (formData.get('proposalId') as string) || undefined;
+    const parts = await parseBoundedMultipart(request, UPLOAD_LIMITS.logo);
+    const filePart = parts.find((part) => part.name === 'logo' && part.filename !== undefined);
+    const proposalId = parts.find((part) => part.name === 'proposalId' && part.filename === undefined)?.data.toString('utf8') || undefined;
 
-    if (!file) {
+    if (!filePart) {
       return NextResponse.json({ success: false, error: 'No logo file provided' }, { status: 400 });
     }
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
 
     const result = await ProposalService.uploadSchoolLogo(
       user,
       params.id,
-      buffer,
-      file.name,
-      file.type || 'image/png',
+      filePart.data,
+      filePart.filename || 'logo',
+      filePart.contentType || 'image/png',
       proposalId
     );
 
     return NextResponse.json({ success: true, ...result });
   } catch (err: any) {
+    const resourceError = uploadErrorResponse(err);
+    if (resourceError) return resourceError;
     console.error('School logo upload error:', err);
     return NextResponse.json({ success: false, error: 'Unable to upload logo' }, { status: 500 });
   }

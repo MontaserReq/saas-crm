@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import { ProposalTemplateService } from '@/server/services/ProposalTemplateService';
 import { rejectUntrustedMutation } from '@/lib/security/web';
+import { parseBoundedMultipart, uploadErrorResponse, UPLOAD_LIMITS } from '@/lib/security/multipart';
 
 export async function GET(
   request: NextRequest,
@@ -39,12 +40,13 @@ export async function PUT(
     let updateInput: any = {};
 
     if (contentType.includes('multipart/form-data')) {
-      const formData = await request.formData();
-      const name = formData.get('name') as string | null;
-      const description = formData.get('description') as string | null;
-      const isActiveRaw = formData.get('isActive') as string | null;
-      const configRaw = formData.get('config') as string | null;
-      const file = formData.get('file') as File | null;
+      const parts = await parseBoundedMultipart(request, UPLOAD_LIMITS.template);
+      const field = (name: string) => parts.find((part) => part.name === name && part.filename === undefined)?.data.toString('utf8');
+      const filePart = parts.find((part) => part.name === 'file' && part.filename !== undefined);
+      const name = field('name') ?? null;
+      const description = field('description') ?? null;
+      const isActiveRaw = field('isActive') ?? null;
+      const configRaw = field('config') ?? null;
 
       if (name !== null) updateInput.name = name;
       if (description !== null) updateInput.description = description;
@@ -56,10 +58,9 @@ export async function PUT(
         } catch {}
       }
 
-      if (file && file.size > 0) {
-        const bytes = await file.arrayBuffer();
-        updateInput.pdfBuffer = Buffer.from(bytes);
-        updateInput.originalFileName = file.name;
+      if (filePart && filePart.data.length > 0) {
+        updateInput.pdfBuffer = filePart.data;
+        updateInput.originalFileName = filePart.filename;
       }
     } else {
       const body = await request.json();
@@ -69,6 +70,8 @@ export async function PUT(
     const updated = await ProposalTemplateService.updateTemplate(user, params.id, updateInput);
     return NextResponse.json({ success: true, template: updated });
   } catch (err: any) {
+    const resourceError = uploadErrorResponse(err);
+    if (resourceError) return resourceError;
     console.error('Template update error:', err);
     return NextResponse.json(
       { success: false, error: 'Unable to update template' },

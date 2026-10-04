@@ -5,6 +5,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { SchoolService } from '@/server/services/SchoolService';
 import { requireOrganizationId } from '@/lib/auth/organization';
 import { rejectUntrustedMutation } from '@/lib/security/web';
+import { parseBoundedMultipart, uploadErrorResponse, UPLOAD_LIMITS } from '@/lib/security/multipart';
 
 export const runtime = 'nodejs';
 
@@ -31,17 +32,17 @@ export async function POST(request: Request) {
     if (!user) return errorResponse('Unauthorized', 401);
     if (!hasPermission(user, PERMISSIONS.SCHOOLS_IMPORT)) return errorResponse('Forbidden: Insufficient permissions to import schools', 403);
 
-    const formData = await request.formData();
-    const file = formData.get('file');
-    if (!(file instanceof File)) return errorResponse('Please select an Excel file');
-    if (file.size === 0) return errorResponse('Please select an Excel file');
-    if (file.size > MAX_FILE_SIZE) return errorResponse('The maximum allowed file size is 10 MB');
+    const parts = await parseBoundedMultipart(request, UPLOAD_LIMITS.import);
+    const filePart = parts.find((part) => part.name === 'file' && part.filename !== undefined);
+    if (!filePart) return errorResponse('Please select an Excel file');
+    if (filePart.data.length === 0) return errorResponse('Please select an Excel file');
+    if (filePart.data.length > MAX_FILE_SIZE) return errorResponse('The maximum allowed file size is 10 MB');
 
-    const extension = file.name.split('.').pop()?.toLowerCase();
+    const extension = filePart.filename?.split('.').pop()?.toLowerCase();
     if (!extension || !['xlsx', 'xls', 'csv'].includes(extension)) return errorResponse('Unsupported file type. Use .xlsx, .xls, or .csv.');
-    if (file.type && !allowedMimeTypes.has(file.type)) return errorResponse('Unsupported file content type.');
+    if (filePart.contentType && filePart.contentType !== 'application/octet-stream' && !allowedMimeTypes.has(filePart.contentType)) return errorResponse('Unsupported file content type.');
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const buffer = filePart.data;
     if (extension === 'xlsx' && (buffer.length < 4 || buffer.subarray(0, 2).toString() !== 'PK')) return errorResponse('Invalid XLSX file signature');
     if (extension === 'xls' && (buffer.length < 8 || buffer.readUInt32LE(0) !== 0xE011CFD0)) return errorResponse('Invalid XLS file signature');
 
@@ -63,8 +64,10 @@ export async function POST(request: Request) {
       .filter((row) => Array.isArray(row) && row.some((value) => value !== '' && value !== null && value !== undefined))
       .map((row) => Object.fromEntries(headers.map((header, index) => [header, Array.isArray(row) ? row[index] ?? '' : ''])));
     const preview = await SchoolService.validateImportRows(rows, requireOrganizationId(user));
-    return NextResponse.json({ success: true, fileName: file.name, ...preview });
+    return NextResponse.json({ success: true, fileName: filePart.filename, ...preview });
   } catch (error) {
+    const resourceError = uploadErrorResponse(error);
+    if (resourceError) return resourceError;
     console.error('School import preview error:', error);
     return errorResponse('Unable to validate the import file.');
   }
