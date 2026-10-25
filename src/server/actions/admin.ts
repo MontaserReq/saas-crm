@@ -12,7 +12,7 @@ import { AuditService } from "@/server/services/AuditService";
 import { requireOrganizationId } from "@/lib/auth/organization";
 import { revalidatePath } from "next/cache";
 import { OperationApprovalService } from "@/server/services/OperationApprovalService";
-import { filterPermissionsForPlan } from "@/lib/platform/entitlements";
+import { filterPermissionsForPlan, isCompanyAssignablePermissionCode } from "@/lib/platform/entitlements";
 
 // ==========================================
 // ADMIN PASSWORD CONFIRMATION (Server-Side)
@@ -749,10 +749,15 @@ async function validateRolePermissionIds(
   // effective permission set and plan.
   if (!isPlatformSuperAdmin(actor)) {
     const allowedCodes = actor.role === "SUPER_ADMIN"
-      ? permissions.map((permission) => permission.code)
+      ? filterPermissionsForPlan(
+        permissions
+          .filter((permission) => isCompanyAssignablePermissionCode(permission.code))
+          .map((permission) => permission.code),
+        actor.planFeatures ?? null,
+      )
       : actor.permissions;
     const allowed = new Set(allowedCodes);
-    const forbidden = permissions.find((permission) => !allowed.has(permission.code));
+    const forbidden = permissions.find((permission) => !isCompanyAssignablePermissionCode(permission.code) || !allowed.has(permission.code));
     if (forbidden) {
       throw new Error("Permission is not available on the current plan");
     }

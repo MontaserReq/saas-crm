@@ -165,6 +165,19 @@ const permissionFeature: Array<[string, PlanFeatureId]> = [
   ['attachments.', 'tickets'], ['communications.', 'tickets'],
 ];
 const baselinePermissionPrefixes = ['organization_settings.', 'notifications.'];
+
+/**
+ * Permission records are shared by a few legacy storage names. The tenant
+ * UI still exposes those records as customers, contacts and leads, while the
+ * school-only activity/analytics records and the not-yet-released assistant
+ * stay out of the company RBAC matrix.
+ */
+export function isCompanyAssignablePermissionCode(permissionCode: string): boolean {
+  return !permissionCode.startsWith('ai_assistant.')
+    && permissionCode !== 'activity.view_school'
+    && permissionCode !== 'analytics.view_schools';
+}
+
 export function filterPermissionsForPlan(permissions: readonly string[], features: readonly string[] | null): string[] {
   const allowed = new Set(features ?? ['dashboard']);
   return permissions.filter(permission => {

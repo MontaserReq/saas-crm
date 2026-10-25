@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createRoleAction, deleteRoleAction, updateRoleAction, updateRolePermissionsAction } from "@/server/actions/admin";
 import { useI18n } from "@/lib/i18n/context";
 import { getPermissionLabel, getPermissionModuleLabel } from "@/lib/i18n/permissionLabels";
+import { isCompanyAssignablePermissionCode } from "@/lib/platform/entitlements";
 
 interface RolesClientViewProps {
   roles: any[];
@@ -38,11 +39,11 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
-  // School-era records are legacy implementation details, and the AI
-  // assistant is intentionally hidden for now. Every operational tenant
-  // capability remains available in the matrix, including todos, messages,
-  // and team chat.
-  const visiblePermissions = useMemo(() => permissions.filter((permission) => permission.module !== "schools" && permission.module !== "ai_assistant" && permission.code !== "activity.view_school" && permission.code !== "analytics.view_schools"), [permissions]);
+  // The database still uses the legacy `schools.*` permission codes for the
+  // customer, contact, lead, import and assignment screens. They are shown
+  // here under their customer-facing labels. Only the unreleased assistant
+  // and school-specific analytics/activity records stay hidden.
+  const visiblePermissions = useMemo(() => permissions.filter((permission) => isCompanyAssignablePermissionCode(permission.code)), [permissions]);
   const modules = useMemo(() => Array.from(new Set(visiblePermissions.map((permission) => permission.module))), [visiblePermissions]);
   const currentRole = roles.find((role) => role.id === selectedRole);
   const currentPerms = rolePermissionsMap[selectedRole] || [];

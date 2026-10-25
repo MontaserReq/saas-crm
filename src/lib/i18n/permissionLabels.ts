@@ -5,7 +5,7 @@ const ARABIC_MODULES: Record<string, string> = {
   roles: "الأدوار",
   departments: "الأقسام",
   task_types: "أنواع المهام",
-  schools: "العملاء",
+  schools: "العملاء وجهات الاتصال والعملاء المحتملون",
   approval_requests: "طلبات الموافقة",
   tickets: "التذاكر",
   attachments: "المرفقات",
@@ -108,6 +108,7 @@ export function getPermissionModuleLabel(
   language: Language,
 ): string {
   if (language === "ar") return ARABIC_MODULES[module] ?? "صلاحيات النظام";
+  if (module === "schools") return "Customers, contacts & leads";
   return module.replaceAll("_", " ");
 }
 
