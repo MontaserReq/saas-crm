@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowUpRight, Check, FileSliders, GitBranch, ListTodo, Search, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
+import { ArrowUpRight, Check, FileSliders, GitBranch, ListTodo, Search, ShieldCheck, UsersRound } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 import { MarketingShell, FinalCta, MarketingFaq } from './MarketingShell';
 import { PricingSection } from './PricingSection';
@@ -45,7 +45,7 @@ export default function LandingPage({ plans }: { plans: PlanConfig[] }) {
       <div><span className={s.sectionLabel}>{t.dataLabel}</span><h2 id="data-title">{t.dataTitle}</h2><p className={s.bodyLead}>{t.dataLead}</p><p className={s.finePrint}>{t.importNote}</p><a className={s.textLink} href="#faq">{t.importLink}<ArrowUpRight aria-hidden="true" /></a></div>
     </section>
     <section className={s.capabilities} aria-label={t.moreLabel}><div className={`${s.container} ${s.capabilityGrid}`}>
-      {t.capabilities.map(([title, text], i) => { const Icon = [GitBranch, Sparkles, ShieldCheck][i]; return <article key={title}><Icon aria-hidden="true" /><h3>{title}</h3><p>{text}</p>{i === 1 && <blockquote className={s.aiExample}><span>{language === 'ar' ? 'مثال على سؤال للمساعد' : 'An example question'}</span>{language === 'ar' ? '«ما التذاكر المفتوحة المسندة إليّ؟»' : '“Which of my tickets are still open?”'}</blockquote>}</article>; })}
+      {t.capabilities.map(([title, text], i) => { const Icon = [GitBranch, ShieldCheck][i]; return <article key={title}><Icon aria-hidden="true" /><h3>{title}</h3><p>{text}</p></article>; })}
     </div></section>
     <section id="workflow" className={`${s.container} ${s.section}`} aria-labelledby="workflow-title">
       <div className={s.sectionHeading}><h2 id="workflow-title">{t.stepsTitle}</h2><p>{t.stepsLead}</p></div>

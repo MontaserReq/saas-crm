@@ -101,6 +101,7 @@
 .sectionHeading { display: grid; grid-template-columns: 1fr .75fr; gap: 60px; align-items: end; margin-bottom: 42px; }
 .sectionHeading > p { color: var(--muted); line-height: 1.85; }
 .benefits, .capabilityGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; }
+.capabilityGrid { grid-template-columns: repeat(2, 1fr); }
 .benefits article { border-inline-start: 1px solid var(--line); padding-inline-start: 24px; }
 .benefits svg, .capabilityGrid svg { color: var(--purple); width: 26px; height: 26px; margin-bottom: 22px; }
 .benefits h3, .capabilityGrid h3 { margin-bottom: 12px; }
@@ -192,6 +193,11 @@
 .tableScroll tbody tr:last-child :is(th,td) { border-bottom: 0; }
 .tableIncluded { display: inline-flex; gap: 5px; align-items: center; font-size: 11px; color: var(--muted); }
 .tableIncluded svg { width: 13px; color: var(--purple); }
+.comparisonValue, .comparisonUnavailable { display: inline-flex; gap: 5px; align-items: center; justify-content: center; font-size: 11px; line-height: 1.5; }
+.comparisonValue { color: var(--ink); font-weight: 600; }
+.comparisonValue svg { width: 13px; color: #148d79; }
+.comparisonUnavailable { color: var(--muted); }
+.comparisonUnavailable svg { width: 13px; }
 .trust { display: grid; grid-template-columns: .9fr 1fr; gap: 100px; }
 .trustList { display: grid; gap: 25px; }
 .trustList article { display: flex; gap: 14px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
