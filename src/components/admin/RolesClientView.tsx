@@ -54,6 +54,28 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
     else setRolePermissionsMap((previous) => ({ ...previous, [selectedRole]: updated }));
   };
 
+  const setModulePermissions = (module: string, target: "current" | "new", selectAll: boolean) => {
+    const modulePermissions = visiblePermissions.filter((permission) => permission.module === module);
+    const moduleIds = new Set(modulePermissions.map((permission) => permission.id));
+    const selected = target === "new" ? newRolePermissionIds : currentPerms;
+    const availableModuleIds = modulePermissions
+      .filter((permission) => availablePermissionSet.has(permission.code))
+      .map((permission) => permission.id);
+    const preservedUnavailableIds = modulePermissions
+      .filter((permission) => !availablePermissionSet.has(permission.code) && selected.includes(permission.id))
+      .map((permission) => permission.id);
+    const updated = selectAll
+      ? Array.from(new Set([
+          ...selected.filter((permissionId) => !moduleIds.has(permissionId)),
+          ...availableModuleIds,
+          ...preservedUnavailableIds,
+        ]))
+      : selected.filter((permissionId) => !moduleIds.has(permissionId));
+
+    if (target === "new") setNewRolePermissionIds(updated);
+    else setRolePermissionsMap((previous) => ({ ...previous, [selectedRole]: updated }));
+  };
+
   const renderPermissionGroups = (target: "current" | "new") => {
     const selected = target === "new" ? newRolePermissionIds : currentPerms;
     const disabled = target === "current" && (!canEdit || currentRoleIsSystem);
@@ -63,7 +85,27 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
           const modulePermissions = visiblePermissions.filter((permission) => permission.module === module);
           return (
             <div key={module} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
-              <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">{t("admin.roles.moduleLabel")}: {getPermissionModuleLabel(module, language)}</h4>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">{t("admin.roles.moduleLabel")}: {getPermissionModuleLabel(module, language)}</h4>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setModulePermissions(module, target, true)}
+                    className="rounded-lg border border-brand-200 px-2.5 py-1.5 text-[11px] font-bold text-brand-700 transition-colors hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isArabic ? "تحديد الجميع" : "Select all"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setModulePermissions(module, target, false)}
+                    className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    {isArabic ? "إلغاء الجميع" : "Clear all"}
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {modulePermissions.map((permission) => {
                   const checked = selected.includes(permission.id);
