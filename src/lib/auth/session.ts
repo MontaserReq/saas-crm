@@ -6,6 +6,7 @@ import prisma from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
 import { getAuthSecret } from '@/lib/auth/config';
 import { applyFeatureOverrides, filterPermissionsForPlan, resolveSubscriptionAccess } from '@/lib/platform/entitlements';
+import { ALL_PERMISSION_CODES } from '@/lib/permissions';
 
 const COOKIE_NAME = 'codeline_session';
 function secretKey() { return new TextEncoder().encode(getAuthSecret()); }
@@ -158,7 +159,12 @@ export async function getCurrentUser(): Promise<UserSession | null> {
     access.features,
     activeOrganization.organization.settings?.featureOverrides,
   );
-  const permissions = isPlatformAdmin ? rolePermissions : filterPermissionsForPlan(rolePermissions, planFeatures);
+  // Company Super Admin is the tenant RBAC authority. Keep the complete role
+  // permission set in the session; hasPermission() applies the intentional AI
+  // assistant product switch and read-only subscription boundary centrally.
+  const permissions = isPlatformAdmin || activeRole.name === 'SUPER_ADMIN'
+    ? Array.from(new Set([...rolePermissions, ...ALL_PERMISSION_CODES]))
+    : filterPermissionsForPlan(rolePermissions, planFeatures);
 
   return {
     id: dbUser.id,

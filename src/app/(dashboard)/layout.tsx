@@ -146,7 +146,7 @@ export default async function DashboardLayout({
               />}
               <PlanRouteGuard
                 features={user.planFeatures ?? null}
-                bypassPlanGuard={user.isPlatformAdmin}
+                bypassPlanGuard={user.isPlatformAdmin || user.role === "SUPER_ADMIN"}
               >
                 {children}
               </PlanRouteGuard>

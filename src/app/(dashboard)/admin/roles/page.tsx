@@ -27,19 +27,36 @@ export default async function AdminRolesPage() {
     prisma.permission.findMany({ orderBy: [{ module: 'asc' }, { name: 'asc' }] }),
   ]);
 
+  const tenantVisiblePermissions = permissions.filter(
+    (permission) => permission.module !== 'schools'
+      && permission.module !== 'ai_assistant'
+      && permission.code !== 'activity.view_school'
+      && permission.code !== 'analytics.view_schools',
+  );
+  const companySuperAdmin = user.role === 'SUPER_ADMIN' && !isPlatformSuperAdmin(user);
+  const rolesForView = roles.map((role) => role.name === 'SUPER_ADMIN'
+    ? {
+        ...role,
+        // The system role is immutable, but the matrix must accurately show
+        // its effective full tenant authority even if an older database has a
+        // partial RolePermission snapshot.
+        rolePermissions: tenantVisiblePermissions.map((permission) => ({ permissionId: permission.id })),
+      }
+    : role);
+
   const canCreate = hasPermission(user, PERMISSIONS.ROLES_CREATE);
   const canEdit = hasPermission(user, PERMISSIONS.ROLES_UPDATE);
   const canDelete = hasPermission(user, PERMISSIONS.ROLES_DELETE);
-  const availablePermissionCodes = isPlatformSuperAdmin(user)
-    ? permissions.map((permission) => permission.code)
+  const availablePermissionCodes = isPlatformSuperAdmin(user) || companySuperAdmin
+    ? tenantVisiblePermissions.map((permission) => permission.code)
     : filterPermissionsForPlan(
-        permissions.map((permission) => permission.code),
+        tenantVisiblePermissions.map((permission) => permission.code),
         user.planFeatures ?? null,
       );
 
   return (
     <RolesClientView
-      roles={roles}
+      roles={rolesForView}
       permissions={permissions}
       canCreate={canCreate}
       canEdit={canEdit}

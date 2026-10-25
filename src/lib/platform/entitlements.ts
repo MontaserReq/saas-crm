@@ -190,6 +190,9 @@ export function isRouteIncluded(pathname: string, features: readonly string[] | 
   return !feature || (features ?? ['dashboard']).includes(feature);
 }
 export function hasPlanFeature(user: { planFeatures?: readonly string[] | null }, feature: PlanFeatureId) {
+  // A Company Super Admin must be able to operate and administer every tenant
+  // module. The AI assistant is intentionally excluded until product launch.
+  if ('role' in user && user.role === 'SUPER_ADMIN') return feature !== 'ai_assistant';
   return (user.planFeatures ?? ['dashboard']).includes(feature);
 }
 

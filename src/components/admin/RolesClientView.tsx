@@ -38,7 +38,11 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
-  const visiblePermissions = useMemo(() => permissions.filter((permission) => permission.module !== "schools" && permission.code !== "activity.view_school" && permission.code !== "analytics.view_schools"), [permissions]);
+  // School-era records are legacy implementation details, and the AI
+  // assistant is intentionally hidden for now. Every operational tenant
+  // capability remains available in the matrix, including todos, messages,
+  // and team chat.
+  const visiblePermissions = useMemo(() => permissions.filter((permission) => permission.module !== "schools" && permission.module !== "ai_assistant" && permission.code !== "activity.view_school" && permission.code !== "analytics.view_schools"), [permissions]);
   const modules = useMemo(() => Array.from(new Set(visiblePermissions.map((permission) => permission.module))), [visiblePermissions]);
   const currentRole = roles.find((role) => role.id === selectedRole);
   const currentPerms = rolePermissionsMap[selectedRole] || [];

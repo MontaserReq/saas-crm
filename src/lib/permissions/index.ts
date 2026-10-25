@@ -2,7 +2,6 @@ import { UserSession, RoleName, TicketStatus } from '@/types';
 import prisma from '@/lib/db/prisma';
 import { requireOrganizationId as requireTenantOrganizationId } from '@/lib/auth/organization';
 import { isPlatformSuperAdmin } from '@/lib/security/platform';
-import { filterPermissionsForPlan } from '@/lib/platform/entitlements';
 
 export const PERMISSIONS = {
   // Users & Roles
@@ -171,17 +170,21 @@ export const PERMISSIONS = {
   WORKFLOW_EXECUTIONS_VIEW: 'workflows.executions.view',
 } as const;
 
+// Keep this list derived from the single permission registry above. It is
+// used by tenant-owner access checks so adding a new permission does not
+// silently leave Company Super Admin without it.
+export const ALL_PERMISSION_CODES = Object.values(PERMISSIONS);
+
 export function hasPermission(user: UserSession | null | undefined, permissionCode: string): boolean {
   if (!user) return false;
   if (isPlatformSuperAdmin(user)) return true;
   if (user.workspaceReadOnly && !isReadOnlyPermission(permissionCode)) return false;
-  // The Company Super Admin owns the tenant workspace. Older role records may
-  // not contain the complete permission catalog, so grant the requested
-  // permission from the plan-aware catalog rather than from stale role rows.
-  // Plan limits still apply: a Scale owner can use every Scale module, while
-  // a lower plan cannot bypass its commercial entitlements.
+  // The Company Super Admin owns the tenant workspace. This is an RBAC
+  // authority role, so it must not depend on an incomplete/stale RolePermission
+  // row or on the current plan's permission subset. The AI assistant remains
+  // deliberately disabled until it is enabled as a product feature.
   if (user.role === 'SUPER_ADMIN') {
-    return filterPermissionsForPlan([permissionCode], user.planFeatures ?? null).includes(permissionCode);
+    return !permissionCode.startsWith('ai_assistant.');
   }
   return user.permissions.includes(permissionCode);
 }

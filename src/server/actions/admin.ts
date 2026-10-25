@@ -744,12 +744,12 @@ async function validateRolePermissionIds(
     throw new Error("One or more permissions are invalid");
   }
 
-  // Company administrators can delegate only permissions they themselves
-  // possess. This prevents a custom role from bypassing plan entitlements or
-  // the administrator's own access boundary.
+  // Company Super Admin is the tenant RBAC authority and may define any
+  // operational custom role. Other company roles remain constrained by their
+  // effective permission set and plan.
   if (!isPlatformSuperAdmin(actor)) {
     const allowedCodes = actor.role === "SUPER_ADMIN"
-      ? filterPermissionsForPlan(permissions.map((permission) => permission.code), actor.planFeatures ?? null)
+      ? permissions.map((permission) => permission.code)
       : actor.permissions;
     const allowed = new Set(allowedCodes);
     const forbidden = permissions.find((permission) => !allowed.has(permission.code));

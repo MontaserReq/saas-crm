@@ -51,6 +51,7 @@ services:
       APP_URL: "${APP_URL:?APP_URL must be set}"
       APP_ORIGIN: "${APP_ORIGIN:?APP_ORIGIN must be set to the public HTTPS origin}"
       TRUST_PROXY: "${TRUST_PROXY:?TRUST_PROXY must be set to single-hop}"
+      GA_MEASUREMENT_ID: "${GA_MEASUREMENT_ID:-}"
 
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}

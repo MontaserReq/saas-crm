@@ -2,6 +2,7 @@ import './globals.css';
 import { ThemeProvider } from 'next-themes';
 import { I18nProvider } from '@/lib/i18n/context';
 import { DialogProvider } from '@/lib/dialog/context';
+import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen bg-background text-foreground dark:bg-slate-950 antialiased">
+        <GoogleAnalytics measurementId={process.env.GA_MEASUREMENT_ID} />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <I18nProvider>
             <DialogProvider>{children}</DialogProvider>

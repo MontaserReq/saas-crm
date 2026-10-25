@@ -101,11 +101,11 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       icon: Share2,
       show: hasPermission(user, PERMISSIONS.SCHOOLS_ASSIGN),
     },
-    { label: t("nav.messages"), href: "/messages", icon: Mail },
+    { label: t("nav.messages"), href: "/messages", icon: Mail, show: hasPermission(user, PERMISSIONS.MESSAGES_VIEW) },
     { label: t("nav.internalMessages"), href: "/chat", icon: MessageCircle, show: hasPermission(user, PERMISSIONS.CHAT_VIEW) },
     { label: language === 'ar' ? 'دعم المنصة' : 'Platform support', href: '/support', icon: LifeBuoy },
     { label: labels.assistant, href: "#assistant", icon: Sparkles, action: "openAssistant", show: hasPlanFeature(user, 'ai_assistant') && hasPermission(user, PERMISSIONS.AI_ASSISTANT_VIEW) },
-    { label: t("nav.myTodo"), href: "/todos", icon: StickyNote },
+    { label: t("nav.myTodo"), href: "/todos", icon: StickyNote, show: hasPermission(user, PERMISSIONS.TODO_VIEW) },
     { label: t("nav.activityChanges"), href: "/activity", icon: Activity, show: hasPermission(user, PERMISSIONS.ACTIVITY_VIEW) },
   ];
 
@@ -202,8 +202,8 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
     { label: labels.globalSettings, href: "/admin/platform/settings", icon: Settings },
   ];
 
-  const planAllows = (href: string) => isRouteIncluded(href.split('?')[0], user.planFeatures ?? null);
   const isCompanySuperAdmin = user.role === 'SUPER_ADMIN' && !isPlatformSuperAdmin(user);
+  const planAllows = (href: string) => isCompanySuperAdmin || isRouteIncluded(href.split('?')[0], user.planFeatures ?? null);
   const filteredMainNav = isPlatformSuperAdmin(user)
     ? superAdminNav
     : mainNav.filter((item) => item.show !== false && planAllows(item.href) && (isCompanySuperAdmin || visibleSetupNavigation(item.href, enabledModules)));
