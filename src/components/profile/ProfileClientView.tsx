@@ -1,10 +1,19 @@
-﻿'use client';
+﻿"use client";
 
-import { useState } from 'react';
-import { useI18n } from '@/lib/i18n/context';
-import { updateUserProfileAction } from '@/server/actions/users';
-import { User, Phone, Mail, Shield, Building2, CheckCircle2, Image as ImageIcon } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import Image from "next/image";
+import { useI18n } from "@/lib/i18n/context";
+import { updateUserProfileAction } from "@/server/actions/users";
+import {
+  User,
+  Phone,
+  Mail,
+  Shield,
+  Building2,
+  CheckCircle2,
+  Image as ImageIcon,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface ProfileClientViewProps {
   user: {
@@ -20,12 +29,12 @@ interface ProfileClientViewProps {
 }
 
 export function ProfileClientView({ user }: ProfileClientViewProps) {
-  const { t, getRoleLabel } = useI18n();
+  const { t, getRoleLabel, errorMessage } = useI18n();
   const router = useRouter();
 
   const [name, setName] = useState(user.name);
-  const [phone, setPhone] = useState(user.phone || '');
-  const [avatar, setAvatar] = useState(user.avatar || '');
+  const [phone, setPhone] = useState(user.phone || "");
+  const [avatar, setAvatar] = useState(user.avatar || "");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +58,7 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
       router.refresh();
       setTimeout(() => setSuccess(false), 4000);
     } else {
-      setError(res.error || t('common.error'));
+      setError(errorMessage(res.error, t("common.error")));
     }
   };
 
@@ -58,9 +67,11 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
           <User className="w-5 h-5 text-brand-600" />
-          <span>{t('profile.title')}</span>
+          <span>{t("profile.title")}</span>
         </h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('profile.subtitle')}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          {t("profile.subtitle")}
+        </p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
@@ -68,13 +79,22 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
         <div className="flex items-center gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-600 to-purple-800 text-white font-black text-xl flex items-center justify-center shadow-lg shadow-brand-500/20">
             {avatar ? (
-              <img src={avatar} alt={name} className="w-full h-full object-cover rounded-2xl" />
+              <Image
+                src={avatar}
+                alt={name}
+                width={64}
+                height={64}
+                unoptimized
+                className="w-full h-full object-cover rounded-2xl"
+              />
             ) : (
               name.charAt(0)
             )}
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">{name}</h3>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              {name}
+            </h3>
             <p className="text-xs text-slate-500">{user.email}</p>
             <div className="flex items-center gap-2 mt-1">
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950 text-brand-700 dark:text-brand-300 text-[10px] font-bold border border-purple-200/60 dark:border-purple-800/60">
@@ -96,7 +116,7 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
           {success && (
             <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{t('profile.profileUpdated')}</span>
+              <span>{t("profile.profileUpdated")}</span>
             </div>
           )}
 
@@ -110,7 +130,7 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                 <User className="w-3 h-3 text-brand-600" />
-                <span>{t('profile.fullName')} *</span>
+                <span>{t("profile.fullName")} *</span>
               </label>
               <input
                 type="text"
@@ -124,10 +144,13 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                 <Phone className="w-3 h-3 text-brand-600" />
-                <span>{t('profile.phone')}</span>
+                <span>{t("profile.phone")}</span>
               </label>
               <input
-                type="text"
+                type="tel"
+                inputMode="tel"
+                dir="ltr"
+                autoComplete="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+962 7 9000 0000"
@@ -139,7 +162,7 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
               <Mail className="w-3 h-3 text-slate-400" />
-              <span>{t('profile.email')}</span>
+              <span>{t("profile.email")}</span>
             </label>
             <input
               type="email"
@@ -152,7 +175,7 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
               <ImageIcon className="w-3 h-3 text-brand-600" />
-              <span>{t('profile.avatar')}</span>
+              <span>{t("profile.avatar")}</span>
             </label>
             <input
               type="url"
@@ -170,7 +193,9 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
               className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 transition-all shadow-md shadow-brand-500/10 flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>{loading ? t('common.loading') : t('profile.saveProfile')}</span>
+              <span>
+                {loading ? t("common.loading") : t("profile.saveProfile")}
+              </span>
             </button>
           </div>
         </form>

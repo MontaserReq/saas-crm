@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -39,17 +39,33 @@ export function Dialog({
   isDestructive = false,
   direction = 'rtl',
 }: DialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+
   useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isLoading) onClose();
+      if (e.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     };
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
+      window.requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLElement>('button:not([disabled])')?.focus());
     }
     return () => {
       document.body.style.overflow = 'unset';
       window.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
     };
   }, [isOpen, onClose, isLoading]);
 
@@ -132,7 +148,7 @@ export function Dialog({
       />
 
       {/* Dialog Box */}
-      <div className="relative flex flex-col w-full max-w-md max-h-[88dvh] sm:max-h-[calc(100vh-4rem)] bg-white dark:bg-charcoal-900 rounded-t-2xl sm:rounded-2xl shadow-2xl border border-charcoal-200 dark:border-charcoal-800 z-10 overflow-hidden sm:my-8 animate-fade-in font-sans">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} className="relative flex flex-col w-full max-w-md max-h-[88dvh] sm:max-h-[calc(100vh-4rem)] bg-white dark:bg-charcoal-900 rounded-t-2xl sm:rounded-2xl shadow-2xl border border-charcoal-200 dark:border-charcoal-800 z-10 overflow-hidden sm:my-8 animate-fade-in font-sans">
         {/* Top bar with close button */}
         <div className="flex-1 min-h-0 overflow-y-auto p-6 pb-4 flex items-start justify-between gap-4">
           <div className="flex items-start gap-3.5">
@@ -142,10 +158,10 @@ export function Dialog({
               {variantConfig.icon}
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-charcoal-950 dark:text-charcoal-50 leading-snug">
+              <h3 id={titleId} className="text-base sm:text-lg font-bold text-charcoal-950 dark:text-charcoal-50 leading-snug">
                 {title}
               </h3>
-              <div className="text-xs sm:text-sm text-charcoal-600 dark:text-charcoal-300 mt-1 leading-relaxed">
+              <div id={descriptionId} className="text-xs sm:text-sm text-charcoal-600 dark:text-charcoal-300 mt-1 leading-relaxed">
                 {typeof message === 'string' ? <p>{message}</p> : message}
               </div>
             </div>
@@ -155,7 +171,8 @@ export function Dialog({
             <button
               type="button"
               onClick={onClose}
-              className="p-2.5 shrink-0 rounded-lg text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors focus:outline-none"
+              aria-label={isRTL ? 'إغلاق' : 'Close'}
+              className="p-2.5 shrink-0 rounded-lg text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200 hover:bg-charcoal-100 dark:hover:bg-charcoal-800 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
             >
               <X className="w-4 h-4" />
             </button>
@@ -169,7 +186,7 @@ export function Dialog({
               type="button"
               onClick={onClose}
               disabled={isLoading}
-              className="px-4 py-2 text-xs sm:text-sm font-semibold text-charcoal-700 dark:text-charcoal-300 bg-white dark:bg-charcoal-800 border border-charcoal-300 dark:border-charcoal-700 hover:bg-charcoal-100/80 dark:hover:bg-charcoal-700 rounded-xl transition-colors focus:outline-none disabled:opacity-50"
+              className="px-4 py-2 text-xs sm:text-sm font-semibold text-charcoal-700 dark:text-charcoal-300 bg-white dark:bg-charcoal-800 border border-charcoal-300 dark:border-charcoal-700 hover:bg-charcoal-100/80 dark:hover:bg-charcoal-700 rounded-xl transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50"
             >
               {resolvedCancelText}
             </button>

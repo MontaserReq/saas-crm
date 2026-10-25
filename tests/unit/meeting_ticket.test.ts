@@ -3,6 +3,7 @@ import { UserSession } from '@/types';
 
 const { prismaMock } = vi.hoisted(() => {
   const prismaMock: any = {
+    $queryRaw: vi.fn(),
     ticket: { count: vi.fn().mockResolvedValue(0), create: vi.fn(), findUnique: vi.fn() },
     meetingDetails: { create: vi.fn() },
     ticketAssignee: { create: vi.fn() },
@@ -62,6 +63,7 @@ describe('Meeting Minutes ticket creation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     currentUser = null;
+    prismaMock.$queryRaw.mockResolvedValue([{ value: 101n }]);
     prismaMock.ticket.count.mockResolvedValue(0);
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'manager-1',

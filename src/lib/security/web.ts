@@ -1,17 +1,10 @@
 import { NextResponse } from 'next/server';
+import { configuredOrigin, trustsSingleHopProxy } from '@/lib/security/runtimeConfig';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export function getConfiguredOrigin(): string | null {
-  const raw = process.env.APP_ORIGIN?.trim();
-  if (!raw) return null;
-  try {
-    const url = new URL(raw);
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
+  return configuredOrigin();
 }
 
 function originFrom(value: string): string | null {
@@ -61,7 +54,8 @@ export function applySecurityHeaders<T extends Response>(response: T, request?: 
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
 
   const url = request ? new URL(request.url) : null;
-  const forwardedHttps = process.env.TRUST_PROXY === 'true' && request?.headers.get('x-forwarded-proto')?.split(',')[0].trim() === 'https';
+  const forwardedHttps = trustsSingleHopProxy()
+    && request?.headers.get('x-forwarded-proto')?.trim().toLowerCase() === 'https';
   if (url?.protocol === 'https:' || forwardedHttps) {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }

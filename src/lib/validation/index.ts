@@ -1,24 +1,47 @@
 import { z } from 'zod';
+import {
+  emailSchema,
+  optionalEmailSchema,
+  optionalInternationalPhoneListSchema,
+  optionalInternationalPhoneSchema,
+} from './contactInfo';
 
-const schoolPhone = z.preprocess(
-  (value) => value === undefined || value === null || value === '' ? value : String(value).trim(),
-  z.string().refine(
-    (value) => value.split(/[,;/\n]+/).every((part) => /^\+?[0-9][0-9\s()\-]{5,20}$/.test(part.trim())),
-    'Invalid phone number. Separate multiple numbers with commas.'
-  ).optional().nullable()
-);
+export * from './contactInfo';
 
 export const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  email: emailSchema,
+  password: z.string().min(6, 'Password must be at least 6 characters').max(256, 'Password is too long'),
 });
+
+export const registerOrganizationSchema = z.object({
+  workspace: z.string().trim().min(2, 'Workspace name is required').max(120, 'Workspace name is too long'),
+  name: z.string().trim().min(2, 'Name is required').max(120, 'Name is too long'),
+  email: emailSchema,
+  password: z.string().min(8, 'Password must be at least 8 characters').max(256, 'Password is too long'),
+  confirmPassword: z.string().max(256),
+  language: z.enum(['en', 'ar']).default('en'),
+}).strict().refine((value) => value.password === value.confirmPassword, {
+  path: ['confirmPassword'],
+  message: 'Passwords do not match',
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(32).max(256),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters').max(256, 'Password is too long'),
+  confirmPassword: z.string().max(256),
+}).refine((value) => value.newPassword === value.confirmPassword, {
+  path: ['confirmPassword'],
+  message: 'Passwords do not match',
+});
+
+export const resetTokenSchema = z.string().trim().min(32).max(256);
 
 export const schoolSchema = z.object({
   name: z.string().min(2, 'School name is required'),
   contactPerson: z.string().optional().nullable(),
-  phone: schoolPhone,
-  whatsapp: z.string().optional().nullable(),
-  email: z.string().email('Invalid email address').optional().nullable().or(z.literal('')),
+  phone: optionalInternationalPhoneListSchema,
+  whatsapp: optionalInternationalPhoneSchema,
+  email: optionalEmailSchema,
   city: z.string().min(2, 'City is required'),
   area: z.string().optional().nullable(),
   classification: z.enum(['A', 'B', 'C']).default('A'),
@@ -31,9 +54,9 @@ export const schoolSchema = z.object({
 export const schoolImportRowSchema = z.object({
   name: z.string().min(2, 'School name is required'),
   contactPerson: z.string().optional().nullable(),
-  phone: schoolPhone,
-  whatsapp: z.string().optional().nullable(),
-  email: z.string().email('Invalid email address').optional().nullable().or(z.literal('')),
+  phone: optionalInternationalPhoneListSchema,
+  whatsapp: optionalInternationalPhoneSchema,
+  email: optionalEmailSchema,
   city: z.string().optional().nullable(),
   area: z.string().optional().nullable(),
   classification: z.preprocess(
@@ -99,15 +122,26 @@ export const communicationAttemptSchema = z.object({
 export const rejectedTicketUpdateSchema = z.object({
   ticketId: z.string().min(1, 'Ticket ID is required'),
   schoolId: z.string().optional().nullable(),
-  phone: z.string().max(100).optional().nullable(),
-  whatsapp: z.string().max(100).optional().nullable(),
-  email: z.string().email('Invalid email address').optional().nullable().or(z.literal('')),
+  phone: optionalInternationalPhoneListSchema,
+  whatsapp: optionalInternationalPhoneSchema,
+  email: optionalEmailSchema,
   taskTypeId: z.string().optional().nullable(),
   subject: z.string().trim().min(3, 'Subject must be at least 3 characters').max(200),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
   dueDate: z.string().optional().nullable(),
   followUpAt: z.string().optional().nullable(),
   correctionNote: z.string().trim().max(5000).optional().nullable(),
+});
+
+export const ticketEditRequestSchema = z.object({
+  ticketId: z.string().min(1, 'Ticket ID is required'),
+  schoolId: z.string().optional().nullable(),
+  taskTypeId: z.string().optional().nullable(),
+  subject: z.string().trim().min(3, 'Subject must be at least 3 characters').max(200),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
+  dueDate: z.string().optional().nullable(),
+  followUpAt: z.string().optional().nullable(),
+  changeReason: z.string().trim().min(3, 'Change reason must be at least 3 characters').max(1000),
 });
 
 export const todoSchema = z.object({
@@ -120,8 +154,8 @@ export const todoSchema = z.object({
 
 export const userCreateSchema = z.object({
   name: z.string().min(2, 'Name is required'),
-  email: z.string().email('Invalid email address'),
-  phone: z.string().optional().nullable(),
+  email: emailSchema,
+  phone: optionalInternationalPhoneSchema,
   password: z.string().min(6, 'Password must be at least 6 characters'),
   roleId: z.string().min(1, 'Role is required'),
   departmentId: z.string().min(1, 'Department is required'),
@@ -130,8 +164,8 @@ export const userCreateSchema = z.object({
 
 export const userUpdateSchema = z.object({
   name: z.string().min(2, 'Name is required'),
-  email: z.string().email('Invalid email address'),
-  phone: z.string().optional().nullable(),
+  email: emailSchema,
+  phone: optionalInternationalPhoneSchema,
   password: z.string().min(6, 'Password must be at least 6 characters').optional().or(z.literal('')),
   roleId: z.string().min(1, 'Role is required'),
   departmentId: z.string().min(1, 'Department is required'),

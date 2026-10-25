@@ -1,10 +1,13 @@
-﻿'use client';
+﻿"use client";
 
-import { useState, useEffect } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { createDepartmentAction, updateDepartmentAction } from '@/server/actions/admin';
-import { AlertCircle, UserCheck } from 'lucide-react';
-import { useI18n } from '@/lib/i18n/context';
+import { useState, useEffect } from "react";
+import { Modal } from "@/components/ui/Modal";
+import {
+  createDepartmentAction,
+  updateDepartmentAction,
+} from "@/server/actions/admin";
+import { AlertCircle, UserCheck } from "lucide-react";
+import { useI18n } from "@/lib/i18n/context";
 
 interface DepartmentModalProps {
   isOpen: boolean;
@@ -13,14 +16,19 @@ interface DepartmentModalProps {
   users?: Array<{ id: string; name: string; email: string }>;
 }
 
-export function DepartmentModal({ isOpen, onClose, department, users = [] }: DepartmentModalProps) {
-  const { t, language } = useI18n();
+export function DepartmentModal({
+  isOpen,
+  onClose,
+  department,
+  users = [],
+}: DepartmentModalProps) {
+  const { t, language, errorMessage } = useI18n();
   const isEditing = !!department;
 
   const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    description: '',
+    name: "",
+    code: "",
+    description: "",
     isActive: true,
   });
   const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
@@ -31,18 +39,20 @@ export function DepartmentModal({ isOpen, onClose, department, users = [] }: Dep
   useEffect(() => {
     if (department) {
       setFormData({
-        name: department.name || '',
-        code: department.code || '',
-        description: department.description || '',
-        isActive: department.isActive !== undefined ? department.isActive : true,
+        name: department.name || "",
+        code: department.code || "",
+        description: department.description || "",
+        isActive:
+          department.isActive !== undefined ? department.isActive : true,
       });
-      const currentMgrIds = department.managers?.map((m: any) => m.userId || m.user?.id) || [];
+      const currentMgrIds =
+        department.managers?.map((m: any) => m.userId || m.user?.id) || [];
       setSelectedManagerIds(currentMgrIds);
     } else {
       setFormData({
-        name: '',
-        code: '',
-        description: '',
+        name: "",
+        code: "",
+        description: "",
         isActive: true,
       });
       setSelectedManagerIds([]);
@@ -79,7 +89,7 @@ export function DepartmentModal({ isOpen, onClose, department, users = [] }: Dep
     if (res.success) {
       onClose();
     } else {
-      setError(res.error || t('common.error'));
+      setError(errorMessage(res.error, t("common.error")));
     }
   };
 
@@ -87,8 +97,12 @@ export function DepartmentModal({ isOpen, onClose, department, users = [] }: Dep
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? t('admin.departments.editDept') : t('admin.departments.addDept')}
-      description={t('admin.departments.subtitle')}
+      title={
+        isEditing
+          ? t("admin.departments.editDept")
+          : t("admin.departments.addDept")
+      }
+      description={t("admin.departments.subtitle")}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
@@ -100,41 +114,47 @@ export function DepartmentModal({ isOpen, onClose, department, users = [] }: Dep
 
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-            {t('admin.departments.name')} <span className="text-rose-500">*</span>
+            {t("admin.departments.name")}{" "}
+            <span className="text-rose-500">*</span>
           </label>
           <input
             type="text"
             required
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder={t('admin.departments.name')}
+            placeholder={t("admin.departments.name")}
             className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-            {t('admin.departments.code')} <span className="text-rose-500">*</span>
+            {t("admin.departments.code")}{" "}
+            <span className="text-rose-500">*</span>
           </label>
           <input
             type="text"
             required
             value={formData.code}
-            onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-            placeholder={t('admin.departments.code')}
+            onChange={(e) =>
+              setFormData({ ...formData, code: e.target.value.toUpperCase() })
+            }
+            placeholder={t("admin.departments.code")}
             className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm font-mono uppercase focus:border-brand-500 focus:outline-none"
           />
         </div>
 
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-            {t('admin.departments.description')}
+            {t("admin.departments.description")}
           </label>
           <textarea
             rows={3}
             value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder={t('admin.departments.description')}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
+            placeholder={t("admin.departments.description")}
             className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
@@ -144,7 +164,7 @@ export function DepartmentModal({ isOpen, onClose, department, users = [] }: Dep
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
               <UserCheck className="w-3.5 h-3.5 text-brand-500" />
-              <span>{t('admin.departments.managers')}</span>
+              <span>{t("admin.departments.managers")}</span>
             </label>
             <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2 space-y-1 bg-slate-50/50 dark:bg-slate-800/50">
               {users.map((u) => {
@@ -155,8 +175,8 @@ export function DepartmentModal({ isOpen, onClose, department, users = [] }: Dep
                     onClick={() => toggleManager(u.id)}
                     className={`flex items-center gap-2.5 p-2 rounded-lg text-xs cursor-pointer transition-colors ${
                       isSelected
-                        ? 'bg-purple-50 dark:bg-purple-950/50 text-brand-700 dark:text-brand-300 font-semibold'
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300'
+                        ? "bg-purple-50 dark:bg-purple-950/50 text-brand-700 dark:text-brand-300 font-semibold"
+                        : "hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300"
                     }`}
                   >
                     <input
@@ -166,7 +186,9 @@ export function DepartmentModal({ isOpen, onClose, department, users = [] }: Dep
                       className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                     />
                     <span>{u.name}</span>
-                    <span className="text-[10px] text-slate-400 font-normal">({u.email})</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      ({u.email})
+                    </span>
                   </label>
                 );
               })}
@@ -179,11 +201,16 @@ export function DepartmentModal({ isOpen, onClose, department, users = [] }: Dep
             type="checkbox"
             id="dept-active-checkbox"
             checked={formData.isActive}
-            onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+            onChange={(e) =>
+              setFormData({ ...formData, isActive: e.target.checked })
+            }
             className="rounded text-brand-600 focus:ring-brand-500"
           />
-          <label htmlFor="dept-active-checkbox" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-            {t('admin.departments.activeStatus')}
+          <label
+            htmlFor="dept-active-checkbox"
+            className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+          >
+            {t("admin.departments.activeStatus")}
           </label>
         </div>
 
@@ -194,14 +221,18 @@ export function DepartmentModal({ isOpen, onClose, department, users = [] }: Dep
             disabled={loading}
             className="px-4 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            {t('common.cancel')}
+            {t("common.cancel")}
           </button>
           <button
             type="submit"
             disabled={loading}
             className="px-5 py-2 rounded-lg text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 transition-colors disabled:opacity-50"
           >
-            {loading ? t('common.loading') : isEditing ? t('admin.departments.updateDept') : t('admin.departments.saveDept')}
+            {loading
+              ? t("common.loading")
+              : isEditing
+                ? t("admin.departments.updateDept")
+                : t("admin.departments.saveDept")}
           </button>
         </div>
       </form>

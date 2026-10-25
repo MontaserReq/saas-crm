@@ -70,11 +70,17 @@ describe('Meeting Minutes ticket — access control (IDOR)', () => {
   });
 
   it('a user with tickets.view_all (e.g. ADMIN) can access any meeting ticket regardless of ownership', async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({ createdById: CREATOR_ID, organizationId: 'org-a' });
     const admin = makeUser({ id: 'admin-1', role: 'ADMIN', permissions: ['tickets.view_all'] });
     const allowed = await canAccessTicket(admin, MEETING_TICKET_ID);
     expect(allowed).toBe(true);
-    // Short-circuits on permission — never needs to hit the DB for this check.
-    expect(prismaMock.ticket.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.ticket.findUnique).toHaveBeenCalled();
+  });
+
+  it('tickets.view_all never grants cross-tenant access', async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({ createdById: CREATOR_ID, organizationId: 'org-b' });
+    const admin = makeUser({ id: 'admin-1', role: 'ADMIN', permissions: ['tickets.view_all'] });
+    await expect(canAccessTicket(admin, MEETING_TICKET_ID)).resolves.toBe(false);
   });
 
   it('an unauthorized user cannot download a meeting minutes attachment by guessing its ID', async () => {
@@ -150,5 +156,19 @@ describe('Meeting attachment upload — server-side file validation', () => {
     const res = await addNoteAction(formData);
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/attachment upload permission required/i);
+  });
+
+  it('requires tickets.transfer at the action boundary for note-triggered transfers', async () => {
+    currentUser = makeUser({ permissions: ['tickets.add_note'] });
+    const formData = new FormData();
+    formData.append('ticketId', MEETING_TICKET_ID);
+    formData.append('content', 'Handoff note');
+    formData.append('transferToUserId', 'user-2');
+
+    const res = await addNoteAction(formData);
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/tickets\.transfer/i);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.note.create).not.toHaveBeenCalled();
   });
 });

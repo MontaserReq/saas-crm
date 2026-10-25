@@ -6,7 +6,7 @@ import { parseBoundedMultipart, uploadErrorResponse, UPLOAD_LIMITS } from '@/lib
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -14,7 +14,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const template = await ProposalTemplateService.getTemplate(user, params.id);
+    const template = await ProposalTemplateService.getTemplate(user, (await params).id);
     return NextResponse.json({ success: true, template });
   } catch (err: any) {
     return NextResponse.json(
@@ -26,7 +26,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const originError = rejectUntrustedMutation(request);
@@ -67,7 +67,7 @@ export async function PUT(
       updateInput = body;
     }
 
-    const updated = await ProposalTemplateService.updateTemplate(user, params.id, updateInput);
+    const updated = await ProposalTemplateService.updateTemplate(user, (await params).id, updateInput);
     return NextResponse.json({ success: true, template: updated });
   } catch (err: any) {
     const resourceError = uploadErrorResponse(err);
@@ -82,7 +82,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const originError = rejectUntrustedMutation(request);
@@ -92,7 +92,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    await ProposalTemplateService.deleteTemplate(user, params.id);
+    await ProposalTemplateService.deleteTemplate(user, (await params).id);
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json(

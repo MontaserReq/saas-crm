@@ -14,6 +14,7 @@ const PERMISSION_CODES = [
 ] as const;
 
 const ROLE_GRANTS: Record<string, readonly string[]> = {
+  PLATFORM_ADMIN: PERMISSION_CODES,
   SUPER_ADMIN: PERMISSION_CODES,
   ADMIN: PERMISSION_CODES,
   SCHOOL_MANAGER: ['ai_research.view', 'ai_research.create', 'ai_research.run', 'ai_research.reject', 'ai_research.enrich'],

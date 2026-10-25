@@ -4,7 +4,7 @@ import { ProposalService } from '@/server/services/ProposalService';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -12,7 +12,7 @@ export async function GET(
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { buffer, fileName } = await ProposalService.getGeneratedPdfBuffer(user, params.id);
+    const { buffer, fileName } = await ProposalService.getGeneratedPdfBuffer(user, (await params).id);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

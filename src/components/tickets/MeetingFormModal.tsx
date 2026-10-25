@@ -4,7 +4,15 @@ import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import { createMeetingTicketAction } from "@/server/actions/tickets";
 import { Modal } from "@/components/ui/Modal";
-import { AlertCircle, UserCheck, XCircle, Plus, X, ListChecks, Users as UsersIcon } from "lucide-react";
+import {
+  AlertCircle,
+  UserCheck,
+  XCircle,
+  Plus,
+  X,
+  ListChecks,
+  Users as UsersIcon,
+} from "lucide-react";
 import type { DirectManagerOption } from "@/components/tickets/TicketFormModal";
 
 interface UserOption {
@@ -45,13 +53,15 @@ export function MeetingFormModal({
   users = [],
   directManager = null,
 }: MeetingFormModalProps) {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const router = useRouter();
 
   const [schoolId, setSchoolId] = useState("");
   const [taskTypeId, setTaskTypeId] = useState("");
   const [subject, setSubject] = useState("");
-  const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
+  const [priority, setPriority] = useState<
+    "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+  >("MEDIUM");
   const [meetingDate, setMeetingDate] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
   const [participants, setParticipants] = useState<ParticipantDraft[]>([]);
@@ -67,8 +77,8 @@ export function MeetingFormModal({
   const status: FormStatus = !directManager
     ? { kind: "no_manager" }
     : !directManager.isActive
-    ? { kind: "manager_disabled", manager: directManager }
-    : { kind: "ready", manager: directManager };
+      ? { kind: "manager_disabled", manager: directManager }
+      : { kind: "ready", manager: directManager };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -112,7 +122,10 @@ export function MeetingFormModal({
   function addActionItem() {
     const text = actionItemText.trim();
     if (!text) return;
-    setActionItems((prev) => [...prev, { text, assigneeId: actionItemAssigneeId || null }]);
+    setActionItems((prev) => [
+      ...prev,
+      { text, assigneeId: actionItemAssigneeId || null },
+    ]);
     setActionItemText("");
     setActionItemAssigneeId("");
   }
@@ -147,12 +160,16 @@ export function MeetingFormModal({
       meetingDate,
       meetingTime,
       participants,
-      actionItems: actionItems.map((a) => ({ text: a.text, assigneeId: a.assigneeId, done: false })),
+      actionItems: actionItems.map((a) => ({
+        text: a.text,
+        assigneeId: a.assigneeId,
+        done: false,
+      })),
       initialNote: minutes.trim() || null,
     });
     setLoading(false);
     if (!result.success) {
-      setError(result.error || t("common.error"));
+      setError(errorMessage(result.error, t("common.error")));
       return;
     }
     onClose();
@@ -204,8 +221,12 @@ export function MeetingFormModal({
                 {status.manager.name.charAt(0)}
               </div>
               <div className="flex-1">
-                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{status.manager.name}</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">{t("tickets.directManagerDesc")}</p>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  {status.manager.name}
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {t("tickets.directManagerDesc")}
+                </p>
               </div>
             </div>
           )}
@@ -231,7 +252,8 @@ export function MeetingFormModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {t("tickets.meetingDate")} <span className="text-rose-500">*</span>
+              {t("tickets.meetingDate")}{" "}
+              <span className="text-rose-500">*</span>
             </label>
             <input
               type="date"
@@ -244,7 +266,8 @@ export function MeetingFormModal({
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {t("tickets.meetingTime")} <span className="text-rose-500">*</span>
+              {t("tickets.meetingTime")}{" "}
+              <span className="text-rose-500">*</span>
             </label>
             <input
               type="time"
@@ -271,7 +294,9 @@ export function MeetingFormModal({
             >
               <option value="">{t("tickets.schoolOptional")}</option>
               {schools.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
               ))}
             </select>
           </div>
@@ -287,7 +312,9 @@ export function MeetingFormModal({
             >
               <option value="">{t("tickets.taskTypeOptional")}</option>
               {taskTypes.map((tt) => (
-                <option key={tt.id} value={tt.id}>{tt.name}</option>
+                <option key={tt.id} value={tt.id}>
+                  {tt.name}
+                </option>
               ))}
             </select>
           </div>
@@ -316,7 +343,8 @@ export function MeetingFormModal({
           <div className="flex items-center gap-2">
             <UsersIcon className="w-4 h-4 text-brand-600" />
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              {t("tickets.participants")} <span className="text-rose-500">*</span>
+              {t("tickets.participants")}{" "}
+              <span className="text-rose-500">*</span>
             </h3>
           </div>
 
@@ -328,7 +356,12 @@ export function MeetingFormModal({
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-xs font-semibold text-brand-700 dark:text-brand-300"
                 >
                   <span>{p.name}</span>
-                  <button type="button" disabled={blocked} onClick={() => removeParticipant(idx)} className="hover:text-rose-500">
+                  <button
+                    type="button"
+                    disabled={blocked}
+                    onClick={() => removeParticipant(idx)}
+                    className="hover:text-rose-500"
+                  >
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -340,12 +373,17 @@ export function MeetingFormModal({
             <select
               disabled={blocked}
               value={participantUserId}
-              onChange={(e) => { setParticipantUserId(e.target.value); setParticipantName(""); }}
+              onChange={(e) => {
+                setParticipantUserId(e.target.value);
+                setParticipantName("");
+              }}
               className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:border-brand-500 focus:outline-none disabled:opacity-60"
             >
               <option value="">{t("tickets.selectTeamMember")}</option>
               {users.map((u) => (
-                <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.email})
+                </option>
               ))}
             </select>
             <input
@@ -371,7 +409,9 @@ export function MeetingFormModal({
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
           <div className="flex items-center gap-2">
             <ListChecks className="w-4 h-4 text-brand-600" />
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t("tickets.actionItems")}</h3>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+              {t("tickets.actionItems")}
+            </h3>
           </div>
 
           {actionItems.length > 0 && (
@@ -385,9 +425,19 @@ export function MeetingFormModal({
                   >
                     <span className="text-slate-700 dark:text-slate-300">
                       {a.text}
-                      {assignee && <span className="text-slate-400"> — {assignee.name}</span>}
+                      {assignee && (
+                        <span className="text-slate-400">
+                          {" "}
+                          — {assignee.name}
+                        </span>
+                      )}
                     </span>
-                    <button type="button" disabled={blocked} onClick={() => removeActionItem(idx)} className="text-slate-400 hover:text-rose-500">
+                    <button
+                      type="button"
+                      disabled={blocked}
+                      onClick={() => removeActionItem(idx)}
+                      className="text-slate-400 hover:text-rose-500"
+                    >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </li>
@@ -412,7 +462,9 @@ export function MeetingFormModal({
             >
               <option value="">{t("tickets.selectAssignee")}</option>
               {users.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
               ))}
             </select>
             <button
@@ -440,7 +492,9 @@ export function MeetingFormModal({
             placeholder={t("tickets.meetingMinutesPlaceholder")}
             className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:border-brand-500 focus:outline-none disabled:opacity-60"
           />
-          <p className="text-[11px] text-slate-400 mt-1">{t("tickets.meetingAttachmentsHint")}</p>
+          <p className="text-[11px] text-slate-400 mt-1">
+            {t("tickets.meetingAttachmentsHint")}
+          </p>
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">

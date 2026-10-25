@@ -36,10 +36,10 @@ async function readBoundedBody(request: Request): Promise<Uint8Array | undefined
 
 async function forward(
   request: Request,
-  { params }: { params: { path: string[] } },
+  { params }: { params: Promise<{ path: string[] }> },
 ) {
   if (!WIDGET_ORIGIN) return new Response('Not Found', { status: 404 });
-  const path = `/${params.path.join('/')}`;
+  const path = `/${(await params).path.join('/')}`;
   if (!allowedPaths().has(path)) return new Response('Not Found', { status: 404 });
   if (!['GET', 'POST'].includes(request.method)) return new Response('Method Not Allowed', { status: 405 });
   const policy = RATE_LIMIT_POLICY_CONFIG.chatbot;
@@ -83,14 +83,14 @@ async function forward(
 
 export async function GET(
   request: Request,
-  context: { params: { path: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ) {
   return forward(request, context);
 }
 
 export async function POST(
   request: Request,
-  context: { params: { path: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ) {
   return forward(request, context);
 }

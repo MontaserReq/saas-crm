@@ -1,8 +1,8 @@
 import { headers } from 'next/headers';
 import { resolveClientIp } from '@/lib/security/api';
 
-export function getRequestContext(runtimeIp?: string | null) {
-  const h = headers();
+export async function getRequestContext(runtimeIp?: string | null) {
+  const h = await headers();
   const ipAddress = resolveClientIp({
     forwarded: h.get('x-forwarded-for'),
     realIp: h.get('x-real-ip'),

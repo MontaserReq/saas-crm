@@ -1,3 +1,5 @@
+import { normalizeInternationalPhone } from '@/lib/validation/contactInfo';
+
 export type SchoolImportField = 'name' | 'contactPerson' | 'city' | 'classification' | 'phone' | 'email';
 export type ResolvedImportColumn = { header: string; index: number };
 export type IgnoredImportColumn = ResolvedImportColumn & { ignored: true };
@@ -33,19 +35,23 @@ export function resolveImportHeaders(headers: string[]) {
   });
   return { mapped, ignored, duplicates, missingRequired: REQUIRED_SCHOOL_IMPORT_FIELDS.filter((field) => !mapped.has(field)), missingOptional: SCHOOL_IMPORT_FIELDS.filter((field) => !REQUIRED_SCHOOL_IMPORT_FIELDS.includes(field) && !mapped.has(field)) };
 }
-
-const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-function toEnglishDigits(value: string) { return value.replace(/[٠-٩]/g, (digit) => String(arabicDigits.indexOf(digit))); }
-function canonicalizeJordanPhone(value: string): string {
-  const digits = value.replace(/\D/g, '');
-  if (digits.startsWith('00962')) return canonicalizeJordanPhone(digits.slice(2));
-  if (digits.startsWith('962')) return digits.length >= 11 ? `0${digits.slice(3)}` : digits;
-  return digits;
-}
 export function normalizeImportPhone(value: unknown): string {
   if (value === undefined || value === null) return '';
-  const raw = toEnglishDigits(String(value)).replace(/[\u200B-\u200D\uFEFF]/g, '');
-  return raw.split(/\/+/).map((part) => canonicalizeJordanPhone(part)).find((part) => /^\d{7,12}$/.test(part)) || '';
+  const raw = String(value).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  if (!raw) return '';
+  const candidates = raw.split(/[,;\n/]+/).flatMap(part => part.match(/(?:\+|00)?[\d٠-٩۰-۹][\d٠-٩۰-۹\s().-]{5,}/g) || []);
+  for (const candidate of candidates) {
+    const compact = candidate.trim();
+    const asciiDigits = compact
+      .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+      .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+      .replace(/\D/g, '');
+    const normalized = normalizeInternationalPhone(compact)
+      || (asciiDigits.startsWith('962') ? normalizeInternationalPhone(`+${asciiDigits}`) : null)
+      || normalizeInternationalPhone(compact, 'JO');
+    if (normalized) return normalized;
+  }
+  return raw;
 }
 
 const UNASSIGNED_PLACEHOLDERS = new Set(['', '-', '—', 'لا يوجد', 'بدون', 'غير محدد', 'لايوجد', 'none', 'n/a', 'na', 'null', 'undefined']);

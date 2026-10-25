@@ -6,8 +6,9 @@ import { TicketService } from '@/server/services/TicketService';
 import { TicketStatus } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { validateAttachmentBatch, validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
+import { validateAttachmentBatch, validateAttachmentContent, validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
 import { requireOrganizationId } from '@/lib/auth/organization';
+import { isPlatformSuperAdmin } from '@/lib/security/platform';
 
 function ticketPermission(user: Awaited<ReturnType<typeof requireAuth>>, permission: string) {
   if (!hasPermission(user, permission)) throw new Error(`Forbidden: missing ${permission}`);
@@ -63,6 +64,9 @@ export async function addNoteAction(formData: FormData) {
     const content = formData.get('content') as string;
     const priority = formData.get('priority') as string | null;
     const transferToUserId = formData.get('transferToUserId') as string | null;
+    if (transferToUserId) {
+      ticketPermission(user, PERMISSIONS.TICKETS_TRANSFER);
+    }
 
     const files = formData.getAll('attachments') as File[];
     const batchError = validateAttachmentBatch(files);
@@ -75,10 +79,13 @@ export async function addNoteAction(formData: FormData) {
         const validationError = validateAttachmentFile(f);
         if (validationError) throw new Error(validationError);
         const arrayBuf = await f.arrayBuffer();
+        const buffer = Buffer.from(arrayBuf);
+        const contentValidation = validateAttachmentContent(f, buffer);
+        if (contentValidation.error) throw new Error(contentValidation.error);
         attachmentBuffers.push({
           originalName: f.name,
-          mimeType: f.type || 'application/octet-stream',
-          buffer: Buffer.from(arrayBuf),
+          mimeType: contentValidation.mimeType,
+          buffer,
         });
       }
     }
@@ -154,6 +161,29 @@ export async function updateRejectedTicketAction(data: {
   }
 }
 
+export async function requestTicketEditAction(data: {
+  ticketId: string;
+  schoolId?: string | null;
+  taskTypeId?: string | null;
+  subject: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  dueDate?: string | null;
+  followUpAt?: string | null;
+  changeReason: string;
+}) {
+  try {
+    const user = await requireAuth();
+    ticketPermission(user, PERMISSIONS.TICKETS_CORRECTION_REQUEST);
+    const request = await TicketService.requestTicketEdit(user, data);
+    revalidatePath(`/tickets/${data.ticketId}`);
+    revalidatePath('/tickets');
+    revalidatePath('/admin/approval-requests');
+    return { success: true, requestId: request.id, pending: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to request ticket edit' };
+  }
+}
+
 export async function resubmitRejectedTicketAction(ticketId: string, targetDepartmentId?: string | null, targetUserId?: string | null) {
   try {
     const user = await requireAuth();
@@ -171,7 +201,7 @@ export async function resubmitRejectedTicketAction(ticketId: string, targetDepar
 export async function closeTicketAction(ticketId: string, closingReason: string) {
   try {
     const user = await requireAuth();
-    ticketPermission(user, PERMISSIONS.TICKETS_CREATE);
+    ticketPermission(user, PERMISSIONS.TICKETS_CLOSE);
     const res = await TicketService.closeTicket(user, ticketId, closingReason);
     revalidatePath(`/tickets/${ticketId}`);
     revalidatePath('/tickets');
@@ -194,7 +224,7 @@ export async function decideTicketApprovalAction(requestId: string, approve: boo
     const requests = await TicketService.listTicketApprovalRequests(user, 'PENDING');
     const request = requests.find((item) => item.id === requestId);
     if (!request) return { success: false, error: 'Request not found' };
-    const permission = request.type === 'CORRECTION' ? PERMISSIONS.TICKETS_CORRECTION_APPROVE : PERMISSIONS.TICKETS_RESUBMIT_APPROVE;
+    const permission = request.type === 'RESUBMIT' ? PERMISSIONS.TICKETS_RESUBMIT_APPROVE : PERMISSIONS.TICKETS_CORRECTION_APPROVE;
     if (!hasPermission(user, PERMISSIONS.APPROVAL_REQUESTS_DECIDE) && !hasPermission(user, permission)) return { success: false, error: 'Forbidden' };
     const result = await TicketService.decideTicketApproval(user, requestId, approve, rejectionReason);
     revalidatePath(`/tickets/${request.ticket.id}`);
@@ -208,6 +238,7 @@ export async function createTicketAction(input: {
   schoolId?: string | null;
   clientId?: string | null;
   taskTypeId?: string | null;
+  assignedToUserId?: string | null;
   departmentId?: string;
   subject?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -226,11 +257,13 @@ export async function createTicketAction(input: {
     const taskType = input.taskTypeId ? await prisma.taskType.findFirst({ where: { id: input.taskTypeId, organizationId }, select: { name: true } }) : null;
     const subject = input.subject?.trim() || `${taskType?.name || 'Task'} - ${client?.name || school?.name || 'Client'}`;
 
-    // The ticket is auto-assigned server-side to currentUser.reportsToUserId.
+    // The service validates a selected assignee for authorized users and
+    // falls back to the current user's direct manager otherwise.
     const ticket = await TicketService.createTicket(user, {
       schoolId: input.schoolId || null,
       clientId: input.clientId || input.schoolId || null,
       taskTypeId: input.taskTypeId || null,
+      assignedToUserId: input.assignedToUserId || null,
       departmentId,
       subject,
       priority: input.priority,
@@ -277,6 +310,13 @@ export async function createMeetingTicketAction(input: {
 export async function updateTicketStatusAction(ticketId: string, newStatus: TicketStatus) {
   try {
     const user = await requireAuth();
+    const statusPermission: Partial<Record<TicketStatus, string>> = {
+      COMPLETED: PERMISSIONS.TICKETS_COMPLETE,
+      IN_PROGRESS: PERMISSIONS.TICKETS_COMPLETE,
+    };
+    const requiredPermission = statusPermission[newStatus];
+    if (!requiredPermission) throw new Error('Forbidden: unsupported status mutation');
+    ticketPermission(user, requiredPermission);
     const res = await TicketService.updateStatus(user, ticketId, newStatus);
     revalidatePath(`/tickets/${ticketId}`);
     revalidatePath('/tickets');
@@ -291,7 +331,7 @@ export async function deleteTicketAction(ticketId: string) {
   try {
     const user = await requireAuth();
     ticketPermission(user, PERMISSIONS.TICKETS_DELETE);
-    if (user.role !== 'SUPER_ADMIN') throw new Error('Forbidden: Only Super Admin can delete tickets');
+    if (!isPlatformSuperAdmin(user) && user.role !== 'SUPER_ADMIN') throw new Error('Forbidden: Only Company Super Admin can delete tickets');
     await TicketService.deleteTicket(user, ticketId);
     revalidatePath('/tickets');
     revalidatePath('/');

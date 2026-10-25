@@ -13,13 +13,14 @@ export const metadata: Metadata = {
 export default async function MessageDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const user = await requireAuth();
   if (!hasPermission(user, PERMISSIONS.MESSAGES_VIEW)) return null;
+  const routeParams = await params;
 
   try {
-    const message = await MessageService.getMessageById(user, params.id);
+    const message = await MessageService.getMessageById(user, routeParams.id);
     return <MessageDetailView message={message} currentUserId={user.id} />;
   } catch (err: any) {
     if (err.message === 'Message not found' || err.message.includes('Unauthorized')) {

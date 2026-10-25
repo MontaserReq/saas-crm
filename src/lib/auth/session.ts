@@ -5,6 +5,7 @@ import { UserSession, RoleName } from '@/types';
 import prisma from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
 import { getAuthSecret } from '@/lib/auth/config';
+import { applyFeatureOverrides, filterPermissionsForPlan, resolveSubscriptionAccess } from '@/lib/platform/entitlements';
 
 const COOKIE_NAME = 'codeline_session';
 function secretKey() { return new TextEncoder().encode(getAuthSecret()); }
@@ -17,18 +18,22 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export async function signToken(payload: UserSession): Promise<string> {
-  return new SignJWT({ ...payload })
+type SessionTokenClaims = Pick<UserSession, 'id' | 'sessionId'>;
+
+export async function signToken(payload: SessionTokenClaims): Promise<string> {
+  return new SignJWT({ sid: payload.sessionId })
     .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(payload.id)
     .setIssuedAt()
     .setExpirationTime('7d')
     .sign(secretKey());
 }
 
-export async function verifyToken(token: string): Promise<UserSession | null> {
+export async function verifyToken(token: string): Promise<SessionTokenClaims | null> {
   try {
     const { payload } = await jwtVerify(token, secretKey());
-    return payload as unknown as UserSession;
+    if (typeof payload.sub !== 'string' || typeof payload.sid !== 'string') return null;
+    return { id: payload.sub, sessionId: payload.sid };
   } catch {
     return null;
   }
@@ -36,7 +41,7 @@ export async function verifyToken(token: string): Promise<UserSession | null> {
 
 export async function createSession(user: UserSession): Promise<void> {
   const token = await signToken(user);
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -47,12 +52,12 @@ export async function createSession(user: UserSession): Promise<void> {
 }
 
 export async function destroySession(): Promise<void> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.delete(COOKIE_NAME);
 }
 
 export async function getCurrentUser(): Promise<UserSession | null> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
 
@@ -76,6 +81,7 @@ export async function getCurrentUser(): Promise<UserSession | null> {
       phone: true,
       avatar: true,
       isActive: true,
+      isPlatformAdmin: true,
       reportsToUserId: true,
       role: {
         select: {
@@ -105,7 +111,7 @@ export async function getCurrentUser(): Promise<UserSession | null> {
         take: 2,
         select: {
           organizationId: true,
-          organization: { select: { name: true } },
+          organization: { select: { name: true, settings: { select: { featureOverrides: true } }, platformSubscription: { select: { status: true, startsAt: true, endsAt: true, trialEndsAt: true, plan: { select: { name: true, slug: true, features: true, isActive: true } } } } } },
           role: {
             select: {
               name: true,
@@ -129,11 +135,30 @@ export async function getCurrentUser(): Promise<UserSession | null> {
   if (activeMemberships.length !== 1) return null;
   const activeOrganization = activeMemberships[0];
   const activeRole = activeOrganization.role || dbUser.role;
+  const isPlatformAdmin = dbUser.isPlatformAdmin === true && dbUser.role.name === 'PLATFORM_ADMIN' && activeRole.name === 'PLATFORM_ADMIN';
+  // Platform authority must be consistent across the account, membership and
+  // explicit marker. Company SUPER_ADMIN is a tenant role and is valid without it.
+  if ((dbUser.isPlatformAdmin || dbUser.role.name === 'PLATFORM_ADMIN' || activeRole.name === 'PLATFORM_ADMIN') && !isPlatformAdmin) return null;
 
-  const permissions = Array.from(new Set([
+  const rolePermissions = Array.from(new Set([
     ...activeRole.rolePermissions.map((rp) => rp.permission.code),
     ...dbUser.userPermissions.map((up) => up.permission.code),
   ]));
+  let subscription = activeOrganization.organization.platformSubscription;
+  const now = new Date();
+  if (subscription?.status === 'TRIAL' && subscription.endsAt && subscription.endsAt <= now) {
+    await prisma.platformSubscription.updateMany({
+      where: { organizationId: activeOrganization.organizationId, status: 'TRIAL', endsAt: { lte: now } },
+      data: { status: 'EXPIRED' },
+    });
+    subscription = { ...subscription, status: 'EXPIRED' };
+  }
+  const access = resolveSubscriptionAccess(subscription, now);
+  const planFeatures = applyFeatureOverrides(
+    access.features,
+    activeOrganization.organization.settings?.featureOverrides,
+  );
+  const permissions = isPlatformAdmin ? rolePermissions : filterPermissionsForPlan(rolePermissions, planFeatures);
 
   return {
     id: dbUser.id,
@@ -142,6 +167,7 @@ export async function getCurrentUser(): Promise<UserSession | null> {
     phone: dbUser.phone,
     avatar: dbUser.avatar,
     role: activeRole.name as RoleName,
+    isPlatformAdmin,
     roleDisplayName: activeRole.displayName,
     departmentId: dbUser.department.id,
     departmentName: dbUser.department.name,
@@ -150,6 +176,13 @@ export async function getCurrentUser(): Promise<UserSession | null> {
     sessionId: session.sessionId,
     organizationId: activeOrganization.organizationId,
     organizationName: activeOrganization.organization.name,
+    planFeatures,
+    planName: subscription?.plan.name ?? null,
+    planSlug: subscription?.plan.slug ?? null,
+    workspaceAccessState: access.state,
+    workspaceReadOnly: access.readOnly,
+    subscriptionStartsAt: access.startsAt?.toISOString() ?? null,
+    subscriptionEndsAt: access.endsAt?.toISOString() ?? null,
   };
 }
 

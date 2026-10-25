@@ -1,0 +1,2 @@
+ALTER TABLE "PlanUpgradeRequest"
+ALTER COLUMN "status" SET DEFAULT 'PENDING_PAYMENT';

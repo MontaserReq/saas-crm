@@ -4,6 +4,7 @@ import { ApprovalRequestsClient } from '@/components/admin/ApprovalRequestsClien
 import { getCurrentUser } from '@/lib/auth/session';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { redirect } from 'next/navigation';
+import { listOperationApprovalRequestsAction } from '@/server/actions/approvals';
 
 export default async function ApprovalRequestsPage() {
   const user = await getCurrentUser();
@@ -12,8 +13,8 @@ export default async function ApprovalRequestsPage() {
     && !hasPermission(user, PERMISSIONS.SCHOOLS_APPROVE_DELETE)
     && !hasPermission(user, PERMISSIONS.TICKETS_CORRECTION_APPROVE)
     && !hasPermission(user, PERMISSIONS.TICKETS_RESUBMIT_APPROVE))) {
-    redirect('/');
+    redirect('/dashboard');
   }
-  const [schoolRequests, ticketRequests] = await Promise.all([listSchoolApprovalRequestsAction(), listTicketApprovalRequestsAction()]);
-  return <ApprovalRequestsClient requests={[...(schoolRequests as any[]).map((request) => ({ ...request, kind: 'SCHOOL' })), ...(ticketRequests as any[]).map((request) => ({ ...request, kind: 'TICKET' }))]} />;
+  const [schoolRequests, ticketRequests, operationRequests] = await Promise.all([listSchoolApprovalRequestsAction(), listTicketApprovalRequestsAction(), listOperationApprovalRequestsAction()]);
+  return <ApprovalRequestsClient requests={[...(schoolRequests as any[]).map((request) => ({ ...request, kind: 'SCHOOL' })), ...(ticketRequests as any[]).map((request) => ({ ...request, kind: 'TICKET' })), ...(operationRequests as any[]).map((request) => ({ ...request, kind: 'OPERATION' }))]} />;
 }

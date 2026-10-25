@@ -9,6 +9,7 @@ const prisma = new PrismaClient();
 const PERMISSION_CODES = ['ai_assistant.view'] as const;
 
 const ROLE_GRANTS: Record<string, readonly string[]> = {
+  PLATFORM_ADMIN: PERMISSION_CODES,
   SUPER_ADMIN: PERMISSION_CODES,
   ADMIN: PERMISSION_CODES,
   SCHOOL_MANAGER: PERMISSION_CODES,

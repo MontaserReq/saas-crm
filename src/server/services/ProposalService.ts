@@ -2,12 +2,14 @@ import prisma from '@/lib/db/prisma';
 import { UserSession } from '@/types';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { getStorageProvider } from '@/lib/storage';
+import { validateAttachmentContent } from '@/lib/storage/attachmentPolicy';
 import { AuditService } from './AuditService';
 import { ProposalTemplateService, TemplateConfig } from './ProposalTemplateService';
 import { applyProposalOverlay } from '@/lib/pdf/proposalOverlay';
 import { formatProposalCode } from '@/lib/proposals/proposalUtils';
 import { requireOrganizationContext } from '@/lib/auth/organization';
 import { acquireOperation, assertOperationOwner, finishOperation, RESOURCE_LIMITS, withOperationOwner } from '@/lib/security/resourceGuard';
+import { parseOptionalEmail, parseOptionalInternationalPhone } from '@/lib/validation';
 
 export interface ProposalServiceItem {
   id?: string;
@@ -165,8 +167,8 @@ export class ProposalService {
         title: input.title.trim(),
         clientName: input.clientName.trim(),
         contactPerson: input.contactPerson?.trim() || null,
-        clientEmail: input.clientEmail?.trim() || null,
-        clientPhone: input.clientPhone?.trim() || null,
+        clientEmail: parseOptionalEmail(input.clientEmail),
+        clientPhone: parseOptionalInternationalPhone(input.clientPhone),
         schoolId: input.schoolId || null,
         clientId: input.clientId || input.schoolId || null,
         templateId: input.templateId || null,
@@ -217,8 +219,8 @@ export class ProposalService {
     if (input.title !== undefined) data.title = input.title.trim();
     if (input.clientName !== undefined) data.clientName = input.clientName.trim();
     if (input.contactPerson !== undefined) data.contactPerson = input.contactPerson?.trim() || null;
-    if (input.clientEmail !== undefined) data.clientEmail = input.clientEmail?.trim() || null;
-    if (input.clientPhone !== undefined) data.clientPhone = input.clientPhone?.trim() || null;
+      if (input.clientEmail !== undefined) data.clientEmail = parseOptionalEmail(input.clientEmail);
+      if (input.clientPhone !== undefined) data.clientPhone = parseOptionalInternationalPhone(input.clientPhone);
     if (input.schoolId !== undefined) data.schoolId = input.schoolId || null;
     if (input.clientId !== undefined) data.clientId = input.clientId || null;
     if (input.templateId !== undefined) data.templateId = input.templateId || null;
@@ -310,15 +312,13 @@ export class ProposalService {
     const school = await prisma.school.findFirst({ where: { id: schoolId, organizationId } });
     if (!school) throw new Error('School not found');
 
-    const allowedMimes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-    if (!allowedMimes.includes(mimeType.toLowerCase())) {
-      throw new Error('Invalid file type. Allowed formats: PNG, JPG, WebP');
-    }
-
     const MAX_SIZE = 5 * 1024 * 1024; // 5MB
     if (fileBuffer.length > MAX_SIZE) {
       throw new Error('File size exceeds 5MB limit');
     }
+    const inspected = validateAttachmentContent({ name: originalName, type: mimeType, size: fileBuffer.length }, fileBuffer);
+    if (inspected.error || !['image/png', 'image/jpeg', 'image/webp'].includes(inspected.mimeType)) throw new Error('Invalid file content. Allowed formats: PNG, JPG, WebP');
+    mimeType = inspected.mimeType;
 
     const storage = getStorageProvider();
 
@@ -377,15 +377,13 @@ export class ProposalService {
     const proposal = await prisma.proposal.findFirst({ where: { id: proposalId, organizationId } });
     if (!proposal) throw new Error('Proposal not found');
 
-    const allowedMimes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-    if (!allowedMimes.includes(mimeType.toLowerCase())) {
-      throw new Error('Invalid file type. Allowed formats: PNG, JPG, WebP');
-    }
-
     const MAX_SIZE = 5 * 1024 * 1024; // 5MB
     if (fileBuffer.length > MAX_SIZE) {
       throw new Error('File size exceeds 5MB limit');
     }
+    const inspected = validateAttachmentContent({ name: originalName, type: mimeType, size: fileBuffer.length }, fileBuffer);
+    if (inspected.error || !['image/png', 'image/jpeg', 'image/webp'].includes(inspected.mimeType)) throw new Error('Invalid file content. Allowed formats: PNG, JPG, WebP');
+    mimeType = inspected.mimeType;
 
     const storage = getStorageProvider();
 
@@ -488,8 +486,8 @@ export class ProposalService {
           } else if (proposal.logoKey.endsWith('.webp')) {
             schoolLogoMime = 'image/webp';
           }
-        } catch (err) {
-          console.warn('Could not load logo snapshot for proposal:', err);
+        } catch {
+          console.warn('Could not load logo snapshot for proposal');
         }
       }
 

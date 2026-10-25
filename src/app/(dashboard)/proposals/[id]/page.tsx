@@ -9,12 +9,13 @@ import prisma from '@/lib/db/prisma';
 export default async function ProposalDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) {
     redirect('/login');
   }
+  const routeParams = await params;
 
   if (!hasPermission(user, PERMISSIONS.PROPOSALS_VIEW)) {
     redirect('/proposals');
@@ -22,7 +23,7 @@ export default async function ProposalDetailPage({
 
   let proposal = null;
   try {
-    proposal = await ProposalService.getProposal(user, params.id);
+    proposal = await ProposalService.getProposal(user, routeParams.id);
   } catch {
     notFound();
   }

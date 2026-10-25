@@ -1,6 +1,8 @@
 import { UserSession, RoleName, TicketStatus } from '@/types';
 import prisma from '@/lib/db/prisma';
 import { requireOrganizationId as requireTenantOrganizationId } from '@/lib/auth/organization';
+import { isPlatformSuperAdmin } from '@/lib/security/platform';
+import { filterPermissionsForPlan } from '@/lib/platform/entitlements';
 
 export const PERMISSIONS = {
   // Users & Roles
@@ -96,6 +98,10 @@ export const PERMISSIONS = {
   MESSAGES_ATTACHMENTS: 'messages.attachments',
   MESSAGES_DELETE: 'messages.delete',
   MESSAGES_VIEW_ALL: 'messages.view_all',
+  MESSAGES_GROUPS_VIEW: 'messages.groups.view',
+  MESSAGES_GROUPS_CREATE: 'messages.groups.create',
+  MESSAGES_GROUPS_UPDATE: 'messages.groups.update',
+  MESSAGES_GROUPS_DELETE: 'messages.groups.delete',
 
   CHAT_VIEW: 'chat.view',
   CHAT_SEND: 'chat.send',
@@ -167,13 +173,29 @@ export const PERMISSIONS = {
 
 export function hasPermission(user: UserSession | null | undefined, permissionCode: string): boolean {
   if (!user) return false;
-  if (user.role === 'SUPER_ADMIN') return true;
+  if (isPlatformSuperAdmin(user)) return true;
+  if (user.workspaceReadOnly && !isReadOnlyPermission(permissionCode)) return false;
+  // The Company Super Admin owns the tenant workspace. Older role records may
+  // not contain the complete permission catalog, so grant the requested
+  // permission from the plan-aware catalog rather than from stale role rows.
+  // Plan limits still apply: a Scale owner can use every Scale module, while
+  // a lower plan cannot bypass its commercial entitlements.
+  if (user.role === 'SUPER_ADMIN') {
+    return filterPermissionsForPlan([permissionCode], user.planFeatures ?? null).includes(permissionCode);
+  }
   return user.permissions.includes(permissionCode);
+}
+
+// Expired subscriptions preserve only non-mutating operations. This check is
+// deliberately centralized so Server Actions, API handlers and services that
+// already use the permission boundary cannot accidentally rely on hidden UI.
+export function isReadOnlyPermission(permissionCode: string): boolean {
+  return permissionCode.includes('.view') || permissionCode.endsWith('.export') || permissionCode.startsWith('notifications.');
 }
 
 export function hasRole(user: UserSession | null | undefined, allowedRoles: RoleName[]): boolean {
   if (!user) return false;
-  if (user.role === 'SUPER_ADMIN') return true;
+  if (isPlatformSuperAdmin(user)) return true;
   return allowedRoles.includes(user.role);
 }
 
@@ -192,14 +214,16 @@ export function requirePermission(user: UserSession | null | undefined, permissi
 export async function canAccessTicket(user: UserSession, ticketId: string): Promise<boolean> {
   if (!user) return false;
   const organizationId = requireTenantOrganizationId(user);
-  if (user.role === 'SUPER_ADMIN') return true;
-  if (hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) return true;
+  if (isPlatformSuperAdmin(user)) return true;
 
-  // Check if ticket creator
+  // Resolve the tenant-owned ticket before applying any organization-level
+  // view grant. A view-all permission is never a cross-tenant grant.
   const ticket = typeof prisma.ticket.findFirst === 'function'
     ? await prisma.ticket.findFirst({ where: { id: ticketId, organizationId }, select: { createdById: true, organizationId: true } })
     : await prisma.ticket.findUnique({ where: { id: ticketId }, select: { createdById: true, organizationId: true } });
   if (ticket?.organizationId && ticket.organizationId !== organizationId) return false;
+  if (!ticket) return false;
+  if (hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) return true;
   if (ticket && ticket.createdById === user.id) return true;
 
   // Check if current or past assignee / viewer
@@ -224,8 +248,7 @@ export async function canAccessTicket(user: UserSession, ticketId: string): Prom
 export async function canPerformTicketAction(user: UserSession, ticketId: string): Promise<boolean> {
   if (!user) return false;
   const organizationId = requireTenantOrganizationId(user);
-  if (user.role === 'SUPER_ADMIN') return true;
-  if (hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) return true;
+  if (isPlatformSuperAdmin(user)) return true;
 
   const ticket = typeof prisma.ticket.findFirst === 'function'
     ? await prisma.ticket.findFirst({ where: { id: ticketId, organizationId }, select: { status: true, organizationId: true } })
@@ -236,6 +259,7 @@ export async function canPerformTicketAction(user: UserSession, ticketId: string
   if (ticket.status === 'CLOSED' || ticket.status === 'REJECTED') {
     return false;
   }
+  if (hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) return true;
 
   const activeAssignee = await prisma.ticketAssignee.findFirst({
     where: {
@@ -257,7 +281,7 @@ export async function canPerformTicketAction(user: UserSession, ticketId: string
 export async function canAccessAttachment(user: UserSession, attachmentId: string): Promise<boolean> {
   if (!user) return false;
   const organizationId = requireTenantOrganizationId(user);
-  if (user.role === 'SUPER_ADMIN') return true;
+  if (isPlatformSuperAdmin(user)) return true;
 
   const attachment = typeof prisma.attachment.findFirst === 'function'
     ? await prisma.attachment.findFirst({ where: { id: attachmentId, organizationId }, include: { note: true } })

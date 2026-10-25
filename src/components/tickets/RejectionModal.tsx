@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { useI18n } from '@/lib/i18n/context';
-import { rejectTicketAction } from '@/server/actions/tickets';
-import { AlertCircle } from 'lucide-react';
+import { useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { useI18n } from "@/lib/i18n/context";
+import { rejectTicketAction } from "@/server/actions/tickets";
+import { AlertCircle } from "lucide-react";
 
 interface RejectionModalProps {
   isOpen: boolean;
@@ -21,15 +21,15 @@ export function RejectionModal({
   ticketNumber,
   onSuccess,
 }: RejectionModalProps) {
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
 
   const handleReject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (reason.trim().length < 3) {
-      setError(t('tickets.enterRejectionReason'));
+      setError(t("tickets.enterRejectionReason"));
       return;
     }
 
@@ -40,11 +40,11 @@ export function RejectionModal({
     setLoading(false);
 
     if (res.success) {
-      setReason('');
+      setReason("");
       onClose();
       if (onSuccess) onSuccess();
     } else {
-      setError(res.error || t('common.error'));
+      setError(errorMessage(res.error, t("common.error")));
     }
   };
 
@@ -52,8 +52,8 @@ export function RejectionModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${t('tickets.reject')} - ${ticketNumber}`}
-      description={t('tickets.rejectionReason')}
+      title={`${t("tickets.reject")} - ${ticketNumber}`}
+      description={t("tickets.rejectionReason")}
     >
       <form onSubmit={handleReject} className="space-y-4">
         {error && (
@@ -65,13 +65,14 @@ export function RejectionModal({
 
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-            {t('tickets.rejectionReason')} <span className="text-rose-500">*</span>
+            {t("tickets.rejectionReason")}{" "}
+            <span className="text-rose-500">*</span>
           </label>
           <textarea
             rows={4}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder={t('tickets.enterRejectionReason')}
+            placeholder={t("tickets.enterRejectionReason")}
             required
             className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:border-brand-500 focus:outline-none"
           />
@@ -84,14 +85,14 @@ export function RejectionModal({
             disabled={loading}
             className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            {t('tickets.cancel')}
+            {t("tickets.cancel")}
           </button>
           <button
             type="submit"
             disabled={loading}
             className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors disabled:opacity-50"
           >
-            {loading ? t('common.loading') : t('tickets.confirmReject')}
+            {loading ? t("common.loading") : t("tickets.confirmReject")}
           </button>
         </div>
       </form>

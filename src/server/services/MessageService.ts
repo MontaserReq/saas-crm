@@ -4,7 +4,8 @@ import { createMessageSchema } from '@/lib/validation';
 import { getStorageProvider } from '@/lib/storage';
 import { NotificationService } from './NotificationService';
 import { AuditService } from './AuditService';
-import { requireOrganizationIdForUserId } from '@/lib/auth/organization';
+import { requireOrganizationId, requireOrganizationIdForUserId } from '@/lib/auth/organization';
+import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 
 export interface SendMessageAttachmentInput {
   originalName: string;
@@ -15,6 +16,7 @@ export interface SendMessageAttachmentInput {
 export interface SendMessageInput {
   toUserIds: string[];
   ccUserIds?: string[];
+  groupIds?: string[];
   subject: string;
   content: string;
   attachments?: SendMessageAttachmentInput[];
@@ -23,6 +25,59 @@ export interface SendMessageInput {
 export class MessageService {
   private static async organizationForUser(userId: string): Promise<string> {
     return requireOrganizationIdForUserId(userId);
+  }
+
+  static async listGroups(user: UserSession) {
+    if (!hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_VIEW) && !hasPermission(user, PERMISSIONS.CHAT_VIEW)) return [];
+    const organizationId = requireOrganizationId(user);
+    return prisma.messageGroup.findMany({
+      where: {
+        organizationId,
+        members: { some: { userId: user.id } },
+      },
+      orderBy: { name: 'asc' },
+      include: {
+        members: {
+          include: {
+            user: { select: { id: true, name: true, email: true, department: { select: { id: true, name: true, code: true } } } },
+          },
+          orderBy: { user: { name: 'asc' } },
+        },
+      },
+    });
+  }
+
+  static async createGroup(user: UserSession, input: { name: string; description?: string; memberIds: string[]; canMembersSend?: boolean }) {
+    if (!hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_CREATE)) throw new Error('Forbidden: message group creation permission required');
+    const organizationId = requireOrganizationId(user);
+    const name = input.name.trim();
+    if (name.length < 2 || name.length > 80) throw new Error('Group name must be between 2 and 80 characters');
+    const memberIds = [...new Set([user.id, ...input.memberIds.filter(Boolean)])];
+    const memberCount = await prisma.organizationMember.count({ where: { organizationId, userId: { in: memberIds }, status: 'ACTIVE' } });
+    if (memberCount !== memberIds.length) throw new Error('All group members must belong to the active organization');
+    return prisma.messageGroup.create({
+      data: {
+        organizationId,
+        name,
+        description: input.description?.trim() || null,
+        canMembersSend: input.canMembersSend !== false,
+        createdById: user.id,
+        members: { create: memberIds.map((userId) => ({ userId })) },
+      },
+      include: { members: { include: { user: { select: { id: true, name: true, email: true } } } } },
+    });
+  }
+
+  static async resolveGroupMemberIds(user: UserSession, groupIds: string[]) {
+    const organizationId = requireOrganizationId(user);
+    const uniqueGroupIds = [...new Set(groupIds.filter(Boolean))];
+    if (uniqueGroupIds.length === 0) return [];
+    const groups = await prisma.messageGroup.findMany({
+      where: { id: { in: uniqueGroupIds }, organizationId, members: { some: { userId: user.id } } },
+      select: { id: true, members: { select: { userId: true } } },
+    });
+    if (groups.length !== uniqueGroupIds.length) throw new Error('One or more message groups are unavailable to you');
+    return [...new Set(groups.flatMap((group) => group.members.map((member) => member.userId)))];
   }
   /**
    * List inbox messages for a user (messages where user is in TO or CC).
@@ -282,9 +337,10 @@ export class MessageService {
       content: input.content,
     });
     const organizationId = await this.organizationForUser(user.id);
+    const groupUserIds = await this.resolveGroupMemberIds(user, input.groupIds || []);
 
     // Deduplicate recipients: ensure TO takes precedence over CC, avoid sending to self multiple times
-    const toSet = new Set(validated.toUserIds);
+    const toSet = new Set([...validated.toUserIds, ...groupUserIds]);
     const ccSet = new Set((validated.ccUserIds || []).filter((id) => !toSet.has(id)));
 
     const recipientEntries: Array<{ userId: string; type: 'TO' | 'CC' }> = [];

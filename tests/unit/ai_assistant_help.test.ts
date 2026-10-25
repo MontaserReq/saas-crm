@@ -57,8 +57,8 @@ describe('AiAssistantToolService.help — permission-filtered topics', () => {
     expect(result).toEqual({ ok: false, reason: 'forbidden' });
   });
 
-  it('SUPER_ADMIN can see every help topic regardless of direct permission grants', () => {
-    const user = makeUser({ role: 'SUPER_ADMIN', permissions: [] });
+  it('PLATFORM_ADMIN can see every help topic regardless of direct permission grants', () => {
+    const user = makeUser({ role: 'PLATFORM_ADMIN', isPlatformAdmin: true, permissions: [] });
     for (const topic of HELP_TOPICS) {
       const result = AiAssistantToolService.help(user, { topic: topic.key });
       expect(result.ok).toBe(true);

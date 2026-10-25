@@ -3,12 +3,23 @@
 import prisma from '@/lib/db/prisma';
 import { requireAuth, hashPassword, verifyPassword, createSession } from '@/lib/auth/session';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { userCreateSchema, userUpdateSchema } from '@/lib/validation';
+import { emailSchema, parseOptionalInternationalPhone, userCreateSchema, userUpdateSchema } from '@/lib/validation';
 import { AuditService } from '@/server/services/AuditService';
 import { revalidatePath } from 'next/cache';
 import { requireOrganizationId } from '@/lib/auth/organization';
 import { checkRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
 import { getRequestContext } from '@/lib/security/request';
+import { canManageProtectedAccount, isProtectedPlatformAccount, isPlatformSuperAdmin } from '@/lib/security/platform';
+import { assertOrganizationUserCapacity } from '@/lib/platform/userCapacity';
+
+const platformIdentitySelect = {
+  isPlatformAdmin: true,
+  role: { select: { name: true } },
+} as const;
+
+function protectedAccountError() {
+  return { success: false as const, error: 'Platform administrator accounts are protected' };
+}
 
 async function validateReportingManager(userId: string | null | undefined, managerId: string | null | undefined, organizationId: string) {
   if (!managerId) return;
@@ -41,6 +52,14 @@ export async function createUserAction(data: any) {
     const department = await prisma.department.findFirst({ where: { id: validated.departmentId, organizationId }, select: { id: true } });
     if (!department) return { success: false, error: 'Selected department does not belong to the active organization' };
     await validateReportingManager(null, validated.reportsToUserId, organizationId);
+    const requestedRole = await prisma.role.findUnique({ where: { id: validated.roleId }, select: { id: true, name: true } });
+    if (!requestedRole) return { success: false, error: 'Selected role is invalid' };
+    const canManageRoles = hasPermission(user, PERMISSIONS.USERS_MANAGE_ROLES);
+    if (requestedRole.name === 'PLATFORM_ADMIN') return { success: false, error: 'Platform Admin cannot be granted from a company account' };
+    if (requestedRole.name === 'SUPER_ADMIN' && !isPlatformSuperAdmin(user) && user.role !== 'SUPER_ADMIN') return { success: false, error: 'Only a Company Super Admin can grant this role' };
+    if (!canManageRoles && requestedRole.name !== 'MEMBER') {
+      return { success: false, error: 'Role assignment permission is required for this role' };
+    }
     const existing = await prisma.user.findUnique({ where: { email: validated.email.toLowerCase() } });
     if (existing) {
       return { success: false, error: 'A user with this email already exists' };
@@ -49,15 +68,19 @@ export async function createUserAction(data: any) {
     const passwordHash = await hashPassword(validated.password);
 
     const newUser = await prisma.$transaction(async (tx) => {
-      const created = await tx.user.create({ data: {
-        name: validated.name,
-        email: validated.email.toLowerCase(),
-        phone: validated.phone || null,
-        passwordHash,
-        roleId: validated.roleId,
-        departmentId: validated.departmentId,
-        reportsToUserId: validated.reportsToUserId || null,
-      } });
+      await assertOrganizationUserCapacity(tx, organizationId);
+      const created = await tx.user.create({
+        data: {
+          name: validated.name,
+          email: validated.email.toLowerCase(),
+          phone: validated.phone || null,
+          passwordHash,
+          roleId: requestedRole.id,
+          departmentId: validated.departmentId,
+          reportsToUserId: validated.reportsToUserId || null,
+        },
+        select: { id: true, name: true, email: true, phone: true, roleId: true, departmentId: true, reportsToUserId: true, isActive: true },
+      });
       await tx.organizationMember.create({ data: { organizationId, userId: created.id, roleId: created.roleId, status: 'ACTIVE' } });
       return created;
     });
@@ -97,9 +120,11 @@ export async function getUserForEditAction(id: string) {
         allowedIps: true,
         reportsToUserId: true,
         userPermissions: { select: { permissionId: true } },
+        ...platformIdentitySelect,
       },
     });
     if (!target) return { success: false, error: 'User not found' };
+    if (!canManageProtectedAccount(actor, target)) return protectedAccountError();
 
     return { success: true, user: target };
   } catch (err: any) {
@@ -111,8 +136,9 @@ export async function getLoginSessionsAction(targetUserId: string) {
   const user = await requireAuth();
   const organizationId = requireOrganizationId(user);
   if (!hasPermission(user, PERMISSIONS.USERS_VIEW_SESSIONS)) return { success: false, error: 'Forbidden' };
-  const target = await prisma.user.findFirst({ where: { id: targetUserId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
+  const target = await prisma.user.findFirst({ where: { id: targetUserId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true, ...platformIdentitySelect } });
   if (!target) return { success: false, error: 'User not found' };
+  if (!canManageProtectedAccount(user, target)) return protectedAccountError();
   const sessions = await prisma.loginSession.findMany({ where: { userId: target.id }, orderBy: { loginAt: 'desc' }, take: 100 });
   return { success: true, sessions };
 }
@@ -126,8 +152,9 @@ export async function updateUserAction(id: string, data: any) {
     }
 
     const validated = userUpdateSchema.parse(data);
-    const existingUser = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { name: true, email: true, phone: true, roleId: true, departmentId: true, isActive: true, accessMode: true, allowedIps: true, reportsToUserId: true, userPermissions: { select: { permissionId: true } } } });
+    const existingUser = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { name: true, email: true, phone: true, roleId: true, departmentId: true, isActive: true, accessMode: true, allowedIps: true, reportsToUserId: true, userPermissions: { select: { permissionId: true } }, ...platformIdentitySelect } });
     if (!existingUser) return { success: false, error: 'User not found' };
+    if (!canManageProtectedAccount(user, existingUser)) return protectedAccountError();
     if (validated.isActive !== existingUser.isActive && !hasPermission(user, validated.isActive ? PERMISSIONS.USERS_ENABLE : PERMISSIONS.USERS_DISABLE)) return { success: false, error: 'Forbidden: account status permission required' };
     const canManageAccess = hasPermission(user, PERMISSIONS.USERS_MANAGE_ACCESS_RESTRICTIONS);
     let currentAllowedIps: string[] = [];
@@ -135,6 +162,12 @@ export async function updateUserAction(id: string, data: any) {
     if ((validated.accessMode !== existingUser.accessMode || JSON.stringify(validated.allowedIps) !== JSON.stringify(currentAllowedIps)) && !canManageAccess) return { success: false, error: 'Forbidden: access restriction permission required' };
     const canManageRoles = hasPermission(user, PERMISSIONS.USERS_MANAGE_ROLES);
     if (validated.roleId !== existingUser.roleId && !canManageRoles) return { success: false, error: 'Forbidden: role assignment permission required' };
+    if (validated.roleId !== existingUser.roleId && canManageRoles) {
+      const requestedRole = await prisma.role.findUnique({ where: { id: validated.roleId }, select: { name: true } });
+      if (!requestedRole) return { success: false, error: 'Selected role is invalid' };
+      if (requestedRole.name === 'PLATFORM_ADMIN') return { success: false, error: 'Platform Admin cannot be granted from a company account' };
+      if (requestedRole.name === 'SUPER_ADMIN' && !isPlatformSuperAdmin(user) && user.role !== 'SUPER_ADMIN') return { success: false, error: 'Only a Company Super Admin can grant this role' };
+    }
     const canManageReporting = hasPermission(user, PERMISSIONS.USERS_MANAGE_REPORTING);
     if (validated.reportsToUserId !== existingUser.reportsToUserId && !canManageReporting) return { success: false, error: 'Forbidden: reporting hierarchy permission required' };
     const department = await prisma.department.findFirst({ where: { id: validated.departmentId, organizationId }, select: { id: true } });
@@ -168,11 +201,25 @@ export async function updateUserAction(id: string, data: any) {
       updateData.passwordHash = await hashPassword(validated.password);
     }
 
+    const passwordChanged = Boolean(updateData.passwordHash);
     const updatedUser = await prisma.$transaction(async (tx) => {
-      const updated = await tx.user.update({ where: { id }, data: updateData });
+      if (validated.isActive && !existingUser.isActive) {
+        await assertOrganizationUserCapacity(tx, organizationId, { excludeUserId: id });
+      }
+      const updated = await tx.user.update({
+        where: { id },
+        data: updateData,
+        select: { id: true, name: true, email: true, phone: true, roleId: true, departmentId: true, reportsToUserId: true, isActive: true, accessMode: true, allowedIps: true },
+      });
       if (permissionsChanged) {
         await tx.userPermission.deleteMany({ where: { userId: id } });
         if (requestedPermissionIds.length) await tx.userPermission.createMany({ data: requestedPermissionIds.map((permissionId) => ({ userId: id, permissionId })) });
+      }
+      if (passwordChanged) {
+        await tx.loginSession.updateMany({
+          where: { userId: id, logoutAt: null, ...(id === user.id && user.sessionId ? { id: { not: user.sessionId } } : {}) },
+          data: { logoutAt: new Date() },
+        });
       }
       return updated;
     });
@@ -218,8 +265,9 @@ export async function disableUserAction(id: string) {
       return { success: false, error: 'Cannot disable your own account' };
     }
 
-    const target = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
+    const target = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true, ...platformIdentitySelect } });
     if (!target) return { success: false, error: 'User not found' };
+    if (!canManageProtectedAccount(user, target)) return protectedAccountError();
 
     const [targetUser] = await prisma.$transaction([
       prisma.user.update({ where: { id: target.id }, data: { isActive: false } }),
@@ -240,9 +288,13 @@ export async function enableUserAction(id: string) {
     const user = await requireAuth();
     const organizationId = requireOrganizationId(user);
     if (!hasPermission(user, PERMISSIONS.USERS_ENABLE)) return { success: false, error: 'Forbidden: Insufficient permissions to enable user' };
-    const target = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true } });
+    const target = await prisma.user.findFirst({ where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true, isActive: true, ...platformIdentitySelect } });
     if (!target) return { success: false, error: 'User not found' };
-    const targetUser = await prisma.user.update({ where: { id: target.id }, data: { isActive: true } });
+    if (!canManageProtectedAccount(user, target)) return protectedAccountError();
+    const targetUser = await prisma.$transaction(async (tx) => {
+      if (!target.isActive) await assertOrganizationUserCapacity(tx, organizationId, { excludeUserId: target.id });
+      return tx.user.update({ where: { id: target.id }, data: { isActive: true } });
+    });
     await AuditService.logAudit({ actorId: user.id, action: 'USER_ENABLED', entityType: 'User', entityId: id, metadata: { name: targetUser.name, email: targetUser.email } });
     revalidatePath('/admin/users');
     return { success: true };
@@ -253,7 +305,7 @@ export async function deleteUserAction(id: string) {
   try {
     const user = await requireAuth();
     const organizationId = requireOrganizationId(user);
-    if (user.role !== 'SUPER_ADMIN') {
+    if (!isPlatformSuperAdmin(user) && user.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Forbidden: Super Admin access required' };
     }
     if (id === user.id) {
@@ -263,6 +315,7 @@ export async function deleteUserAction(id: string) {
     const targetUser = await prisma.user.findUnique({
       where: { id, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } },
       include: {
+        role: { select: { name: true } },
         _count: {
           select: {
             ticketAssignees: true,
@@ -275,6 +328,7 @@ export async function deleteUserAction(id: string) {
     });
 
     if (!targetUser) return { success: false, error: 'User not found' };
+    if (isProtectedPlatformAccount(targetUser)) return protectedAccountError();
 
     const count = (targetUser as any)._count;
     const hasRelations =
@@ -334,13 +388,14 @@ export async function transferUserWorkAction(data: {
     }
 
     const [fromUser, toUser] = await Promise.all([
-      prisma.user.findFirst({ where: { id: fromUserId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } } }),
-      prisma.user.findFirst({ where: { id: toUserId, isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, include: { department: true } }),
+      prisma.user.findFirst({ where: { id: fromUserId, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, include: { role: { select: { name: true } } } }),
+      prisma.user.findFirst({ where: { id: toUserId, isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, include: { department: true, role: { select: { name: true } } } }),
     ]);
 
     if (!fromUser || !toUser) {
       return { success: false, error: 'User not found or target user is inactive' };
     }
+    if ((!canManageProtectedAccount(user, fromUser) || !canManageProtectedAccount(user, toUser))) return protectedAccountError();
 
     let transferredTicketsCount = 0;
     let transferredSchoolsCount = 0;
@@ -350,6 +405,7 @@ export async function transferUserWorkAction(data: {
       if (transferOpenTickets) {
         const activeTickets = await tx.ticket.findMany({
           where: {
+            organizationId,
             status: { notIn: ['CLOSED', 'REJECTED'] },
             assignees: {
               some: {
@@ -416,7 +472,7 @@ export async function transferUserWorkAction(data: {
       // 2. Transfer Responsible Schools
       if (transferResponsibleSchools) {
         const updatedSchools = await tx.school.updateMany({
-          where: { responsibleEmployeeId: fromUserId },
+          where: { organizationId, responsibleEmployeeId: fromUserId },
           data: { responsibleEmployeeId: toUserId },
         });
         transferredSchoolsCount = updatedSchools.count;
@@ -455,7 +511,7 @@ export async function updateUserProfileAction(data: { name?: string; phone?: str
 
     const updateData: any = {};
     if (data.name && data.name.trim().length >= 2) updateData.name = data.name.trim();
-    if (data.phone !== undefined) updateData.phone = data.phone?.trim() || null;
+    if (data.phone !== undefined) updateData.phone = parseOptionalInternationalPhone(data.phone);
     if (data.avatar !== undefined) updateData.avatar = data.avatar;
 
     const updated = await prisma.user.update({
@@ -489,7 +545,7 @@ export async function updateUserCredentialsAction(data: {
 
     if (data.newPassword) {
       const policy = RATE_LIMIT_POLICY_CONFIG.password_change;
-      const request = getRequestContext();
+      const request = await getRequestContext();
       const [userLimit, ipLimit] = await Promise.all([
         checkRateLimit({ policy: 'password_change', identity: `password-change-user:${user.id}`, ...policy }),
         checkRateLimit({ policy: 'password_change', identity: `password-change-ip:${request.ipAddress}`, ...policy }),
@@ -523,7 +579,7 @@ export async function updateUserCredentialsAction(data: {
     const updateData: any = {};
 
     if (data.newEmail && data.newEmail.trim().toLowerCase() !== dbUser.email) {
-      const email = data.newEmail.trim().toLowerCase();
+      const email = emailSchema.parse(data.newEmail);
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
         return { success: false, error: 'Email is already taken by another account' };
@@ -539,17 +595,16 @@ export async function updateUserCredentialsAction(data: {
       return { success: true, message: 'No changes provided' };
     }
 
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: updateData,
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.user.update({ where: { id: user.id }, data: updateData });
+      if (updateData.passwordHash) {
+        await tx.loginSession.updateMany({
+          where: { userId: user.id, logoutAt: null, ...(user.sessionId ? { id: { not: user.sessionId } } : {}) },
+          data: { logoutAt: new Date() },
+        });
+      }
+      return row;
     });
-
-    if (updateData.passwordHash) {
-      await prisma.loginSession.updateMany({
-        where: { userId: user.id, logoutAt: null, ...(user.sessionId ? { id: { not: user.sessionId } } : {}) },
-        data: { logoutAt: new Date() },
-      });
-    }
 
     await AuditService.logAudit({
       actorId: user.id,

@@ -1,10 +1,13 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { DepartmentModal } from './DepartmentModal';
-import { AdminPasswordConfirmModal } from './AdminPasswordConfirmModal';
-import { deleteDepartmentAction, toggleDepartmentStatusAction } from '@/server/actions/admin';
-import { useI18n } from '@/lib/i18n/context';
+import { useState } from "react";
+import { DepartmentModal } from "./DepartmentModal";
+import { AdminPasswordConfirmModal } from "./AdminPasswordConfirmModal";
+import {
+  deleteDepartmentAction,
+  toggleDepartmentStatusAction,
+} from "@/server/actions/admin";
+import { useI18n } from "@/lib/i18n/context";
 import {
   Building2,
   Plus,
@@ -18,8 +21,8 @@ import {
   AlertTriangle,
   Info,
   UserCheck,
-} from 'lucide-react';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+} from "lucide-react";
+import { ExportDropdown } from "@/components/ui/ExportDropdown";
 
 interface DepartmentItem {
   id: string;
@@ -34,21 +37,34 @@ interface DepartmentItem {
   _count: {
     users: number;
     tickets: number;
+    crmTasks: number;
+    calendarEvents: number;
   };
 }
 
 interface DepartmentsClientViewProps {
   departments: DepartmentItem[];
-  users?: Array<{ id: string; name: string; email: string; department?: { name: string } | null }>;
+  users?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    department?: { name: string } | null;
+  }>;
 }
 
-export function DepartmentsClientView({ departments, users = [] }: DepartmentsClientViewProps) {
-  const { t, language } = useI18n();
+export function DepartmentsClientView({
+  departments,
+  users = [],
+}: DepartmentsClientViewProps) {
+  const { t, language, errorMessage } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [editingDept, setEditingDept] = useState<DepartmentItem | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "info" | "error";
+    message: string;
+  } | null>(null);
 
   const [deletingDept, setDeletingDept] = useState<DepartmentItem | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -57,11 +73,18 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
     (d) =>
       d.name.toLowerCase().includes(search.toLowerCase()) ||
       d.code.toLowerCase().includes(search.toLowerCase()) ||
-      (d.description && d.description.toLowerCase().includes(search.toLowerCase()))
+      (d.description &&
+        d.description.toLowerCase().includes(search.toLowerCase())),
   );
 
-  const totalMembers = departments.reduce((acc, d) => acc + (d._count?.users || 0), 0);
-  const totalTickets = departments.reduce((acc, d) => acc + (d._count?.tickets || 0), 0);
+  const totalMembers = departments.reduce(
+    (acc, d) => acc + (d._count?.users || 0),
+    0,
+  );
+  const totalTickets = departments.reduce(
+    (acc, d) => acc + (d._count?.tickets || 0),
+    0,
+  );
   const activeCount = departments.filter((d) => d.isActive).length;
 
   const handleDeleteConfirm = async () => {
@@ -72,11 +95,13 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
 
     if (res.success) {
       setFeedback({
-        type: res.deactivated ? 'info' : 'success',
-        message: res.message || (res.deactivated ? t('common.success') : t('common.success')),
+        type: res.deactivated ? "info" : "success",
+        message:
+          res.message ||
+          (res.deactivated ? t("common.success") : t("common.success")),
       });
     } else {
-      throw new Error(res.error || t('common.error'));
+      throw new Error(errorMessage(res.error, t("common.error")));
     }
   };
 
@@ -88,24 +113,39 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
 
     if (res.success) {
       setFeedback({
-        type: 'success',
-        message: t('common.success'),
+        type: "success",
+        message: t("common.success"),
       });
     } else {
       setFeedback({
-        type: 'error',
-        message: res.error || t('common.error'),
+        type: "error",
+        message: errorMessage(res.error, t("common.error")),
       });
     }
   };
 
   const exportColumns = [
-    { header: t('admin.departments.code'), accessor: (d: any) => d.code },
-    { header: t('admin.departments.name'), accessor: (d: any) => d.name },
-    { header: t('admin.departments.description'), accessor: (d: any) => d.description || '' },
-    { header: t('admin.departments.membersCount'), accessor: (d: any) => d._count?.users || 0 },
-    { header: t('admin.departments.ticketsCount'), accessor: (d: any) => d._count?.tickets || 0 },
-    { header: t('admin.departments.status'), accessor: (d: any) => (d.isActive ? t('admin.departments.active') : t('admin.departments.inactive')) },
+    { header: t("admin.departments.code"), accessor: (d: any) => d.code },
+    { header: t("admin.departments.name"), accessor: (d: any) => d.name },
+    {
+      header: t("admin.departments.description"),
+      accessor: (d: any) => d.description || "",
+    },
+    {
+      header: t("admin.departments.membersCount"),
+      accessor: (d: any) => d._count?.users || 0,
+    },
+    {
+      header: t("admin.departments.ticketsCount"),
+      accessor: (d: any) => d._count?.tickets || 0,
+    },
+    {
+      header: t("admin.departments.status"),
+      accessor: (d: any) =>
+        d.isActive
+          ? t("admin.departments.active")
+          : t("admin.departments.inactive"),
+    },
   ];
 
   return (
@@ -114,20 +154,22 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{t('admin.departments.title')}</h2>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+              {t("admin.departments.title")}
+            </h2>
             <span className="px-2.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-brand-700 dark:text-brand-300 text-xs font-extrabold border border-purple-200 dark:border-purple-800">
               Super Admin
             </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {t('admin.departments.description')}
+            {t("admin.departments.description")}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <ExportDropdown
             filename="departments"
-            title={t('admin.departments.title')}
+            title={t("admin.departments.title")}
             data={departments}
             columns={exportColumns}
           />
@@ -139,7 +181,7 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-md shadow-brand-500/20 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>{t('admin.departments.addDepartment')}</span>
+            <span>{t("admin.departments.addDepartment")}</span>
           </button>
         </div>
       </div>
@@ -147,20 +189,36 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
       {/* KPI Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-          <span className="text-[11px] font-semibold text-slate-400 block">{t('admin.departments.totalDepts')}</span>
-          <span className="text-xl font-black text-slate-900 dark:text-slate-100">{departments.length}</span>
+          <span className="text-[11px] font-semibold text-slate-400 block">
+            {t("admin.departments.totalDepts")}
+          </span>
+          <span className="text-xl font-black text-slate-900 dark:text-slate-100">
+            {departments.length}
+          </span>
         </div>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-          <span className="text-[11px] font-semibold text-slate-400 block">{t('admin.departments.activeUnits')}</span>
-          <span className="text-xl font-black text-emerald-600">{activeCount}</span>
+          <span className="text-[11px] font-semibold text-slate-400 block">
+            {t("admin.departments.activeUnits")}
+          </span>
+          <span className="text-xl font-black text-emerald-600">
+            {activeCount}
+          </span>
         </div>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-          <span className="text-[11px] font-semibold text-slate-400 block">{t('admin.departments.totalMembers')}</span>
-          <span className="text-xl font-black text-brand-600">{totalMembers}</span>
+          <span className="text-[11px] font-semibold text-slate-400 block">
+            {t("admin.departments.totalMembers")}
+          </span>
+          <span className="text-xl font-black text-brand-600">
+            {totalMembers}
+          </span>
         </div>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-          <span className="text-[11px] font-semibold text-slate-400 block">{t('admin.departments.totalTickets')}</span>
-          <span className="text-xl font-black text-indigo-600">{totalTickets}</span>
+          <span className="text-[11px] font-semibold text-slate-400 block">
+            {t("admin.departments.totalTickets")}
+          </span>
+          <span className="text-xl font-black text-indigo-600">
+            {totalTickets}
+          </span>
         </div>
       </div>
 
@@ -168,20 +226,29 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
       {feedback && (
         <div
           className={`p-3.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-            feedback.type === 'success'
-              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
-              : feedback.type === 'info'
-              ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-brand-800 dark:text-brand-300'
-              : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+            feedback.type === "success"
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
+              : feedback.type === "info"
+                ? "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-brand-800 dark:text-brand-300"
+                : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300"
           }`}
         >
           <div className="flex items-center gap-2">
-            {feedback.type === 'success' && <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />}
-            {feedback.type === 'info' && <Info className="w-4 h-4 shrink-0 text-brand-600" />}
-            {feedback.type === 'error' && <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />}
+            {feedback.type === "success" && (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            )}
+            {feedback.type === "info" && (
+              <Info className="w-4 h-4 shrink-0 text-brand-600" />
+            )}
+            {feedback.type === "error" && (
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+            )}
             <span>{feedback.message}</span>
           </div>
-          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-600 font-bold">
+          <button
+            onClick={() => setFeedback(null)}
+            className="text-slate-400 hover:text-slate-600 font-bold"
+          >
             ×
           </button>
         </div>
@@ -195,7 +262,7 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('admin.departments.searchPlaceholder')}
+            placeholder={t("admin.departments.searchPlaceholder")}
             className="w-full pl-9 pr-3 rtl:pl-3 rtl:pr-9 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
           />
         </div>
@@ -208,33 +275,46 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
             key={dept.id}
             className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm space-y-3 transition-all ${
               dept.isActive
-                ? 'border-slate-200 dark:border-slate-800 hover:shadow-md'
-                : 'border-slate-200/50 dark:border-slate-800/50 opacity-70 bg-slate-50/50 dark:bg-slate-900/50'
+                ? "border-slate-200 dark:border-slate-800 hover:shadow-md"
+                : "border-slate-200/50 dark:border-slate-800/50 opacity-70 bg-slate-50/50 dark:bg-slate-900/50"
             }`}
           >
             {/* Header / Code & Status */}
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-brand-600 dark:text-brand-400 flex items-center justify-center font-extrabold text-xs font-mono">
-                {dept.code}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    dept.isActive
-                      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40'
-                      : 'bg-rose-50 text-rose-600 dark:bg-rose-950/40'
-                  }`}
-                >
-                  {dept.isActive ? t('admin.departments.active') : t('admin.departments.inactive')}
+            <div className="flex min-h-10 items-center justify-between gap-3">
+              <div
+                className="inline-flex min-w-0 max-w-[68%] items-center justify-center rounded-xl bg-purple-100 px-3 py-2 text-center text-[10px] font-extrabold tracking-wide text-brand-700 dark:bg-purple-950/60 dark:text-brand-300"
+                title={dept.code}
+              >
+                <span className="truncate" dir="ltr">
+                  {dept.code}
                 </span>
               </div>
+              <span
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                  dept.isActive
+                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    dept.isActive ? "bg-emerald-500" : "bg-rose-500"
+                  }`}
+                  aria-hidden="true"
+                />
+                {dept.isActive
+                  ? t("admin.departments.active")
+                  : t("admin.departments.inactive")}
+              </span>
             </div>
 
             {/* Name & Description */}
             <div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{dept.name}</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                {dept.name}
+              </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 min-h-[32px]">
-                {dept.description || '—'}
+                {dept.description || "—"}
               </p>
             </div>
 
@@ -243,7 +323,7 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
               <div className="pt-2">
                 <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                   <UserCheck className="w-3 h-3 text-brand-500" />
-                  <span>{t('admin.departments.managers')}</span>
+                  <span>{t("admin.departments.managers")}</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {dept.managers.map((m) => (
@@ -262,11 +342,18 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
               <div className="flex items-center gap-1">
                 <Users className="w-3.5 h-3.5 text-slate-400" />
-                <span>{dept._count?.users || 0} {t('admin.departments.members')}</span>
+                <span>
+                  {dept._count?.users || 0} {t("admin.departments.members")}
+                </span>
               </div>
               <div className="flex items-center gap-1">
                 <Ticket className="w-3.5 h-3.5 text-slate-400" />
-                <span>{dept._count?.tickets || 0} {t('admin.departments.tickets')}</span>
+                <span>
+                  {(dept._count?.tickets || 0) +
+                    (dept._count?.crmTasks || 0) +
+                    (dept._count?.calendarEvents || 0)}{" "}
+                  {language === "ar" ? "عنصر عمل" : "work items"}
+                </span>
               </div>
             </div>
 
@@ -278,13 +365,21 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
                 disabled={actionLoading === dept.id}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
                   dept.isActive
-                    ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-                    : 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                    ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                    : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                 }`}
-                title={dept.isActive ? t('admin.departments.deactivate') : t('admin.departments.activate')}
+                title={
+                  dept.isActive
+                    ? t("admin.departments.deactivate")
+                    : t("admin.departments.activate")
+                }
               >
                 <Power className="w-3 h-3" />
-                <span>{dept.isActive ? t('admin.departments.deactivate') : t('admin.departments.activate')}</span>
+                <span>
+                  {dept.isActive
+                    ? t("admin.departments.deactivate")
+                    : t("admin.departments.activate")}
+                </span>
               </button>
 
               <div className="flex items-center gap-1">
@@ -295,7 +390,7 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
                     setIsOpen(true);
                   }}
                   className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
-                  title={t('common.edit')}
+                  title={t("common.edit")}
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
@@ -308,7 +403,7 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
                   }}
                   disabled={actionLoading === dept.id}
                   className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 transition-colors"
-                  title={t('common.delete')}
+                  title={t("common.delete")}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -321,7 +416,9 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
       {filteredDepartments.length === 0 && (
         <div className="p-12 text-center bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
           <Building2 className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-          <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">{t('admin.departments.noDeptsFound')}</p>
+          <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+            {t("admin.departments.noDeptsFound")}
+          </p>
         </div>
       )}
 
@@ -343,10 +440,12 @@ export function DepartmentsClientView({ departments, users = [] }: DepartmentsCl
           setIsDeleteOpen(false);
           setDeletingDept(null);
         }}
-        title={t('admin.departments.confirmDeleteTitle', { name: deletingDept?.name || '' })}
-        itemDescription={t('admin.departments.confirmDeleteDesc', {
-          name: deletingDept?.name || '',
-          code: deletingDept?.code || '',
+        title={t("admin.departments.confirmDeleteTitle", {
+          name: deletingDept?.name || "",
+        })}
+        itemDescription={t("admin.departments.confirmDeleteDesc", {
+          name: deletingDept?.name || "",
+          code: deletingDept?.code || "",
         })}
         onConfirm={handleDeleteConfirm}
       />

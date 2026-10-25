@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { isIP } from 'node:net';
+import { trustsSingleHopProxy } from '@/lib/security/runtimeConfig';
 
 export function clientIp(request: Request): string {
   return resolveClientIp({
@@ -9,13 +11,16 @@ export function clientIp(request: Request): string {
 }
 
 export function resolveClientIp(input: { forwarded?: string | null; realIp?: string | null; runtimeIp?: string | null }): string {
-  const trustedProxy = process.env.TRUST_PROXY === 'true';
-  if (trustedProxy) {
-    const value = (input.forwarded?.split(',')[0] || input.realIp || '').trim();
-    return value.length <= 128 && value ? value : 'anonymous';
+  if (trustsSingleHopProxy()) {
+    // In single-hop mode the trusted edge must replace, rather than append to,
+    // forwarding headers. Multi-value chains are rejected instead of guessed.
+    const forwarded = input.forwarded?.trim() || '';
+    if (forwarded) return !forwarded.includes(',') && isIP(forwarded) ? forwarded : 'anonymous';
+    const value = input.realIp?.trim() || '';
+    return isIP(value) ? value : 'anonymous';
   }
   const runtimeIp = input.runtimeIp?.trim();
-  return runtimeIp && runtimeIp.length <= 128 ? runtimeIp : 'anonymous';
+  return runtimeIp && isIP(runtimeIp) ? runtimeIp : 'anonymous';
 }
 
 export function tooManyRequests(retryAfter: number, details?: { limit?: number; remaining?: number; resetAt?: number }) {

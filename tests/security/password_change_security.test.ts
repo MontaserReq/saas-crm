@@ -6,6 +6,7 @@ const { prismaMock, verifyPassword, hashPassword, requireAuth, createSession, ra
     loginSession: { updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
     organizationMember: { findMany: vi.fn().mockResolvedValue([{ organizationId: 'org-a' }]) },
+    $transaction: vi.fn(async (callback: (tx: typeof prismaMock) => unknown) => callback(prismaMock)),
   },
   verifyPassword: vi.fn(),
   hashPassword: vi.fn(),
@@ -47,11 +48,49 @@ describe('password change session invalidation', () => {
     const result = await updateUserCredentialsAction({ currentPassword: 'old-password', newPassword: 'new-password', newEmail: undefined });
 
     expect(result.success).toBe(true);
+    expect(prismaMock.$transaction).toHaveBeenCalledOnce();
+    expect(prismaMock.user.update).toHaveBeenCalledWith({ where: { id: 'user-a' }, data: { passwordHash: 'new-hash' } });
     expect(prismaMock.loginSession.updateMany).toHaveBeenCalledWith({
       where: { userId: 'user-a', logoutAt: null, id: { not: 'current-session' } },
       data: { logoutAt: expect.any(Date) },
     });
     expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'current-session' }));
+  });
+
+  it('preserves the existing session policy for an email-only change', async () => {
+    requireAuth.mockResolvedValue({ id: 'user-a', sessionId: 'current-session', organizationId: 'org-a' });
+    verifyPassword.mockResolvedValue(true);
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce({
+        id: 'user-a', name: 'User A', email: 'a@example.test', phone: null, avatar: null,
+        passwordHash: 'old-hash', role: { name: 'MEMBER', displayName: 'Member', rolePermissions: [] },
+        department: { id: 'dept-a', name: 'Dept A' },
+      })
+      .mockResolvedValueOnce(null);
+    prismaMock.user.update.mockResolvedValue({ id: 'user-a', name: 'User A', email: 'new@example.test', phone: null, avatar: null });
+
+    expect((await updateUserCredentialsAction({ currentPassword: 'old-password', newEmail: 'new@example.test' })).success).toBe(true);
+    expect(prismaMock.user.update).toHaveBeenCalledWith({ where: { id: 'user-a' }, data: { email: 'new@example.test' } });
+    expect(prismaMock.loginSession.updateMany).not.toHaveBeenCalled();
+    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'current-session', email: 'new@example.test' }));
+  });
+
+  it('does not rotate the current session when the credential transaction fails', async () => {
+    requireAuth.mockResolvedValue({ id: 'user-a', sessionId: 'current-session', organizationId: 'org-a' });
+    verifyPassword.mockResolvedValue(true);
+    hashPassword.mockResolvedValue('new-hash');
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-a', name: 'User A', email: 'a@example.test', phone: null, avatar: null,
+      passwordHash: 'old-hash', role: { name: 'MEMBER', displayName: 'Member', rolePermissions: [] },
+      department: { id: 'dept-a', name: 'Dept A' },
+    });
+    prismaMock.user.update.mockResolvedValue({ id: 'user-a', name: 'User A', email: 'a@example.test', phone: null, avatar: null });
+    prismaMock.loginSession.updateMany.mockRejectedValueOnce(new Error('SESSION_INVALIDATION_FAILED'));
+
+    expect(await updateUserCredentialsAction({ currentPassword: 'old-password', newPassword: 'new-password' })).toEqual({ success: false, error: 'SESSION_INVALIDATION_FAILED' });
+    expect(prismaMock.$transaction).toHaveBeenCalledOnce();
+    expect(prismaMock.user.update).toHaveBeenCalledOnce();
+    expect(createSession).not.toHaveBeenCalled();
   });
 
   it('does not change credentials when the current password is wrong', async () => {

@@ -1,8 +1,17 @@
 node_modules/
 .next/
+.next-*/
+.next-marketing-qa/
+.next-marketing-build/
+.next-smart-setup-build/
 .env
 .env.local
 .env.*.local
 uploads/
 *.log
 coverage/
+.next-smart-setup-qa/
+.next-plan-qa/
+.next-e2e/
+playwright-report/
+test-results/

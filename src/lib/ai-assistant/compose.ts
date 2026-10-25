@@ -110,7 +110,7 @@ function templateAnswer(tool: ToolName, data: any, lang: Lang): string {
     case 'searchSchools': {
       if (!data.schools.length) return notFoundMessage(lang);
       const lines = data.schools.map((s: any) => `- ${s.name} — ${s.city} (${statusLabel(s.status, lang)})`);
-      const header = ar ? `لقيت ${formatNumber(data.totalMatching, lang)} مدرسة:` : `Found ${formatNumber(data.totalMatching, lang)} school(s):`;
+      const header = ar ? `لقيت ${formatNumber(data.totalMatching, lang)} عميل:` : `Found ${formatNumber(data.totalMatching, lang)} customer(s):`;
       return [header, ...lines].join('\n');
     }
     case 'getSchool': {
@@ -126,7 +126,7 @@ function templateAnswer(tool: ToolName, data: any, lang: Lang): string {
       return lines.join('\n');
     }
     case 'getSchoolFollowUps': {
-      if (!data.items.length) return ar ? 'ما في مدارس محتاجة متابعة حاليًا.' : 'No schools currently need follow-up.';
+      if (!data.items.length) return ar ? 'ما في عملاء محتاجين متابعة حاليًا.' : 'No customers currently need follow-up.';
       const lines = data.items.map((i: any) => `- ${i.school} (${i.city}) — ${i.ticketNumber}, ${ar ? 'تاريخ المتابعة' : 'follow-up'}: ${formatDate(i.followUpAt, lang)}`);
       const header = ar ? `في ${formatNumber(data.count, lang)} تذكرة محتاجة متابعة:` : `${formatNumber(data.count, lang)} ticket(s) need follow-up:`;
       return [header, ...lines].join('\n');
@@ -166,8 +166,8 @@ function templateAnswer(tool: ToolName, data: any, lang: Lang): string {
     case 'getDashboardStats': {
       const m = data.metrics;
       return ar
-        ? `عندك ${formatNumber(m.total, lang)} تذكرة إجمالًا: ${formatNumber(m.pending, lang)} قيد الانتظار، ${formatNumber(m.inProgress, lang)} قيد التنفيذ، ${formatNumber(m.completed, lang)} مكتملة، ${formatNumber(m.closed, lang)} مغلقة. عدد المدارس: ${formatNumber(m.totalSchools, lang)}.`
-        : `You have ${formatNumber(m.total, lang)} ticket(s) total: ${formatNumber(m.pending, lang)} pending, ${formatNumber(m.inProgress, lang)} in progress, ${formatNumber(m.completed, lang)} completed, ${formatNumber(m.closed, lang)} closed. Schools: ${formatNumber(m.totalSchools, lang)}.`;
+        ? `عندك ${formatNumber(m.total, lang)} تذكرة إجمالًا: ${formatNumber(m.pending, lang)} قيد الانتظار، ${formatNumber(m.inProgress, lang)} قيد التنفيذ، ${formatNumber(m.completed, lang)} مكتملة، ${formatNumber(m.closed, lang)} مغلقة. عدد العملاء: ${formatNumber(m.totalSchools, lang)}.`
+        : `You have ${formatNumber(m.total, lang)} ticket(s) total: ${formatNumber(m.pending, lang)} pending, ${formatNumber(m.inProgress, lang)} in progress, ${formatNumber(m.completed, lang)} completed, ${formatNumber(m.closed, lang)} closed. Customers: ${formatNumber(m.totalSchools, lang)}.`;
     }
     case 'getMostOpenAssignees': {
       if (!data.items.length) return notFoundMessage(lang);
@@ -186,19 +186,19 @@ function templateAnswer(tool: ToolName, data: any, lang: Lang): string {
 
 async function summarizeSchoolActivity(data: { schoolName: string; recentTickets: any[] }, lang: Lang): Promise<string> {
   if (!data.recentTickets.length) {
-    return lang === 'ar' ? `ما في نشاط مسجل لمدرسة ${data.schoolName}.` : `No recorded activity for ${data.schoolName}.`;
+    return lang === 'ar' ? `ما في نشاط مسجل للعميل ${data.schoolName}.` : `No recorded activity for ${data.schoolName}.`;
   }
 
   const system =
     lang === 'ar'
-      ? 'أنت مساعد يلخص نشاط مدرسة بناءً على بيانات مرفقة فقط. لا تخترع أي معلومة غير موجودة بالبيانات. أجب بالعربية باختصار (3-4 أسطر).'
-      : 'You summarize a school\'s recent ticket activity using ONLY the data provided. Never invent information not present in the data. Answer in English, concisely (3-4 lines).';
+      ? 'أنت مساعد يلخص نشاط عميل بناءً على بيانات مرفقة فقط. لا تخترع أي معلومة غير موجودة بالبيانات. أجب بالعربية باختصار (3-4 أسطر).'
+      : 'You summarize a customer\'s recent ticket activity using ONLY the data provided. Never invent information not present in the data. Answer in English, concisely (3-4 lines).';
 
   try {
     const reply = await callGeminiChat(
       [
         { role: 'system', content: system },
-        { role: 'user', content: `School: ${data.schoolName}\nRecent tickets (JSON): ${JSON.stringify(data.recentTickets)}` },
+        { role: 'user', content: `Customer: ${data.schoolName}\nRecent tickets (JSON): ${JSON.stringify(data.recentTickets)}` },
       ],
       400
     );
@@ -208,6 +208,6 @@ async function summarizeSchoolActivity(data: { schoolName: string; recentTickets
     const lines = data.recentTickets.map(
       (t: any) => `- ${t.ticketNumber}: ${t.subject} — ${statusLabel(t.status, lang)} (${formatDate(t.createdAt, lang)})`
     );
-    return [lang === 'ar' ? `آخر نشاط لمدرسة ${data.schoolName}:` : `Recent activity for ${data.schoolName}:`, ...lines].join('\n');
+    return [lang === 'ar' ? `آخر نشاط للعميل ${data.schoolName}:` : `Recent activity for ${data.schoolName}:`, ...lines].join('\n');
   }
 }

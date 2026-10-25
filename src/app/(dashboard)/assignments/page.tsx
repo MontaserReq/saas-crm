@@ -9,7 +9,7 @@ export default async function AssignmentsPage() {
   const user = (await getCurrentUser())!;
 
   if (!hasPermission(user, PERMISSIONS.SCHOOLS_ASSIGN)) {
-    redirect('/');
+    redirect('/dashboard');
   }
 
   const [taskTypes, departments, teamMembers, availableSchools] = await Promise.all([

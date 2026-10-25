@@ -8,16 +8,19 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  phone        String?
-  passwordHash String
-  avatar       String?
-  isActive     Boolean   @default(true)
-  lastLoginAt  DateTime?
-  accessMode   String    @default("ANY_IP") // ANY_IP | RESTRICTED_IPS
-  allowedIps   String? // JSON array; retained independently from login history
+  id              String    @id @default(cuid())
+  name            String
+  email           String    @unique
+  phone           String?
+  passwordHash    String
+  avatar          String?
+  isActive        Boolean   @default(true)
+  // Explicit platform authority marker. A role name alone is never enough
+  // to access Platform Admin capabilities.
+  isPlatformAdmin Boolean   @default(false)
+  lastLoginAt     DateTime?
+  accessMode      String    @default("ANY_IP") // ANY_IP | RESTRICTED_IPS
+  allowedIps      String? // JSON array; retained independently from login history
 
   roleId String
   role   Role   @relation(fields: [roleId], references: [id])
@@ -32,54 +35,58 @@ model User {
 
   // Relations
   ticketAssignees               TicketAssignee[]
-  createdTickets                Ticket[]                  @relation("TicketCreator")
-  createdAssignments            SchoolAssignment[]        @relation("AssignmentCreator")
-  notes                         Note[]                    @relation("NoteAuthor")
-  communicationAttempts         CommunicationAttempt[]    @relation("AttemptAuthor")
-  assignmentHistoryFrom         AssignmentHistory[]       @relation("AssignFrom")
-  assignmentHistoryTo           AssignmentHistory[]       @relation("AssignTo")
-  assignmentHistoryAction       AssignmentHistory[]       @relation("AssignPerformed")
+  createdTickets                Ticket[]                   @relation("TicketCreator")
+  createdAssignments            SchoolAssignment[]         @relation("AssignmentCreator")
+  notes                         Note[]                     @relation("NoteAuthor")
+  communicationAttempts         CommunicationAttempt[]     @relation("AttemptAuthor")
+  assignmentHistoryFrom         AssignmentHistory[]        @relation("AssignFrom")
+  assignmentHistoryTo           AssignmentHistory[]        @relation("AssignTo")
+  assignmentHistoryAction       AssignmentHistory[]        @relation("AssignPerformed")
   notifications                 Notification[]
-  auditLogs                     AuditLog[]                @relation("AuditActor")
-  activityEvents                ActivityEvent[]           @relation("ActivityActor")
-  todos                         Todo[]                    @relation("UserTodos")
-  createdSchools                School[]                  @relation("SchoolCreator")
-  responsibleSchools            School[]                  @relation("SchoolResponsible")
-  createdClients                Client[]                  @relation("ClientCreator")
-  updatedClients                Client[]                  @relation("ClientUpdater")
-  assignedLeads                 Lead[]                    @relation("LeadAssignee")
-  assignedContacts              Contact[]                 @relation("ContactAssignee")
-  ownedDeals                    Deal[]                    @relation("DealOwner")
-  createdDeals                  Deal[]                    @relation("DealCreator")
+  auditLogs                     AuditLog[]                 @relation("AuditActor")
+  activityEvents                ActivityEvent[]            @relation("ActivityActor")
+  todos                         Todo[]                     @relation("UserTodos")
+  createdSchools                School[]                   @relation("SchoolCreator")
+  responsibleSchools            School[]                   @relation("SchoolResponsible")
+  createdClients                Client[]                   @relation("ClientCreator")
+  updatedClients                Client[]                   @relation("ClientUpdater")
+  assignedLeads                 Lead[]                     @relation("LeadAssignee")
+  assignedContacts              Contact[]                  @relation("ContactAssignee")
+  ownedDeals                    Deal[]                     @relation("DealOwner")
+  createdDeals                  Deal[]                     @relation("DealCreator")
   dealAssignments               DealAssignee[]
-  ownedCrmTasks                 CrmTask[]                 @relation("CrmTaskOwner")
-  assignedCrmTasks              CrmTask[]                 @relation("CrmTaskAssignee")
-  createdCrmTasks               CrmTask[]                 @relation("CrmTaskCreator")
+  ownedCrmTasks                 CrmTask[]                  @relation("CrmTaskOwner")
+  assignedCrmTasks              CrmTask[]                  @relation("CrmTaskAssignee")
+  createdCrmTasks               CrmTask[]                  @relation("CrmTaskCreator")
   managedDepartments            DepartmentManager[]
-  sentMessages                  Message[]                 @relation("SentMessages")
-  receivedMessages              MessageRecipient[]        @relation("ReceivedMessages")
+  sentMessages                  Message[]                  @relation("SentMessages")
+  receivedMessages              MessageRecipient[]         @relation("ReceivedMessages")
+  createdMessageGroups          MessageGroup[]             @relation("MessageGroupCreator")
+  messageGroupMemberships       MessageGroupMember[]
   chatMemberships               ChatParticipant[]
-  sentChatMessages              ChatMessage[]             @relation("ChatMessageSender")
+  sentChatMessages              ChatMessage[]              @relation("ChatMessageSender")
   loginSessions                 LoginSession[]
   passwordResetTokens           PasswordResetToken[]
-  schoolApprovalRequests        SchoolApprovalRequest[]   @relation("SchoolApprovalRequester")
-  schoolApprovalDecisions       SchoolApprovalRequest[]   @relation("SchoolApprovalDecider")
-  ticketApprovalRequests        TicketApprovalRequest[]   @relation("TicketApprovalRequester")
-  ticketApprovalDecisions       TicketApprovalRequest[]   @relation("TicketApprovalDecider")
-  assignedCalendarEvents        CalendarEvent[]           @relation("CalendarAssignedUser")
-  createdCalendarEvents         CalendarEvent[]           @relation("CalendarCreator")
+  schoolApprovalRequests        SchoolApprovalRequest[]    @relation("SchoolApprovalRequester")
+  schoolApprovalDecisions       SchoolApprovalRequest[]    @relation("SchoolApprovalDecider")
+  ticketApprovalRequests        TicketApprovalRequest[]    @relation("TicketApprovalRequester")
+  ticketApprovalDecisions       TicketApprovalRequest[]    @relation("TicketApprovalDecider")
+  operationApprovalRequests     OperationApprovalRequest[] @relation("OperationApprovalRequester")
+  operationApprovalDecisions    OperationApprovalRequest[] @relation("OperationApprovalDecider")
+  assignedCalendarEvents        CalendarEvent[]            @relation("CalendarAssignedUser")
+  createdCalendarEvents         CalendarEvent[]            @relation("CalendarCreator")
   calendarEventAssignees        CalendarEventAssignee[]
   taskTypeMemberships           TaskTypeMember[]
-  schoolResearchJobs            SchoolResearchJob[]       @relation("SchoolResearchJobCreator")
-  schoolResearchDecisions       SchoolResearchCandidate[] @relation("SchoolResearchCandidateDecider")
+  schoolResearchJobs            SchoolResearchJob[]        @relation("SchoolResearchJobCreator")
+  schoolResearchDecisions       SchoolResearchCandidate[]  @relation("SchoolResearchCandidateDecider")
   createdMeetingDetails         MeetingDetails[]
   presence                      UserPresence?
-  createdProposals              Proposal[]                @relation("ProposalCreator")
-  createdProposalTemplates      ProposalTemplate[]        @relation("ProposalTemplateCreator")
-  createdCustomFieldDefinitions CustomFieldDefinition[]   @relation("CustomFieldDefinitionCreatedBy")
-  updatedCustomFieldDefinitions CustomFieldDefinition[]   @relation("CustomFieldDefinitionUpdatedBy")
-  createdWorkflows              Workflow[]                @relation("WorkflowCreatedBy")
-  updatedWorkflows              Workflow[]                @relation("WorkflowUpdatedBy")
+  createdProposals              Proposal[]                 @relation("ProposalCreator")
+  createdProposalTemplates      ProposalTemplate[]         @relation("ProposalTemplateCreator")
+  createdCustomFieldDefinitions CustomFieldDefinition[]    @relation("CustomFieldDefinitionCreatedBy")
+  updatedCustomFieldDefinitions CustomFieldDefinition[]    @relation("CustomFieldDefinitionUpdatedBy")
+  createdWorkflows              Workflow[]                 @relation("WorkflowCreatedBy")
+  updatedWorkflows              Workflow[]                 @relation("WorkflowUpdatedBy")
 
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
@@ -89,6 +96,10 @@ model User {
   sentInvitations         OrganizationInvite[] @relation("InvitationSender")
   receivedInvitations     OrganizationInvite[] @relation("InvitationRecipient")
   operationExecutions     OperationExecution[] @relation("OperationExecutionUser")
+  requestedPlanUpgrades   PlanUpgradeRequest[] @relation("PlanUpgradeRequester")
+  reviewedPlanUpgrades    PlanUpgradeRequest[] @relation("PlanUpgradeReviewer")
+  confirmedPlanPayments   PlanUpgradeRequest[] @relation("PlanPaymentConfirmer")
+  initiatedDataImports    DataImport[]         @relation("DataImportInitiator")
 
   @@index([roleId])
   @@index([departmentId])
@@ -111,42 +122,49 @@ model Organization {
   language     String  @default("en")
   isActive     Boolean @default(true)
 
-  members                OrganizationMember[]
-  teams                  Team[]
-  settings               OrganizationSettings?
-  invitations            OrganizationInvite[]
-  departments            Department[]
-  schools                School[]
-  researchJobs           SchoolResearchJob[]
-  assignments            SchoolAssignment[]
-  taskTypes              TaskType[]
-  tickets                Ticket[]
-  ticketApprovalRequests TicketApprovalRequest[]
-  schoolApprovalRequests SchoolApprovalRequest[]
-  chatConversations      ChatConversation[]
-  calendarEvents         CalendarEvent[]
-  messageTemplates       MessageTemplate[]
-  proposalTemplates      ProposalTemplate[]
-  proposals              Proposal[]
-  attachments            Attachment[]
-  messageAttachments     MessageAttachment[]
-  notifications          Notification[]
-  auditLogs              AuditLog[]
-  activityEvents         ActivityEvent[]
-  todos                  Todo[]
-  messages               Message[]
-  clients                Client[]                @relation("ClientOrganization")
-  leads                  Lead[]
-  contacts               Contact[]
-  pipelines              Pipeline[]
-  pipelineStages         PipelineStage[]
-  deals                  Deal[]
-  crmTasks               CrmTask[]
-  customFieldDefinitions CustomFieldDefinition[]
-  customFieldValues      CustomFieldValue[]
-  workflows              Workflow[]
-  workflowExecutions     WorkflowExecution[]
-  operationExecutions    OperationExecution[]
+  members                   OrganizationMember[]
+  teams                     Team[]
+  settings                  OrganizationSettings?
+  invitations               OrganizationInvite[]
+  departments               Department[]
+  schools                   School[]
+  researchJobs              SchoolResearchJob[]
+  assignments               SchoolAssignment[]
+  taskTypes                 TaskType[]
+  tickets                   Ticket[]
+  ticketApprovalRequests    TicketApprovalRequest[]
+  schoolApprovalRequests    SchoolApprovalRequest[]
+  chatConversations         ChatConversation[]
+  calendarEvents            CalendarEvent[]
+  messageTemplates          MessageTemplate[]
+  proposalTemplates         ProposalTemplate[]
+  proposals                 Proposal[]
+  attachments               Attachment[]
+  messageAttachments        MessageAttachment[]
+  notifications             Notification[]
+  auditLogs                 AuditLog[]
+  activityEvents            ActivityEvent[]
+  todos                     Todo[]
+  messages                  Message[]
+  messageGroups             MessageGroup[]
+  clients                   Client[]                   @relation("ClientOrganization")
+  leads                     Lead[]
+  contacts                  Contact[]
+  pipelines                 Pipeline[]
+  pipelineStages            PipelineStage[]
+  deals                     Deal[]
+  crmTasks                  CrmTask[]
+  customFieldDefinitions    CustomFieldDefinition[]
+  customFieldValues         CustomFieldValue[]
+  workflows                 Workflow[]
+  workflowExecutions        WorkflowExecution[]
+  operationExecutions       OperationExecution[]
+  externalIntegrations      ExternalIntegration[]
+  platformSubscription      PlatformSubscription?
+  planUpgradeRequests       PlanUpgradeRequest[]
+  platformSupportCases      PlatformSupportCase[]
+  dataImports               DataImport[]
+  operationApprovalRequests OperationApprovalRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -211,10 +229,143 @@ model OrganizationSettings {
   clientTypes             String       @default("[]")
   leadStatuses            String       @default("[]")
   ticketStatuses          String       @default("[]")
+  ticketPriorities        String       @default("[]")
+  approvalRules           String       @default("{}")
   notificationPreferences String       @default("{}")
+  // Platform-admin feature exceptions for this workspace.
+  featureOverrides        String       @default("{}")
   dateFormat              String       @default("yyyy-MM-dd")
+  // Null preserves legacy workspaces. Versioned Smart Setup progress is tenant-owned.
+  onboardingState         String?
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
+}
+
+model ExternalIntegration {
+  id                    String       @id @default(cuid())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider              String
+  accountEmail          String?
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  scopes                String       @default("[]")
+  metadata              String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@unique([organizationId, provider])
+  @@index([organizationId, provider])
+}
+
+model PlatformPlan {
+  id                    String                 @id @default(cuid())
+  slug                  String                 @unique
+  name                  String
+  descriptionEn         String                 @default("")
+  descriptionAr         String                 @default("")
+  monthlyPrice          Decimal?               @db.Decimal(12, 2)
+  annualPrice           Decimal?               @db.Decimal(12, 2)
+  currency              String                 @default("JOD")
+  // Retained for legacy reporting only. Runtime billing never derives a price
+  // from this percentage.
+  annualDiscountPercent Int?
+  pricingVersion        Int                    @default(1)
+  catalogRevision       Int                    @default(1)
+  userLimit             Int?
+  features              String                 @default("[]")
+  availability          String                 @default("self_serve")
+  recommended           Boolean                @default(false)
+  isActive              Boolean                @default(true)
+  subscriptions         PlatformSubscription[]
+  upgradeRequests       PlanUpgradeRequest[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+}
+
+model PlatformSubscription {
+  id              String               @id @default(cuid())
+  organizationId  String               @unique
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  planId          String
+  plan            PlatformPlan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status          String               @default("TRIAL")
+  billingInterval String               @default("monthly")
+  startsAt        DateTime             @default(now())
+  endsAt          DateTime?
+  // Immutable trial history is retained when a paid period later replaces the
+  // current subscription window.
+  trialStartedAt  DateTime?
+  trialEndsAt     DateTime?
+  notes           String               @default("")
+  activations     PlanUpgradeRequest[] @relation("ActivatedSubscription")
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([planId, status])
+}
+
+model PlanUpgradeRequest {
+  id                      String                @id @default(cuid())
+  organizationId          String
+  organization            Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestedById           String
+  requestedBy             User                  @relation("PlanUpgradeRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  fromPlanId              String?
+  planId                  String
+  plan                    PlatformPlan          @relation(fields: [planId], references: [id], onDelete: Restrict)
+  billingInterval         String                @default("monthly")
+  reason                  String                @default("")
+  // PENDING_PAYMENT | PAYMENT_CONFIRMED | ACTIVATED | REJECTED | CANCELLED
+  status                  String                @default("PENDING_PAYMENT")
+  priceSnapshot           Decimal?              @db.Decimal(12, 2)
+  currencySnapshot        String?
+  pricingVersionSnapshot  Int?
+  confirmedAmount         Decimal?              @db.Decimal(12, 2)
+  confirmedCurrency       String?
+  paymentReference        String                @default("")
+  paymentNote             String                @default("")
+  paymentConfirmedById    String?
+  paymentConfirmedBy      User?                 @relation("PlanPaymentConfirmer", fields: [paymentConfirmedById], references: [id], onDelete: Restrict)
+  paymentConfirmedAt      DateTime?
+  activatedAt             DateTime?
+  activatedSubscriptionId String?
+  activatedSubscription   PlatformSubscription? @relation("ActivatedSubscription", fields: [activatedSubscriptionId], references: [id], onDelete: Restrict)
+  reviewNote              String                @default("")
+  reviewedById            String?
+  reviewedBy              User?                 @relation("PlanUpgradeReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  reviewedAt              DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
+  @@index([activatedSubscriptionId])
+}
+
+model PlatformSupportCase {
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subject        String
+  description    String        @default("")
+  contactEmail   String?
+  status         String        @default("OPEN")
+  priority       String        @default("NORMAL")
+  resolution     String        @default("")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId, status])
+  @@index([status, createdAt])
+}
+
+model PlatformSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 model CustomFieldDefinition {
@@ -241,7 +392,7 @@ model CustomFieldDefinition {
   updatedAt      DateTime           @updatedAt
 
   @@unique([organizationId, entityType, key])
-  @@index([organizationId, entityType, active, displayOrder])
+  @@index([organizationId, entityType, active, displayOrder], map: "CustomFieldDefinition_organizationId_entityType_active_displayO")
 }
 
 model CustomFieldValue {
@@ -260,9 +411,52 @@ model CustomFieldValue {
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 
-  @@unique([organizationId, fieldDefinitionId, entityType, entityId])
+  @@unique([organizationId, fieldDefinitionId, entityType, entityId], map: "CustomFieldValue_organizationId_fieldDefinitionId_entityType_en")
   @@index([organizationId, entityType, entityId])
   @@index([organizationId, fieldDefinitionId])
+}
+
+// Server-authoritative staging and history for Smart Excel/CSV imports.
+// sourceRows is short-lived and cleared after execution/cancellation. Only
+// sanitized row numbers and validation reasons are retained in failureRows.
+model DataImport {
+  id                     String       @id @default(cuid())
+  organizationId         String
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  initiatedById          String
+  initiatedBy            User         @relation("DataImportInitiator", fields: [initiatedById], references: [id], onDelete: Restrict)
+  destination            String?
+  recommendedDestination String?
+  originalFilename       String
+  sheetName              String
+  status                 String       @default("DRAFT") // DRAFT | READY | PROCESSING | COMPLETED | PARTIAL | FAILED | CANCELLED
+  mode                   String       @default("CREATE") // CREATE | SKIP_DUPLICATES | UPDATE | UPSERT
+  matchField             String?
+  headers                Json
+  sourceRows             Json?
+  mapping                Json?
+  proposedCustomFields   Json?
+  failureRows            Json?
+  errorMessage           String?
+  totalRows              Int          @default(0)
+  validRows              Int          @default(0)
+  processedRows          Int          @default(0)
+  importedRows           Int          @default(0)
+  updatedRows            Int          @default(0)
+  skippedRows            Int          @default(0)
+  failedRows             Int          @default(0)
+  idempotencyKey         String?
+  startedAt              DateTime?
+  completedAt            DateTime?
+  expiresAt              DateTime
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([initiatedById, createdAt])
+  @@index([expiresAt])
 }
 
 model Workflow {
@@ -312,7 +506,7 @@ model WorkflowExecution {
   @@unique([organizationId, workflowId, eventId])
   @@index([organizationId, status, createdAt])
   @@index([organizationId, workflowId, createdAt])
-  @@index([organizationId, eventType, entityType, entityId])
+  @@index([organizationId, eventType, entityType, entityId], map: "WorkflowExecution_organizationId_eventType_entityType_entityId_")
 }
 
 model OrganizationInvite {
@@ -337,7 +531,7 @@ model OrganizationInvite {
 
 model Role {
   id          String  @id @default(cuid())
-  name        String  @unique // SUPER_ADMIN, ADMIN, SCHOOL_MANAGER, MEMBER
+  name        String  @unique // PLATFORM_ADMIN, SUPER_ADMIN, ADMIN, SCHOOL_MANAGER, MEMBER
   displayName String
   description String?
   isSystem    Boolean @default(false)
@@ -396,18 +590,21 @@ model Department {
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   name           String
-  code           String        @unique // "PR", "SCHOOL_OUTREACH", "VISITS", "DATA_COLLECTION", "NGOS", "MANAGEMENT", "MEDIA"
+  code           String // Tenant-local code; legacy null-tenant rows remain protected by a partial DB index.
   description    String?
   isActive       Boolean       @default(true)
 
-  users     User[]
-  managers  DepartmentManager[]
-  tickets   Ticket[]
-  taskTypes TaskType[]
+  users          User[]
+  managers       DepartmentManager[]
+  tickets        Ticket[]
+  taskTypes      TaskType[]
+  crmTasks       CrmTask[]
+  calendarEvents CalendarEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([organizationId, code])
   @@index([organizationId, isActive])
 }
 
@@ -617,6 +814,8 @@ model CrmTask {
   assignedUser   User?        @relation("CrmTaskAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
   assignedTeamId String?
   assignedTeam   Team?        @relation("CrmTaskTeam", fields: [assignedTeamId], references: [id], onDelete: SetNull)
+  departmentId   String?
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   createdById    String
   createdBy      User         @relation("CrmTaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
   clientId       String?
@@ -638,6 +837,7 @@ model CrmTask {
   @@index([organizationId, status])
   @@index([organizationId, assignedUserId])
   @@index([organizationId, assignedTeamId])
+  @@index([organizationId, departmentId])
   @@index([organizationId, dueDate])
   @@index([organizationId, createdAt])
 }
@@ -725,18 +925,18 @@ model SchoolResearchJob {
   aiCallCount    Int     @default(0)
   sourceCount    Int     @default(0)
 
-  startedAt   DateTime?
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime            @default(now())
   currentOperationId String?
   currentOperation   OperationExecution? @relation("ResearchJobCurrentOperation", fields: [currentOperationId], references: [id], onDelete: SetNull)
 
   candidates SchoolResearchCandidate[]
   attempts   SchoolResearchAttempt[]
 
+  @@unique([currentOperationId])
   @@index([createdById, createdAt])
   @@index([status])
-  @@unique([currentOperationId])
 }
 
 model SchoolResearchCandidate {
@@ -877,7 +1077,7 @@ model TicketApprovalRequest {
   requester       User          @relation("TicketApprovalRequester", fields: [requesterId], references: [id])
   decidedById     String?
   decidedBy       User?         @relation("TicketApprovalDecider", fields: [decidedById], references: [id])
-  type            String // CORRECTION | RESUBMIT
+  type            String // EDIT | CORRECTION | RESUBMIT
   status          String        @default("PENDING")
   proposedData    String
   rejectionReason String?
@@ -889,10 +1089,35 @@ model TicketApprovalRequest {
   @@index([requesterId])
 }
 
+model OperationApprovalRequest {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  resourceType    String
+  operation       String
+  entityId        String?
+  entityLabel     String?
+  payload         String
+  status          String       @default("PENDING") // PENDING | PROCESSING | APPROVED | REJECTED
+  requesterId     String
+  requester       User         @relation("OperationApprovalRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  decidedById     String?
+  decidedBy       User?        @relation("OperationApprovalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  rejectionReason String?
+  createdAt       DateTime     @default(now())
+  decidedAt       DateTime?
+
+  @@index([organizationId, status, createdAt])
+  @@index([requesterId, createdAt])
+  @@index([resourceType, operation, entityId])
+}
+
 model ChatConversation {
   id             String            @id @default(cuid())
   organizationId String?
   organization   Organization?     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  messageGroupId String?           @unique
+  messageGroup   MessageGroup?     @relation(fields: [messageGroupId], references: [id], onDelete: Cascade)
   participants   ChatParticipant[]
   messages       ChatMessage[]
   createdAt      DateTime          @default(now())
@@ -1001,7 +1226,7 @@ model TaskType {
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   name           String
   // Legacy code retained only for historical ticket references. Not user-editable. Not surfaced in UI.
-  code           String?       @unique
+  code           String?
   description    String?
   isActive       Boolean       @default(true)
   createdById    String?
@@ -1015,6 +1240,7 @@ model TaskType {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([organizationId, code])
   @@index([isActive])
   @@index([departmentId])
 }
@@ -1297,6 +1523,37 @@ model Message {
   @@index([createdAt])
 }
 
+model MessageGroup {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  canMembersSend Boolean              @default(true)
+  createdById    String
+  createdBy      User                 @relation("MessageGroupCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  chatConversation ChatConversation?
+  members        MessageGroupMember[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, createdAt])
+  @@index([createdById])
+}
+
+model MessageGroupMember {
+  id        String       @id @default(cuid())
+  groupId   String
+  group     MessageGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
 model MessageRecipient {
   id         String    @id @default(cuid())
   messageId  String
@@ -1363,8 +1620,11 @@ model CalendarEvent {
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
   ticketId String?
-  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1374,6 +1634,8 @@ model CalendarEvent {
   @@index([startDate])
   @@index([type])
   @@index([organizationId, clientId])
+  @@index([organizationId, departmentId])
+  @@index([organizationId, ticketId])
 }
 
 model CalendarEventAssignee {
@@ -1394,7 +1656,7 @@ model MessageTemplate {
   id             String        @id @default(cuid())
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  code           String        @unique
+  code           String
   title          String
   titleAr        String
   subject        String
@@ -1407,6 +1669,7 @@ model MessageTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([organizationId, code])
   @@index([category])
 }
 
@@ -1504,39 +1767,39 @@ model RateLimitCounter {
 // intentionally separate from RateLimitCounter: rate limits count requests in
 // a time window, while this model owns active execution leases and idempotency.
 model OperationExecution {
-  id             String        @id @default(cuid())
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String?
-  user           User?         @relation("OperationExecutionUser", fields: [userId], references: [id], onDelete: SetNull)
-  operationType  String
-  idempotencyKey String?
-  status         String        @default("PENDING")
-  leaseExpiresAt DateTime?
-  startedAt      DateTime?
-  completedAt    DateTime?
-  attemptCount   Int           @default(0)
-  ownerToken     String?
-  resultPayload  String?
-  failureReason  String?
-  researchMaxProviderRequests Int?
-  researchMaxSourceRequests Int?
+  id                                 String        @id @default(cuid())
+  organizationId                     String?
+  organization                       Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId                             String?
+  user                               User?         @relation("OperationExecutionUser", fields: [userId], references: [id], onDelete: SetNull)
+  operationType                      String
+  idempotencyKey                     String?
+  status                             String        @default("PENDING")
+  leaseExpiresAt                     DateTime?
+  startedAt                          DateTime?
+  completedAt                        DateTime?
+  attemptCount                       Int           @default(0)
+  ownerToken                         String?
+  resultPayload                      String?
+  failureReason                      String?
+  researchMaxProviderRequests        Int?
+  researchMaxSourceRequests          Int?
   researchMaxSourceRequestsPerSchool Int?
-  researchMaxRetries Int?
-  researchMaxTokens Int?
-  researchMaxDurationMs Int?
-  researchProviderRequests Int @default(0)
-  researchSourceRequests Int @default(0)
-  researchRetryAttempts Int @default(0)
-  researchInputTokens Int @default(0)
-  researchOutputTokens Int @default(0)
-  researchTotalTokens Int @default(0)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  researchMaxRetries                 Int?
+  researchMaxTokens                  Int?
+  researchMaxDurationMs              Int?
+  researchProviderRequests           Int           @default(0)
+  researchSourceRequests             Int           @default(0)
+  researchRetryAttempts              Int           @default(0)
+  researchInputTokens                Int           @default(0)
+  researchOutputTokens               Int           @default(0)
+  researchTotalTokens                Int           @default(0)
+  createdAt                          DateTime      @default(now())
+  updatedAt                          DateTime      @updatedAt
 
   authoritativeResearchJob SchoolResearchJob? @relation("ResearchJobCurrentOperation")
 
-  @@unique([organizationId, operationType, idempotencyKey])
+  @@unique([organizationId, operationType, idempotencyKey], map: "OperationExecution_organizationId_operationType_idempotencyKey_")
   @@index([operationType, status, leaseExpiresAt])
   @@index([organizationId, operationType, status])
   @@index([userId, operationType, status])

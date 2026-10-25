@@ -14,6 +14,26 @@ function request(url = 'http://attacker.example/dashboard', headers?: Record<str
 }
 
 describe('authentication redirect origin safety', () => {
+  it('allows public marketing and signup pages without a session', () => {
+    for (const path of ['/', '/pricing', '/onboarding', '/login']) {
+      const response = middleware(request(`http://localhost:3000${path}`));
+      expect(response.headers.get('location')).toBeNull();
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    }
+  });
+
+  it('does not expose similarly named protected routes', () => {
+    process.env.APP_ORIGIN = '';
+    for (const path of ['/pricing-internal', '/pricing/admin', '/dashboard']) {
+      expect(middleware(request(`http://localhost:3000${path}`)).headers.get('location')).toBe('/login');
+    }
+  });
+
+  it('lets the login layout validate stale cookies instead of redirecting to marketing', () => {
+    const response = middleware(request('http://localhost:3000/login', { cookie: 'codeline_session=expired-or-revoked' }));
+    expect(response.headers.get('location')).toBeNull();
+  });
+
   it('uses a validated APP_ORIGIN for configured redirects', () => {
     process.env.APP_ORIGIN = 'https://crm.example.com';
     expect(authRedirect('/login', request()).headers.get('location')).toBe('https://crm.example.com/login');

@@ -8,7 +8,7 @@ export default async function AdminAnalyticsPage() {
   const user = (await getCurrentUser())!;
 
   if (!hasPermission(user, PERMISSIONS.ANALYTICS_VIEW)) {
-    redirect('/');
+    redirect('/dashboard');
   }
 
   const data = await AnalyticsService.getAdminAnalytics(user);

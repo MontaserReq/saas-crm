@@ -4,6 +4,7 @@ import { AuditService } from './AuditService';
 import { SchoolService } from './SchoolService';
 import { isValidCandidateTransition, ResearchCandidateStatus } from '@/lib/ai-school-research/stateMachine';
 import { requireOrganizationIdForUserId } from '@/lib/auth/organization';
+import { normalizeResearchEmail, normalizeResearchPhone } from '@/lib/ai-school-research/normalize';
 
 export class SchoolResearchCandidateService {
   private static async organizationForActor(actorId: string): Promise<string> {
@@ -41,8 +42,8 @@ export class SchoolResearchCandidateService {
       const payload = schoolSchema.parse({
         name: candidate.name,
         contactPerson: candidate.contactPerson,
-        phone: candidate.phone,
-        email: candidate.email,
+        phone: normalizeResearchPhone(candidate.phone) || null,
+        email: normalizeResearchEmail(candidate.email),
         city: candidate.city || 'Amman',
         area: candidate.area,
         classification: 'C',

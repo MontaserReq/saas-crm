@@ -1,23 +1,23 @@
-﻿import prisma from '@/lib/db/prisma';
-import { UserSession } from '@/types';
-import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { AuditService } from './AuditService';
-import { requireOrganizationContext } from '@/lib/auth/organization';
+﻿import prisma from "@/lib/db/prisma";
+import { UserSession } from "@/types";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
+import { AuditService } from "./AuditService";
+import { requireOrganizationContext } from "@/lib/auth/organization";
 
 export const CALENDAR_EVENT_TYPES = [
-  'MEETING',
-  'CALL',
-  'FOLLOW_UP',
-  'CONTRACT_SIGNING',
-  'APPOINTMENT',
-  'SCHEDULED_TASK',
+  "MEETING",
+  "CALL",
+  "FOLLOW_UP",
+  "CONTRACT_SIGNING",
+  "APPOINTMENT",
+  "SCHEDULED_TASK",
   // Legacy types kept for backwards compatibility
-  'DUE_DATE',
-  'TASK',
-  'EVENT',
+  "DUE_DATE",
+  "TASK",
+  "EVENT",
 ] as const;
 
-export type CalendarEventType = typeof CALENDAR_EVENT_TYPES[number];
+export type CalendarEventType = (typeof CALENDAR_EVENT_TYPES)[number];
 
 export interface CalendarEventInput {
   title: string;
@@ -34,6 +34,7 @@ export interface CalendarEventInput {
   schoolId?: string | null;
   clientId?: string | null;
   ticketId?: string | null;
+  departmentId?: string | null;
 }
 
 /** Include shape used throughout list/get queries */
@@ -48,6 +49,7 @@ const eventInclude = {
   school: { select: { id: true, name: true, city: true } },
   client: { select: { id: true, name: true, type: true, status: true } },
   ticket: { select: { id: true, ticketNumber: true, subject: true } },
+  department: { select: { id: true, name: true, code: true } },
 } as const;
 
 export class CalendarService {
@@ -57,10 +59,16 @@ export class CalendarService {
 
   static async listEvents(
     user: UserSession,
-    filter?: { startMonth?: string; type?: string; schoolId?: string; clientId?: string; myEventsOnly?: boolean }
+    filter?: {
+      startMonth?: string;
+      type?: string;
+      schoolId?: string;
+      clientId?: string;
+      myEventsOnly?: boolean;
+    },
   ) {
     if (!hasPermission(user, PERMISSIONS.CALENDAR_VIEW))
-      throw new Error('Forbidden: calendar.view permission required');
+      throw new Error("Forbidden: calendar.view permission required");
     const organizationId = (await requireOrganizationContext(user)).id;
     const canViewAll = hasPermission(user, PERMISSIONS.CALENDAR_VIEW_ALL);
 
@@ -74,69 +82,93 @@ export class CalendarService {
       ];
     }
 
-    if (filter?.type && filter.type !== 'ALL') {
+    if (filter?.type && filter.type !== "ALL") {
       where.type = filter.type;
     }
 
-    if (filter?.schoolId && filter.schoolId !== 'ALL') {
+    if (filter?.schoolId && filter.schoolId !== "ALL") {
       where.schoolId = filter.schoolId;
     }
-    if (filter?.clientId && filter.clientId !== 'ALL') where.clientId = filter.clientId;
+    if (filter?.clientId && filter.clientId !== "ALL")
+      where.clientId = filter.clientId;
 
     return prisma.calendarEvent.findMany({
       where,
-      orderBy: { startDate: 'asc' },
+      orderBy: { startDate: "asc" },
       include: eventInclude,
     });
   }
 
   static async createEvent(user: UserSession, input: CalendarEventInput) {
     if (!hasPermission(user, PERMISSIONS.CALENDAR_CREATE))
-      throw new Error('Forbidden: calendar.create permission required');
+      throw new Error("Forbidden: calendar.create permission required");
     const organizationId = (await requireOrganizationContext(user)).id;
     if (!input.title || input.title.trim().length < 2)
-      throw new Error('Event title is required');
-    if (!input.startDate)
-      throw new Error('Event start date is required');
+      throw new Error("Event title is required");
+    if (!input.startDate) throw new Error("Event start date is required");
 
     const startDate = new Date(input.startDate);
     const endDate = input.endDate ? new Date(input.endDate) : null;
 
     if (endDate && endDate < startDate) {
       throw new Error(
-        'تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء. / End date must be on or after the start date.'
+        "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء. / End date must be on or after the start date.",
       );
     }
 
     const rawIds = new Set<string>();
     if (input.userId) rawIds.add(input.userId);
-    if (input.assigneeIds?.length) input.assigneeIds.forEach((id) => rawIds.add(id));
+    if (input.assigneeIds?.length)
+      input.assigneeIds.forEach((id) => rawIds.add(id));
     if (rawIds.size === 0) rawIds.add(user.id);
     const assigneeIds = Array.from(rawIds);
     const primaryUserId = assigneeIds[0];
+    const primaryUser = await prisma.user.findFirst({
+      where: {
+        id: primaryUserId,
+        organizationMemberships: { some: { organizationId, status: "ACTIVE" } },
+      },
+      select: { departmentId: true },
+    });
+    const departmentId = input.departmentId || primaryUser?.departmentId || user.departmentId;
 
     const validAssignees = await prisma.organizationMember.count({
-      where: { organizationId, userId: { in: assigneeIds }, status: 'ACTIVE' },
+      where: { organizationId, userId: { in: assigneeIds }, status: "ACTIVE" },
     });
-    if (validAssignees !== assigneeIds.length) throw new Error('All assignees must belong to the active organization');
+    if (validAssignees !== assigneeIds.length)
+      throw new Error("All assignees must belong to the active organization");
+    if (!(await prisma.department.findFirst({ where: { id: departmentId, organizationId, isActive: true }, select: { id: true } })))
+      throw new Error("The responsible department is not active in this organization");
     if (input.schoolId) {
-      const school = await prisma.school.findFirst({ where: { id: input.schoolId, organizationId }, select: { id: true } });
-      if (!school) throw new Error('Related school not found in the active organization');
+      const school = await prisma.school.findFirst({
+        where: { id: input.schoolId, organizationId },
+        select: { id: true },
+      });
+      if (!school)
+        throw new Error("Related school not found in the active organization");
     }
     if (input.clientId) {
-      const client = await prisma.client.findFirst({ where: { id: input.clientId, organizationId, deletedAt: null }, select: { id: true } });
-      if (!client) throw new Error('Related client not found in the active organization');
+      const client = await prisma.client.findFirst({
+        where: { id: input.clientId, organizationId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!client)
+        throw new Error("Related client not found in the active organization");
     }
     if (input.ticketId) {
-      const ticket = await prisma.ticket.findFirst({ where: { id: input.ticketId, organizationId }, select: { id: true } });
-      if (!ticket) throw new Error('Related ticket not found in the active organization');
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: input.ticketId, organizationId },
+        select: { id: true },
+      });
+      if (!ticket)
+        throw new Error("Related ticket not found in the active organization");
     }
 
     const event = await prisma.calendarEvent.create({
       data: {
         title: input.title.trim(),
         description: input.description?.trim() || null,
-        type: input.type || 'MEETING',
+        type: input.type || "MEETING",
         startDate,
         endDate,
         allDay: !!input.allDay,
@@ -146,6 +178,7 @@ export class CalendarService {
         schoolId: input.schoolId || null,
         clientId: input.clientId || input.schoolId || null,
         ticketId: input.ticketId || null,
+        departmentId,
         organizationId,
         assignees: {
           create: assigneeIds.map((uid) => ({ userId: uid })),
@@ -156,78 +189,133 @@ export class CalendarService {
 
     await AuditService.logAudit({
       actorId: user.id,
-      action: 'CALENDAR_EVENT_CREATED',
-      entityType: 'CalendarEvent',
+      action: "CALENDAR_EVENT_CREATED",
+      entityType: "CalendarEvent",
       entityId: event.id,
-      metadata: { title: event.title, type: event.type, assigneeCount: assigneeIds.length },
+      metadata: {
+        title: event.title,
+        type: event.type,
+        assigneeCount: assigneeIds.length,
+      },
     });
 
     return event;
   }
 
-  static async updateEvent(user: UserSession, id: string, input: Partial<CalendarEventInput>) {
+  static async updateEvent(
+    user: UserSession,
+    id: string,
+    input: Partial<CalendarEventInput>,
+  ) {
     if (!hasPermission(user, PERMISSIONS.CALENDAR_UPDATE))
-      throw new Error('Forbidden: calendar.update permission required');
+      throw new Error("Forbidden: calendar.update permission required");
     const organizationId = (await requireOrganizationContext(user)).id;
-    const existing = await prisma.calendarEvent.findFirst({ where: { id, organizationId } });
-    if (!existing) throw new Error('Event not found');
+    const existing = await prisma.calendarEvent.findFirst({
+      where: { id, organizationId },
+    });
+    if (!existing) throw new Error("Event not found");
 
     const canEdit =
       hasPermission(user, PERMISSIONS.CALENDAR_VIEW_ALL) ||
       existing.createdById === user.id ||
       existing.userId === user.id;
-    if (!canEdit) throw new Error('Forbidden: You do not have permission to edit this event');
+    if (!canEdit)
+      throw new Error(
+        "Forbidden: You do not have permission to edit this event",
+      );
 
-    const startDate = input.startDate ? new Date(input.startDate) : existing.startDate;
+    const startDate = input.startDate
+      ? new Date(input.startDate)
+      : existing.startDate;
     const endDate =
       input.endDate !== undefined
-        ? input.endDate ? new Date(input.endDate) : null
+        ? input.endDate
+          ? new Date(input.endDate)
+          : null
         : existing.endDate;
 
     if (endDate && endDate < startDate) {
       throw new Error(
-        'تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء. / End date must be on or after the start date.'
+        "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء. / End date must be on or after the start date.",
       );
     }
 
     const data: any = {};
     if (input.title !== undefined) data.title = input.title.trim();
-    if (input.description !== undefined) data.description = input.description?.trim() || null;
+    if (input.description !== undefined)
+      data.description = input.description?.trim() || null;
     if (input.type !== undefined) data.type = input.type;
     if (input.startDate !== undefined) data.startDate = startDate;
     if (input.endDate !== undefined) data.endDate = endDate;
     if (input.allDay !== undefined) data.allDay = !!input.allDay;
-    if (input.location !== undefined) data.location = input.location?.trim() || null;
+    if (input.location !== undefined)
+      data.location = input.location?.trim() || null;
     if (input.schoolId !== undefined) data.schoolId = input.schoolId || null;
     if (input.clientId !== undefined) data.clientId = input.clientId || null;
     if (input.ticketId !== undefined) data.ticketId = input.ticketId || null;
+    if (input.departmentId !== undefined) data.departmentId = input.departmentId || null;
 
-    const relatedSchoolId = input.schoolId !== undefined ? input.schoolId : existing.schoolId;
-    const relatedClientId = input.clientId !== undefined ? input.clientId : existing.clientId;
-    const relatedTicketId = input.ticketId !== undefined ? input.ticketId : existing.ticketId;
+    const relatedSchoolId =
+      input.schoolId !== undefined ? input.schoolId : existing.schoolId;
+    const relatedClientId =
+      input.clientId !== undefined ? input.clientId : existing.clientId;
+    const relatedTicketId =
+      input.ticketId !== undefined ? input.ticketId : existing.ticketId;
+    const relatedDepartmentId =
+      input.departmentId !== undefined ? input.departmentId : existing.departmentId;
     if (relatedSchoolId) {
-      const school = await prisma.school.findFirst({ where: { id: relatedSchoolId, organizationId }, select: { id: true } });
-      if (!school) throw new Error('Related school not found in the active organization');
+      const school = await prisma.school.findFirst({
+        where: { id: relatedSchoolId, organizationId },
+        select: { id: true },
+      });
+      if (!school)
+        throw new Error("Related school not found in the active organization");
     }
     if (relatedClientId) {
-      const client = await prisma.client.findFirst({ where: { id: relatedClientId, organizationId, deletedAt: null }, select: { id: true } });
-      if (!client) throw new Error('Related client not found in the active organization');
+      const client = await prisma.client.findFirst({
+        where: { id: relatedClientId, organizationId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!client)
+        throw new Error("Related client not found in the active organization");
     }
     if (relatedTicketId) {
-      const ticket = await prisma.ticket.findFirst({ where: { id: relatedTicketId, organizationId }, select: { id: true } });
-      if (!ticket) throw new Error('Related ticket not found in the active organization');
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: relatedTicketId, organizationId },
+        select: { id: true },
+      });
+      if (!ticket)
+        throw new Error("Related ticket not found in the active organization");
     }
+    if (relatedDepartmentId && !(await prisma.department.findFirst({ where: { id: relatedDepartmentId, organizationId, isActive: true }, select: { id: true } })))
+      throw new Error("The responsible department is not active in this organization");
 
-    const hasAssigneeUpdate = input.assigneeIds !== undefined || input.userId !== undefined;
+    const hasAssigneeUpdate =
+      input.assigneeIds !== undefined || input.userId !== undefined;
     if (hasAssigneeUpdate) {
       const rawIds = new Set<string>();
       if (input.userId) rawIds.add(input.userId);
-      if (input.assigneeIds?.length) input.assigneeIds.forEach((uid) => rawIds.add(uid));
+      if (input.assigneeIds?.length)
+        input.assigneeIds.forEach((uid) => rawIds.add(uid));
       const assigneeIds = Array.from(rawIds);
       if (assigneeIds.length > 0) {
-        const validAssignees = await prisma.organizationMember.count({ where: { organizationId, userId: { in: assigneeIds }, status: 'ACTIVE' } });
-        if (validAssignees !== assigneeIds.length) throw new Error('All assignees must belong to the active organization');
+        const validAssignees = await prisma.organizationMember.count({
+          where: {
+            organizationId,
+            userId: { in: assigneeIds },
+            status: "ACTIVE",
+          },
+        });
+        if (validAssignees !== assigneeIds.length)
+          throw new Error(
+            "All assignees must belong to the active organization",
+          );
         data.userId = assigneeIds[0];
+        const primaryUser = await prisma.user.findFirst({
+          where: { id: assigneeIds[0], organizationMemberships: { some: { organizationId, status: "ACTIVE" } } },
+          select: { departmentId: true },
+        });
+        if (primaryUser) data.departmentId = primaryUser.departmentId;
         data.assignees = {
           deleteMany: {},
           create: assigneeIds.map((uid) => ({ userId: uid })),
@@ -235,28 +323,37 @@ export class CalendarService {
       }
     }
 
-    return prisma.calendarEvent.update({ where: { id }, data, include: eventInclude });
+    return prisma.calendarEvent.update({
+      where: { id },
+      data,
+      include: eventInclude,
+    });
   }
 
   static async deleteEvent(user: UserSession, id: string) {
     if (!hasPermission(user, PERMISSIONS.CALENDAR_DELETE))
-      throw new Error('Forbidden: calendar.delete permission required');
+      throw new Error("Forbidden: calendar.delete permission required");
     const organizationId = (await requireOrganizationContext(user)).id;
-    const existing = await prisma.calendarEvent.findFirst({ where: { id, organizationId } });
-    if (!existing) throw new Error('Event not found');
+    const existing = await prisma.calendarEvent.findFirst({
+      where: { id, organizationId },
+    });
+    if (!existing) throw new Error("Event not found");
 
     const canDelete =
       hasPermission(user, PERMISSIONS.CALENDAR_VIEW_ALL) ||
       existing.createdById === user.id ||
       existing.userId === user.id;
-    if (!canDelete) throw new Error('Forbidden: You do not have permission to delete this event');
+    if (!canDelete)
+      throw new Error(
+        "Forbidden: You do not have permission to delete this event",
+      );
 
     await prisma.calendarEvent.delete({ where: { id } });
 
     await AuditService.logAudit({
       actorId: user.id,
-      action: 'CALENDAR_EVENT_DELETED',
-      entityType: 'CalendarEvent',
+      action: "CALENDAR_EVENT_DELETED",
+      entityType: "CalendarEvent",
       entityId: id,
       metadata: { title: existing.title },
     });

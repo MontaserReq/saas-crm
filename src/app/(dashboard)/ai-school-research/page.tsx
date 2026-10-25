@@ -7,12 +7,13 @@ import { AiResearchHomeView } from '@/components/ai-school-research/AiResearchHo
 export default async function AiSchoolResearchPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | undefined };
+  searchParams: Promise<{ [key: string]: string | undefined }>;
 }) {
   const user = (await getCurrentUser())!;
   if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW)) return null;
 
-  const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
+  const params = await searchParams;
+  const page = params.page ? parseInt(params.page, 10) : 1;
   const [result, config] = await Promise.all([
     SchoolResearchService.listJobs(user, page),
     Promise.resolve(getAiResearchConfig()),

@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 import { getCurrentUser } from '@/lib/auth/session';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { SchoolService } from '@/server/services/SchoolService';
 import { requireOrganizationId } from '@/lib/auth/organization';
 import { rejectUntrustedMutation } from '@/lib/security/web';
 import { parseBoundedMultipart, uploadErrorResponse, UPLOAD_LIMITS } from '@/lib/security/multipart';
+import { parseSpreadsheet, SMART_IMPORT_LIMITS } from '@/lib/imports/parseSpreadsheet';
 
 export const runtime = 'nodejs';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const MAX_COLUMNS = 100;
-const MAX_CELLS = 250_000;
 const allowedMimeTypes = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-excel',
   'text/csv',
   'application/csv',
   'application/octet-stream',
@@ -36,39 +32,19 @@ export async function POST(request: Request) {
     const filePart = parts.find((part) => part.name === 'file' && part.filename !== undefined);
     if (!filePart) return errorResponse('Please select an Excel file');
     if (filePart.data.length === 0) return errorResponse('Please select an Excel file');
-    if (filePart.data.length > MAX_FILE_SIZE) return errorResponse('The maximum allowed file size is 10 MB');
+    if (filePart.data.length > SMART_IMPORT_LIMITS.maxFileBytes) return errorResponse(`The maximum allowed file size is ${Math.floor(SMART_IMPORT_LIMITS.maxFileBytes / 1024 / 1024)} MB`);
 
     const extension = filePart.filename?.split('.').pop()?.toLowerCase();
-    if (!extension || !['xlsx', 'xls', 'csv'].includes(extension)) return errorResponse('Unsupported file type. Use .xlsx, .xls, or .csv.');
+    if (!extension || !['xlsx', 'csv'].includes(extension)) return errorResponse('Unsupported file type. Use .xlsx or .csv. Legacy .xls files must be saved as .xlsx or .csv.');
     if (filePart.contentType && filePart.contentType !== 'application/octet-stream' && !allowedMimeTypes.has(filePart.contentType)) return errorResponse('Unsupported file content type.');
 
-    const buffer = filePart.data;
-    if (extension === 'xlsx' && (buffer.length < 4 || buffer.subarray(0, 2).toString() !== 'PK')) return errorResponse('Invalid XLSX file signature');
-    if (extension === 'xls' && (buffer.length < 8 || buffer.readUInt32LE(0) !== 0xE011CFD0)) return errorResponse('Invalid XLS file signature');
-
-    const workbook = XLSX.read(buffer, { type: 'buffer', WTF: true });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    if (!sheet) return errorResponse('The workbook has no worksheet');
-    // Read the worksheet as a matrix first so every field remains tied to its
-    // actual header index. Blank/ignored columns can never shift another field.
-    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: true });
-    const headerRow = matrix[0];
-    if (!Array.isArray(headerRow) || headerRow.length === 0) return errorResponse('The worksheet has no header row');
-    if (headerRow.length > MAX_COLUMNS) return errorResponse('The worksheet has too many columns');
-    if (matrix.length > 5001 || matrix.length * headerRow.length > MAX_CELLS) return errorResponse('The worksheet exceeds the maximum allowed dimensions');
-    const headers = headerRow.map((header, index) => {
-      const label = String(header ?? '').trim();
-      return label || `__EMPTY_${index + 1}`;
-    });
-    const rows = matrix.slice(1)
-      .filter((row) => Array.isArray(row) && row.some((value) => value !== '' && value !== null && value !== undefined))
-      .map((row) => Object.fromEntries(headers.map((header, index) => [header, Array.isArray(row) ? row[index] ?? '' : ''])));
-    const preview = await SchoolService.validateImportRows(rows, requireOrganizationId(user));
+    const parsed = await parseSpreadsheet({ buffer: filePart.data, filename: filePart.filename || 'upload', mimeType: filePart.contentType });
+    const preview = await SchoolService.validateImportRows(parsed.rows, requireOrganizationId(user));
     return NextResponse.json({ success: true, fileName: filePart.filename, ...preview });
   } catch (error) {
     const resourceError = uploadErrorResponse(error);
     if (resourceError) return resourceError;
-    console.error('School import preview error:', error);
+    console.error('School import preview failed');
     return errorResponse('Unable to validate the import file.');
   }
 }

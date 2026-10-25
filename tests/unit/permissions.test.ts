@@ -3,12 +3,13 @@ import { hasPermission, hasRole, requirePermission, PERMISSIONS } from '@/lib/pe
 import { UserSession } from '@/types';
 
 describe('RBAC & Permission Checking', () => {
-  const superAdmin: UserSession = {
+  const platformAdmin: UserSession = {
     id: 'user-super',
-    name: 'Super Admin',
+    name: 'Platform Admin',
     email: 'super@codeline.jo',
-    role: 'SUPER_ADMIN',
-    roleDisplayName: 'Super Admin',
+    role: 'PLATFORM_ADMIN',
+    isPlatformAdmin: true,
+    roleDisplayName: 'Platform Admin',
     departmentId: 'dept-1',
     departmentName: 'Management',
     permissions: [],
@@ -32,10 +33,10 @@ describe('RBAC & Permission Checking', () => {
     ],
   };
 
-  it('Super Admin automatically bypasses all permission checks', () => {
-    expect(hasPermission(superAdmin, PERMISSIONS.USERS_CREATE)).toBe(true);
-    expect(hasPermission(superAdmin, PERMISSIONS.TICKETS_VIEW_ALL)).toBe(true);
-    expect(hasPermission(superAdmin, PERMISSIONS.AUDIT_LOGS_VIEW)).toBe(true);
+  it('Platform Admin automatically bypasses all permission checks', () => {
+    expect(hasPermission(platformAdmin, PERMISSIONS.USERS_CREATE)).toBe(true);
+    expect(hasPermission(platformAdmin, PERMISSIONS.TICKETS_VIEW_ALL)).toBe(true);
+    expect(hasPermission(platformAdmin, PERMISSIONS.AUDIT_LOGS_VIEW)).toBe(true);
   });
 
   it('Member has only explicitly granted permissions', () => {
@@ -47,7 +48,7 @@ describe('RBAC & Permission Checking', () => {
   });
 
   it('Role checking helper works accurately', () => {
-    expect(hasRole(superAdmin, ['MEMBER'])).toBe(true); // Super admin inherits
+    expect(hasRole(platformAdmin, ['MEMBER'])).toBe(true); // Platform Admin inherits
     expect(hasRole(member, ['MEMBER'])).toBe(true);
     expect(hasRole(member, ['ADMIN'])).toBe(false);
   });

@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, phase/**]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: codeline_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d codeline_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/codeline_test
+      AUTH_SECRET: ci-only-auth-secret-that-is-longer-than-thirty-two-characters
+      APP_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      APP_ORIGIN: http://localhost:3000
+      NODE_ENV: test
+      SEED_TARGET: disposable-local
+      SEED_DATABASE_LABEL: disposable
+      SEED_CONFIRM: ERASE_DISPOSABLE_DATABASE
+      SEED_DEFAULT_PASSWORD: ci-only-password-not-used-outside-this-job
+      RUN_AUTH_MEMBERSHIP_DB: "1"
+      RUN_SMART_IMPORT_DB: "1"
+      RUN_PLAN_UPGRADES_DB: "1"
+      RUN_SMART_SETUP_DB: "1"
+      RUN_TICKET_MUTATION_DB: "1"
+      RUN_WORKFLOW_DB: "1"
+      CONFIRM_DISPOSABLE_WORKFLOW_DB: "1"
+      RUN_PLATFORM_ADMIN_BOUNDARY_DB: "1"
+      RUN_RATE_LIMITER_DB: "1"
+      RUN_TENANT_CRUD_DB: "1"
+      RUN_RESOURCE_GUARD_DB: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run db:seed
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --maxWorkers=1 --no-file-parallelism
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:isolated
+      - run: npm run build
+        env:
+          NODE_ENV: production
+          APP_ORIGIN: https://ci.invalid
+          APP_URL: https://ci.invalid
+          NEXT_PUBLIC_APP_URL: https://ci.invalid
+          TRUST_PROXY: single-hop
+      - run: npm audit --omit=dev --audit-level=high

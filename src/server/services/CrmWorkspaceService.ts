@@ -1,20 +1,28 @@
 import prisma from '@/lib/db/prisma';
 import { UserSession } from '@/types';
 import { requireOrganizationContext } from '@/lib/auth/organization';
+import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 
 export class CrmWorkspaceService {
-  static async dashboard(user: UserSession) {
+  static async dashboard(user: UserSession, modules?: string[]) {
     const organizationId = (await requireOrganizationContext(user)).id;
+    const can = (module: string, permission: string) => (!modules || modules.includes(module)) && hasPermission(user, permission);
+    const customers = can('clients', PERMISSIONS.SCHOOLS_VIEW);
+    const leadAccess = can('leads', PERMISSIONS.SCHOOLS_VIEW);
+    const dealAccess = can('deals', PERMISSIONS.DEALS_VIEW);
+    const taskAccess = can('tasks', PERMISSIONS.TASKS_VIEW);
+    const pipelineAccess = can('pipelines', PERMISSIONS.PIPELINES_VIEW);
+    const entities = [...(customers ? ['Client', 'Contact'] : []), ...(leadAccess ? ['Lead'] : []), ...(dealAccess ? ['Deal'] : []), ...(taskAccess ? ['CrmTask'] : []), ...(pipelineAccess ? ['Pipeline'] : [])];
     const [clients, leads, deals, pipelineValue, openTasks, overdueTasks, recentActivity, upcomingTasks, pipelineSummary] = await Promise.all([
-      prisma.client.count({ where: { organizationId, deletedAt: null } }),
-      prisma.lead.count({ where: { organizationId, deletedAt: null, status: { notIn: ['CONVERTED', 'LOST'] } } }),
-      prisma.deal.count({ where: { organizationId, deletedAt: null, status: 'OPEN' } }),
-      prisma.deal.aggregate({ where: { organizationId, deletedAt: null, status: 'OPEN' }, _sum: { value: true } }),
-      prisma.crmTask.count({ where: { organizationId, deletedAt: null, status: { in: ['TODO', 'IN_PROGRESS'] } } }),
-      prisma.crmTask.count({ where: { organizationId, deletedAt: null, status: { in: ['TODO', 'IN_PROGRESS'] }, dueDate: { lt: new Date() } } }),
-      prisma.auditLog.findMany({ where: { organizationId, entityType: { in: ['Client', 'Lead', 'Contact', 'Deal', 'CrmTask', 'Pipeline'] } }, orderBy: { createdAt: 'desc' }, take: 10, include: { actor: { select: { id: true, name: true } } } }),
-      prisma.crmTask.findMany({ where: { organizationId, deletedAt: null, status: { in: ['TODO', 'IN_PROGRESS'] }, dueDate: { gte: new Date() } }, orderBy: { dueDate: 'asc' }, take: 10, include: { deal: { select: { id: true, title: true } }, client: { select: { id: true, name: true } } } }),
-      prisma.pipeline.findMany({ where: { organizationId, isActive: true }, orderBy: { createdAt: 'asc' }, take: 10, include: { stages: { where: { isActive: true }, orderBy: { order: 'asc' }, include: { _count: { select: { deals: true } } } } } }),
+      customers ? prisma.client.count({ where: { organizationId, deletedAt: null } }) : Promise.resolve(0),
+      leadAccess ? prisma.lead.count({ where: { organizationId, deletedAt: null, status: { notIn: ['CONVERTED', 'LOST'] } } }) : Promise.resolve(0),
+      dealAccess ? prisma.deal.count({ where: { organizationId, deletedAt: null, status: 'OPEN' } }) : Promise.resolve(0),
+      dealAccess ? prisma.deal.aggregate({ where: { organizationId, deletedAt: null, status: 'OPEN' }, _sum: { value: true } }) : Promise.resolve({ _sum: { value: null } }),
+      taskAccess ? prisma.crmTask.count({ where: { organizationId, deletedAt: null, status: { in: ['TODO', 'IN_PROGRESS'] } } }) : Promise.resolve(0),
+      taskAccess ? prisma.crmTask.count({ where: { organizationId, deletedAt: null, status: { in: ['TODO', 'IN_PROGRESS'] }, dueDate: { lt: new Date() } } }) : Promise.resolve(0),
+      prisma.auditLog.findMany({ where: { organizationId, entityType: { in: entities } }, orderBy: { createdAt: 'desc' }, take: 10, include: { actor: { select: { id: true, name: true } } } }),
+      taskAccess ? prisma.crmTask.findMany({ where: { organizationId, deletedAt: null, status: { in: ['TODO', 'IN_PROGRESS'] }, dueDate: { gte: new Date() } }, orderBy: { dueDate: 'asc' }, take: 10, include: { ...(dealAccess ? { deal: { select: { id: true, title: true } } } : {}), ...(customers ? { client: { select: { id: true, name: true } } } : {}) } }) : Promise.resolve([]),
+      pipelineAccess ? prisma.pipeline.findMany({ where: { organizationId, isActive: true }, orderBy: { createdAt: 'asc' }, take: 10, include: { stages: { where: { isActive: true }, orderBy: { order: 'asc' }, include: { _count: { select: { deals: true } } } } } }) : Promise.resolve([]),
     ]);
     return { counts: { clients, leads, deals, pipelineValue: pipelineValue._sum.value?.toString() || '0', openTasks, overdueTasks }, recentActivity, upcomingTasks, pipelineSummary };
   }

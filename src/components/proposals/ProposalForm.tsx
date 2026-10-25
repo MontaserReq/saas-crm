@@ -1,14 +1,15 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useI18n } from '@/lib/i18n/context';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from "react";
+import Image from "next/image";
+import { useI18n } from "@/lib/i18n/context";
+import { useRouter } from "next/navigation";
 import {
   createProposalAction,
   updateProposalAction,
   deleteProposalAction,
   generateProposalAction,
-} from '@/server/actions/proposals';
+} from "@/server/actions/proposals";
 import {
   FileText,
   Building2,
@@ -26,13 +27,18 @@ import {
   Layers,
   Eye,
   Check,
-} from 'lucide-react';
-import { useDialog } from '@/lib/dialog/context';
-import { formatProposalCode } from '@/lib/proposals/proposalUtils';
+} from "lucide-react";
+import { useDialog } from "@/lib/dialog/context";
+import { formatProposalCode } from "@/lib/proposals/proposalUtils";
 
 interface ProposalFormProps {
   proposal?: any;
-  templates: Array<{ id: string; name: string; isActive: boolean; originalFileName: string }>;
+  templates: Array<{
+    id: string;
+    name: string;
+    isActive: boolean;
+    originalFileName: string;
+  }>;
   schools?: Array<{ id: string; name: string; logoKey?: string | null }>;
   currentUserId: string;
 }
@@ -42,15 +48,15 @@ export function ProposalForm({
   templates,
   currentUserId,
 }: ProposalFormProps) {
-  const { t, language } = useI18n();
+  const { t, language, errorMessage } = useI18n();
   const router = useRouter();
   const { confirm } = useDialog();
   const isEditing = !!proposal;
 
   const [formData, setFormData] = useState({
-    title: proposal?.title || '',
-    templateId: proposal?.templateId || (templates[0]?.id || ''),
-    status: proposal?.status || 'DRAFT',
+    title: proposal?.title || "",
+    templateId: proposal?.templateId || templates[0]?.id || "",
+    status: proposal?.status || "DRAFT",
   });
 
   // School logo state
@@ -72,13 +78,25 @@ export function ProposalForm({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(file.type)) {
-      setError(language === 'ar' ? 'يرجى اختيار صورة PNG أو JPG أو WebP فقط.' : 'Please upload a PNG, JPG, or WebP image.');
+    if (
+      !["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(
+        file.type,
+      )
+    ) {
+      setError(
+        language === "ar"
+          ? "يرجى اختيار صورة PNG أو JPG أو WebP فقط."
+          : "Please upload a PNG, JPG, or WebP image.",
+      );
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setError(language === 'ar' ? 'حجم الصورة يتجاوز 5 ميغابايت.' : 'Logo image exceeds 5MB size limit.');
+      setError(
+        language === "ar"
+          ? "حجم الصورة يتجاوز 5 ميغابايت."
+          : "Logo image exceeds 5MB size limit.",
+      );
       return;
     }
 
@@ -91,11 +109,19 @@ export function ProposalForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) {
-      setError(language === 'ar' ? 'يرجى إدخال عنوان وموضوع العرض' : 'Proposal title / subject is required');
+      setError(
+        language === "ar"
+          ? "يرجى إدخال عنوان وموضوع العرض"
+          : "Proposal title / subject is required",
+      );
       return;
     }
     if (!formData.templateId) {
-      setError(language === 'ar' ? 'يرجى اختيار قالب العرض' : 'Please select a proposal template');
+      setError(
+        language === "ar"
+          ? "يرجى اختيار قالب العرض"
+          : "Please select a proposal template",
+      );
       return;
     }
 
@@ -116,14 +142,28 @@ export function ProposalForm({
       const res = await updateProposalAction(proposal.id, payload);
       if (!res.success) {
         setLoading(false);
-        setError(res.error || 'Failed to update proposal');
+        setError(
+          errorMessage(
+            res.error,
+            language === "ar"
+              ? "تعذر تحديث العرض"
+              : "Failed to update proposal",
+          ),
+        );
         return;
       }
     } else {
       const res = await createProposalAction(payload);
       if (!res.success) {
         setLoading(false);
-        setError(res.error || 'Failed to create proposal');
+        setError(
+          errorMessage(
+            res.error,
+            language === "ar"
+              ? "تعذر إنشاء العرض"
+              : "Failed to create proposal",
+          ),
+        );
         return;
       }
       targetId = res.proposal?.id;
@@ -132,19 +172,21 @@ export function ProposalForm({
     // Upload new School Logo if selected
     if (logoFile && targetId) {
       const data = new FormData();
-      data.append('logo', logoFile);
+      data.append("logo", logoFile);
       try {
         await fetch(`/api/proposals/${targetId}/logo`, {
-          method: 'POST',
+          method: "POST",
           body: data,
         });
       } catch (err) {
-        console.warn('Logo upload warning:', err);
+        console.warn("Logo upload warning:", err);
       }
     }
 
     setLoading(false);
-    setSuccessMsg(isEditing ? t('proposals.updatedSuccess') : t('proposals.createdSuccess'));
+    setSuccessMsg(
+      isEditing ? t("proposals.updatedSuccess") : t("proposals.createdSuccess"),
+    );
 
     if (!isEditing && targetId) {
       router.push(`/proposals/${targetId}`);
@@ -162,16 +204,30 @@ export function ProposalForm({
       const res = await generateProposalAction(proposal.id);
       if (res.success) {
         setSuccessMsg(
-          language === 'ar'
-            ? 'تم توليد ملف العرض بنجاح ودمج الشعار على القالب!'
-            : 'Proposal PDF generated successfully via template overlay!'
+          language === "ar"
+            ? "تم توليد ملف العرض بنجاح ودمج الشعار على القالب!"
+            : "Proposal PDF generated successfully via template overlay!",
         );
         router.refresh();
       } else {
-        setError(res.error || 'Failed to generate proposal');
+        setError(
+          errorMessage(
+            res.error,
+            language === "ar"
+              ? "تعذر توليد العرض"
+              : "Failed to generate proposal",
+          ),
+        );
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to generate proposal');
+      setError(
+        errorMessage(
+          err?.message,
+          language === "ar"
+            ? "تعذر توليد العرض"
+            : "Failed to generate proposal",
+        ),
+      );
     } finally {
       setGeneratingPdf(false);
     }
@@ -180,8 +236,8 @@ export function ProposalForm({
   const handleDelete = async () => {
     if (!proposal) return;
     const approved = await confirm({
-      title: t('proposals.deleteProposal'),
-      message: t('proposals.deleteConfirm'),
+      title: t("proposals.deleteProposal"),
+      message: t("proposals.deleteConfirm"),
       isDestructive: true,
     });
     if (!approved) return;
@@ -191,9 +247,14 @@ export function ProposalForm({
     setLoading(false);
 
     if (res.success) {
-      router.push('/proposals');
+      router.push("/proposals");
     } else {
-      setError(res.error || 'Failed to delete proposal');
+      setError(
+        errorMessage(
+          res.error,
+          language === "ar" ? "تعذر حذف العرض" : "Failed to delete proposal",
+        ),
+      );
     }
   };
 
@@ -204,7 +265,7 @@ export function ProposalForm({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => router.push('/proposals')}
+            onClick={() => router.push("/proposals")}
             className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <ArrowLeft className="w-4 h-4 rtl:rotate-180 text-slate-700 dark:text-slate-300" />
@@ -213,7 +274,11 @@ export function ProposalForm({
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-brand-600" />
-                <span>{isEditing ? t('proposals.editProposal') : t('proposals.newProposal')}</span>
+                <span>
+                  {isEditing
+                    ? t("proposals.editProposal")
+                    : t("proposals.newProposal")}
+                </span>
               </h1>
               {isEditing && (
                 <span className="px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold bg-purple-100 text-brand-700 dark:bg-purple-950/80 dark:text-brand-300 border border-purple-200 dark:border-purple-800">
@@ -222,9 +287,9 @@ export function ProposalForm({
               )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {language === 'ar'
-                ? 'إنشاء وتخصيص عرض رسمي مبني على قالب PDF مع دمج شعار المدرسة والشعار الرسمي.'
-                : 'Create and generate a proposal overlaying school logos onto reusable PDF templates.'}
+              {language === "ar"
+                ? "إنشاء وتخصيص عرض رسمي مبني على قالب PDF مع دمج شعار العميل والشعار الرسمي."
+                : "Create and generate a proposal overlaying customer logos onto reusable PDF templates."}
             </p>
           </div>
         </div>
@@ -242,7 +307,13 @@ export function ProposalForm({
               ) : (
                 <Sparkles className="w-3.5 h-3.5" />
               )}
-              <span>{generatingPdf ? t('proposals.generating') : language === 'ar' ? 'توليد العرض (Generate PDF)' : 'Generate Proposal'}</span>
+              <span>
+                {generatingPdf
+                  ? t("proposals.generating")
+                  : language === "ar"
+                    ? "توليد العرض (Generate PDF)"
+                    : "Generate Proposal"}
+              </span>
             </button>
           )}
 
@@ -251,8 +322,12 @@ export function ProposalForm({
             disabled={loading}
             className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-all disabled:opacity-50"
           >
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-            <span>{isEditing ? t('common.save') : t('proposals.create')}</span>
+            {loading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            )}
+            <span>{isEditing ? t("common.save") : t("proposals.create")}</span>
           </button>
         </div>
       </div>
@@ -280,16 +355,18 @@ export function ProposalForm({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xs font-bold text-slate-900 dark:text-white">
-                  {language === 'ar' ? 'ملف الـ Proposal جاهز ومُدمج مع القالب!' : 'Proposal PDF is Generated & Ready!'}
+                  {language === "ar"
+                    ? "ملف الـ Proposal جاهز ومُدمج مع القالب!"
+                    : "Proposal PDF is Generated & Ready!"}
                 </h3>
                 <span className="text-[10px] font-mono font-bold text-brand-600 dark:text-brand-400">
                   {formatProposalCode(proposal)}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {language === 'ar'
-                  ? 'تم توليد العرض مع الحفاظ الكامل على تصميم الـ PDF الأصلي وشعار المدرسة.'
-                  : 'Generated with school logo and CodeLine branding overlaid onto original template.'}
+                {language === "ar"
+                  ? "تم توليد العرض مع الحفاظ الكامل على تصميم الـ PDF الأصلي وشعار العميل."
+                  : "Generated with customer logo and CodeLine branding overlaid onto original template."}
               </p>
             </div>
           </div>
@@ -302,7 +379,7 @@ export function ProposalForm({
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all shadow-xs"
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>{language === 'ar' ? 'معاينة PDF' : 'Preview'}</span>
+              <span>{language === "ar" ? "معاينة PDF" : "Preview"}</span>
             </a>
 
             <a
@@ -311,7 +388,7 @@ export function ProposalForm({
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 transition-all shadow-sm"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>{t('proposals.downloadPdf')}</span>
+              <span>{t("proposals.downloadPdf")}</span>
             </a>
           </div>
         </div>
@@ -321,7 +398,11 @@ export function ProposalForm({
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
         <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
           <Layers className="w-4 h-4 text-brand-600" />
-          <span>{language === 'ar' ? 'بيانات العرض والقالب' : 'Proposal Details & Template'}</span>
+          <span>
+            {language === "ar"
+              ? "بيانات العرض والقالب"
+              : "Proposal Details & Template"}
+          </span>
         </h2>
 
         <div className="space-y-4">
@@ -329,18 +410,28 @@ export function ProposalForm({
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
               <Layers className="w-3.5 h-3.5 text-brand-500" />
-              <span>{language === 'ar' ? 'قالب الـ PDF الأساسي' : 'Base PDF Template'} <span className="text-rose-500">*</span></span>
+              <span>
+                {language === "ar"
+                  ? "قالب الـ PDF الأساسي"
+                  : "Base PDF Template"}{" "}
+                <span className="text-rose-500">*</span>
+              </span>
             </label>
             <select
               required
               value={formData.templateId}
-              onChange={(e) => setFormData({ ...formData, templateId: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, templateId: e.target.value })
+              }
               className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
             >
-              <option value="">-- {language === 'ar' ? 'اختر قالب العرض' : 'Select a Template'} --</option>
+              <option value="">
+                -- {language === "ar" ? "اختر قالب العرض" : "Select a Template"}{" "}
+                --
+              </option>
               {templates.map((tmpl) => (
                 <option key={tmpl.id} value={tmpl.id}>
-                  {tmpl.name} {!tmpl.isActive ? '(Inactive)' : ''}
+                  {tmpl.name} {!tmpl.isActive ? "(Inactive)" : ""}
                 </option>
               ))}
             </select>
@@ -349,17 +440,22 @@ export function ProposalForm({
           {/* Title & Subject */}
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {language === 'ar' ? 'عنوان وموضوع العرض' : 'Proposal Title & Subject'} <span className="text-rose-500">*</span>
+              {language === "ar"
+                ? "عنوان وموضوع العرض"
+                : "Proposal Title & Subject"}{" "}
+              <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
               required
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, title: e.target.value })
+              }
               placeholder={
-                language === 'ar'
-                  ? 'مثال: عرض تقديم نظام الإدارة المدرسية الذكي - مدارس الرواد النموذجية'
-                  : 'e.g. Smart School Platform Proposal - Pioneers Academy'
+                language === "ar"
+                  ? "مثال: عرض تقديم نظام إدارة العملاء الذكي - شركة الرواد"
+                  : "e.g. Smart Customer Operations Proposal - Pioneers Company"
               }
               className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-brand-500"
             />
@@ -367,40 +463,47 @@ export function ProposalForm({
         </div>
       </div>
 
-      {/* 2. School Logo Management Card */}
+      {/* 2. Customer Logo Management Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
         <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
           <ImageIcon className="w-4 h-4 text-brand-600" />
-          <span>{language === 'ar' ? 'شعار المدرسة (School Logo)' : 'School Logo'}</span>
+          <span>
+            {language === "ar" ? "شعار العميل (Customer Logo)" : "Customer Logo"}
+          </span>
         </h2>
 
         <p className="text-[11px] text-slate-500 dark:text-slate-400">
-          {language === 'ar'
-            ? 'يتم جلب شعار المدرسة المحفوظ مسبقًا تلقائيًا أو يمكنك رفع / استبدال الشعار. يتم دمج الشعار على الصفحة الأولى من القالب بدقة.'
-            : 'School logo is automatically loaded from the school record or can be uploaded directly. Overlay is applied to page 1.'}
+          {language === "ar"
+            ? "يتم جلب شعار العميل المحفوظ مسبقًا تلقائيًا أو يمكنك رفع / استبدال الشعار. يتم دمج الشعار على الصفحة الأولى من القالب بدقة."
+            : "Customer logo is automatically loaded from the customer record or can be uploaded directly. Overlay is applied to page 1."}
         </p>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-1">
           {logoPreview ? (
             <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60">
-              <img
+              <Image
                 src={logoPreview}
-                alt="School Logo"
+                alt="Customer Logo"
+                width={56}
+                height={56}
+                unoptimized
                 className="w-14 h-14 object-contain rounded-lg bg-white p-1 border border-slate-200 dark:border-slate-700"
               />
               <div className="space-y-1">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
                   {isNewLogoUploaded
-                    ? language === 'ar'
-                      ? 'تم اختيار شعار جديد (سيتم حفظه وتطبيقه)'
-                      : 'New logo selected'
-                    : language === 'ar'
-                    ? 'الشعار المحفوظ للمدرسة ✓'
-                    : 'Saved school logo ✓'}
+                    ? language === "ar"
+                      ? "تم اختيار شعار جديد (سيتم حفظه وتطبيقه)"
+                      : "New logo selected"
+                    : language === "ar"
+                      ? "الشعار المحفوظ للعميل ✓"
+                      : "Saved customer logo ✓"}
                 </span>
                 <label className="cursor-pointer text-[11px] font-semibold text-brand-600 hover:underline inline-flex items-center gap-1">
                   <Upload className="w-3 h-3" />
-                  <span>{language === 'ar' ? 'استبدال الشعار' : 'Replace Logo'}</span>
+                  <span>
+                    {language === "ar" ? "استبدال الشعار" : "Replace Logo"}
+                  </span>
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/jpg,image/webp"
@@ -413,7 +516,11 @@ export function ProposalForm({
           ) : (
             <label className="cursor-pointer flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 bg-slate-50/50 dark:bg-slate-800/40 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors">
               <Upload className="w-4 h-4 text-brand-500" />
-              <span>{language === 'ar' ? 'رفع شعار المدرسة (PNG / JPG / WebP)' : 'Upload School Logo'}</span>
+              <span>
+                {language === "ar"
+                  ? "رفع شعار العميل (PNG / JPG / WebP)"
+                  : "Upload Customer Logo"}
+              </span>
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/jpg,image/webp"
@@ -435,9 +542,11 @@ export function ProposalForm({
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>{t('proposals.deleteProposal')}</span>
+            <span>{t("proposals.deleteProposal")}</span>
           </button>
-        ) : <div />}
+        ) : (
+          <div />
+        )}
 
         <div className="flex items-center gap-2">
           {isEditing && (
@@ -452,7 +561,13 @@ export function ProposalForm({
               ) : (
                 <Sparkles className="w-3.5 h-3.5" />
               )}
-              <span>{generatingPdf ? t('proposals.generating') : language === 'ar' ? 'توليد العرض (Generate PDF)' : 'Generate Proposal'}</span>
+              <span>
+                {generatingPdf
+                  ? t("proposals.generating")
+                  : language === "ar"
+                    ? "توليد العرض (Generate PDF)"
+                    : "Generate Proposal"}
+              </span>
             </button>
           )}
 
@@ -461,8 +576,12 @@ export function ProposalForm({
             disabled={loading}
             className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-all disabled:opacity-50"
           >
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-            <span>{isEditing ? t('common.save') : t('proposals.create')}</span>
+            {loading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            )}
+            <span>{isEditing ? t("common.save") : t("proposals.create")}</span>
           </button>
         </div>
       </div>

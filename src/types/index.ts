@@ -1,4 +1,4 @@
-export type RoleName = 'SUPER_ADMIN' | 'ADMIN' | 'SCHOOL_MANAGER' | 'MEMBER';
+export type RoleName = 'PLATFORM_ADMIN' | 'SUPER_ADMIN' | 'ADMIN' | 'SCHOOL_MANAGER' | 'MEMBER';
 
 export type TicketStatus =
   | 'PENDING'
@@ -40,6 +40,7 @@ export interface UserSession {
   phone?: string | null;
   avatar?: string | null;
   role: RoleName;
+  isPlatformAdmin?: boolean;
   roleDisplayName: string;
   departmentId: string;
   departmentName: string;
@@ -51,6 +52,14 @@ export interface UserSession {
    * membership rather than accepting a browser-supplied organization ID. */
   organizationId?: string;
   organizationName?: string;
+  /** Missing/null commercial state is treated as baseline-only by server policy. */
+  planFeatures?: string[] | null;
+  planName?: string | null;
+  planSlug?: string | null;
+  workspaceAccessState?: import('@/lib/platform/entitlements').WorkspaceAccessState;
+  workspaceReadOnly?: boolean;
+  subscriptionStartsAt?: string | null;
+  subscriptionEndsAt?: string | null;
 }
 
 export interface BreadcrumbItem {

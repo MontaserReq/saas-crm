@@ -1,9 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+const { prismaMock } = vi.hoisted(() => ({ prismaMock: { ticket: { findFirst: vi.fn() }, ticketAssignee: { findFirst: vi.fn() } } }));
+vi.mock('@/lib/db/prisma', () => ({ default: prismaMock }));
 import { canAccessTicket } from '@/lib/permissions';
 import { UserSession } from '@/types';
 import { TicketService } from '@/server/services/TicketService';
 
 describe('Data Privacy, Immutability & Access Control Security Tests', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.ticket.findFirst.mockResolvedValue({ createdById: 'another-user', organizationId: 'org-a' });
+  });
   const memberAhmad: UserSession = {
     id: 'user-ahmad-id',
     name: 'Ahmad',
@@ -33,13 +39,14 @@ describe('Data Privacy, Immutability & Access Control Security Tests', () => {
     expect(isAllowed).toBe(true);
   });
 
-  it('Super Admin always has full access to all tickets', async () => {
+  it('Platform Admin always has full access to all tickets', async () => {
     const superAdmin: UserSession = {
       id: 'super-id',
-      name: 'Super Admin',
+      name: 'Platform Admin',
       email: 'super@codeline.jo',
-      role: 'SUPER_ADMIN',
-      roleDisplayName: 'Super Admin',
+      role: 'PLATFORM_ADMIN',
+      isPlatformAdmin: true,
+      roleDisplayName: 'Platform Admin',
       departmentId: 'dept-1',
       departmentName: 'Management',
       organizationId: 'org-a',

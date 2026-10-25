@@ -3,6 +3,8 @@ import prisma from '@/lib/db/prisma';
 import { UserSession } from '@/types';
 import { requireOrganizationContext } from '@/lib/auth/organization';
 import { AuditService } from './AuditService';
+import { hasPlanFeature, PlanFeatureId } from '@/lib/platform/entitlements';
+import { normalizeEmail, normalizeInternationalPhone } from '@/lib/validation/contactInfo';
 
 export const CUSTOM_FIELD_ENTITIES = ['CLIENT', 'LEAD', 'CONTACT', 'DEAL', 'TICKET', 'TASK'] as const;
 export const CUSTOM_FIELD_TYPES = ['TEXT', 'TEXTAREA', 'NUMBER', 'CURRENCY', 'BOOLEAN', 'DATE', 'DATETIME', 'EMAIL', 'PHONE', 'URL', 'SELECT', 'MULTI_SELECT'] as const;
@@ -17,6 +19,11 @@ const empty = (v: unknown) => v === undefined || v === null || (typeof v === 'st
 
 function assertEntity(entityType: string): asserts entityType is CustomFieldEntity { if (!entitySet.has(entityType)) throw new Error('Unsupported custom field entity'); }
 function assertType(fieldType: string): asserts fieldType is CustomFieldType { if (!typeSet.has(fieldType)) throw new Error('Unsupported custom field type'); }
+function assertPlanAccess(user: UserSession, entityType?: CustomFieldEntity) {
+  if (!hasPlanFeature(user, 'custom_fields')) throw new Error('Custom fields are not included in the current plan');
+  const entityFeature: Partial<Record<CustomFieldEntity, PlanFeatureId>> = { CLIENT: 'clients', LEAD: 'leads', CONTACT: 'contacts', DEAL: 'deals', TICKET: 'tickets', TASK: 'tasks' };
+  if (entityType && entityFeature[entityType] && !hasPlanFeature(user, entityFeature[entityType]!)) throw new Error('The selected record type is not included in the current plan');
+}
 function optionsOf(options: unknown): string[] {
   if (!Array.isArray(options)) return [];
   return options.map((o) => typeof o === 'string' ? o.trim() : (o && typeof o === 'object' && 'value' in o ? String((o as { value: unknown }).value).trim() : '')).filter(Boolean);
@@ -61,19 +68,30 @@ function encodeValue(fieldType: CustomFieldType, value: unknown): Partial<Prisma
     return { valueJson: value.map(String) };
   }
   const text = String(value).trim();
-  if (fieldType === 'EMAIL' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) throw new Error('Custom field value must be a valid email');
+  if (fieldType === 'EMAIL') {
+    const email = normalizeEmail(text);
+    if (!email) throw new Error('Custom field value must be a valid email');
+    return { valueText: email };
+  }
+  if (fieldType === 'PHONE') {
+    const phone = normalizeInternationalPhone(text);
+    if (!phone) throw new Error('Custom field value must be a valid international number including the country code');
+    return { valueText: phone };
+  }
   if (fieldType === 'URL' && !/^https?:\/\//i.test(text)) throw new Error('Custom field value must be a valid URL');
   return { valueText: text };
 }
 
 export class CustomFieldService {
   static async listDefinitions(user: UserSession, entityType?: CustomFieldEntity) {
+    assertPlanAccess(user, entityType);
     const organizationId = (await requireOrganizationContext(user)).id;
     if (entityType) assertEntity(entityType);
     return prisma.customFieldDefinition.findMany({ where: { organizationId, ...(entityType ? { entityType } : {}), archivedAt: null }, orderBy: [{ entityType: 'asc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }] });
   }
 
   static async createDefinition(user: UserSession, input: { entityType: CustomFieldEntity; key: string; label: string; description?: string; fieldType: CustomFieldType; required?: boolean; searchable?: boolean; displayOrder?: number; options?: unknown }) {
+    assertPlanAccess(user, input.entityType);
     const organizationId = (await requireOrganizationContext(user)).id;
     assertEntity(input.entityType); assertType(input.fieldType);
     const key = input.key.trim().toLowerCase();
@@ -86,6 +104,7 @@ export class CustomFieldService {
   }
 
   static async updateDefinition(user: UserSession, id: string, input: Partial<{ label: string; description: string; required: boolean; searchable: boolean; displayOrder: number; options: unknown; active: boolean }>) {
+    assertPlanAccess(user);
     const organizationId = (await requireOrganizationContext(user)).id;
     const existing = await prisma.customFieldDefinition.findFirst({ where: { id, organizationId, archivedAt: null } });
     if (!existing) throw new Error('Custom field not found');
@@ -103,6 +122,7 @@ export class CustomFieldService {
   }
 
   static async archiveDefinition(user: UserSession, id: string) {
+    assertPlanAccess(user);
     const organizationId = (await requireOrganizationContext(user)).id;
     const existing = await prisma.customFieldDefinition.findFirst({ where: { id, organizationId, archivedAt: null } });
     if (!existing) throw new Error('Custom field not found');
@@ -112,6 +132,7 @@ export class CustomFieldService {
   }
 
   static async setValues(user: UserSession, entityType: CustomFieldEntity, entityId: string, values: Record<string, unknown>) {
+    assertPlanAccess(user, entityType);
     const organizationId = (await requireOrganizationContext(user)).id;
     return prisma.$transaction((tx) => this.persistValues(tx, organizationId, user.id, entityType, entityId, values));
   }
@@ -141,6 +162,7 @@ export class CustomFieldService {
   }
 
   static async getEntityValues(user: UserSession, entityType: CustomFieldEntity, entityId: string) {
+    assertPlanAccess(user, entityType);
     const organizationId = (await requireOrganizationContext(user)).id;
     return this.getEntityValuesById(prisma, organizationId, entityType, entityId);
   }

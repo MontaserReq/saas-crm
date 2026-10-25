@@ -4,13 +4,15 @@ import prisma from '@/lib/db/prisma';
 import { checkRateLimit, consumeRateLimit, peekRateLimit, rateLimitStorageKey, resetRateLimiterCleanupCounterForTests } from '@/lib/security/rateLimiter';
 
 const secret = 'rate-limiter-test-secret-with-more-than-32-characters';
-const databaseAvailable = Boolean(process.env.DATABASE_URL);
+const databaseAvailable = process.env.RUN_RATE_LIMITER_DB === '1';
 
 describe.skipIf(!databaseAvailable)('PostgreSQL distributed rate limiter', () => {
   const identity = `database-test-${crypto.randomUUID()}`;
   const now = new Date('2026-10-02T10:00:00.000Z');
 
   beforeAll(async () => {
+    const databaseUrl = new URL(process.env.DATABASE_URL!);
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(databaseUrl.hostname)) throw new Error('Integration tests require a local PostgreSQL database');
     process.env.AUTH_SECRET = secret;
     resetRateLimiterCleanupCounterForTests();
     await prisma.$connect();

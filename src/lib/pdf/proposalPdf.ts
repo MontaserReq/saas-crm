@@ -31,7 +31,7 @@ export async function generateProposalPdf(data: ProposalPdfData): Promise<void> 
   const margin = 18;
   const contentWidth = pageWidth - margin * 2;
 
-  // Primary CodeLine Brand Palette
+  // SatrCRM brand palette
   const brandDark = [88, 28, 135]; // #581c87 (deep purple)
   const brandPrimary = [124, 58, 237]; // #7c3aed (brand purple)
   const textDark = [30, 41, 59]; // #1e293b
@@ -39,7 +39,19 @@ export async function generateProposalPdf(data: ProposalPdfData): Promise<void> 
   const bgLight = [248, 250, 252]; // #f8fafc
   const borderColor = [226, 232, 240]; // #e2e8f0
 
-  // Pre-load school logo if present
+  // Pre-load the official English SatrCRM wordmark and the school logo if present.
+  let brandLogoImg: HTMLImageElement | null = null;
+  try {
+    brandLogoImg = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = '/branding/satrcrm-en-purple.png';
+    });
+  } catch {
+    brandLogoImg = null;
+  }
+
   let schoolLogoImg: HTMLImageElement | null = null;
   if (data.schoolLogoUrl) {
     try {
@@ -62,23 +74,31 @@ export async function generateProposalPdf(data: ProposalPdfData): Promise<void> 
     doc.setFillColor(brandDark[0], brandDark[1], brandDark[2]);
     doc.rect(0, 0, pageWidth, 5, 'F');
 
-    // CodeLine Logo / Branding (Left)
-    doc.setFillColor(brandPrimary[0], brandPrimary[1], brandPrimary[2]);
-    doc.roundedRect(margin, 12, 10, 10, 2, 2, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.text('CL', margin + 2.5, 18.5);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(brandDark[0], brandDark[1], brandDark[2]);
-    doc.setFontSize(13);
-    doc.text('CODELINE', margin + 13, 17);
+    // Official English SatrCRM wordmark (left)
+    if (brandLogoImg) {
+      const logoMaxW = 40;
+      const logoMaxH = 12;
+      const aspect = brandLogoImg.width / brandLogoImg.height;
+      let drawW = logoMaxW;
+      let drawH = drawW / aspect;
+      if (drawH > logoMaxH) {
+        drawH = logoMaxH;
+        drawW = drawH * aspect;
+      }
+      doc.addImage(brandLogoImg, 'PNG', margin, 10, drawW, drawH);
+    } else {
+      doc.setFillColor(brandPrimary[0], brandPrimary[1], brandPrimary[2]);
+      doc.roundedRect(margin, 12, 10, 10, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.text('S', margin + 3, 18.5);
+    }
 
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
     doc.setFontSize(7.5);
-    doc.text('Educational Systems & Operations Platform', margin + 13, 21);
+    doc.text('Customer relationships and operations platform', margin, 23);
 
     // School Logo or Client Name (Right side of Header)
     if (schoolLogoImg) {
@@ -125,7 +145,7 @@ export async function generateProposalPdf(data: ProposalPdfData): Promise<void> 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text('CodeLine Operations Platform | Amman, Jordan | info@codeline.jo', margin, footY + 2);
+    doc.text('SatrCRM | Amman, Jordan | info@codeline.jo', margin, footY + 2);
     doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - margin, footY + 2, { align: 'right' });
   };
 

@@ -1,17 +1,22 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { useI18n } from '@/lib/i18n/context';
-import { transferTicketAction } from '@/server/actions/tickets';
-import { AlertCircle } from 'lucide-react';
+import { useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { useI18n } from "@/lib/i18n/context";
+import { transferTicketAction } from "@/server/actions/tickets";
+import { AlertCircle } from "lucide-react";
 
 interface TransferModalProps {
   isOpen: boolean;
   onClose: () => void;
   ticketId: string;
   ticketNumber: string;
-  teamMembers: Array<{ id: string; name: string; email: string; department?: { name: string } }>;
+  teamMembers: Array<{
+    id: string;
+    name: string;
+    email: string;
+    department?: { name: string };
+  }>;
   onSuccess?: () => void;
 }
 
@@ -23,36 +28,40 @@ export function TransferModal({
   teamMembers,
   onSuccess,
 }: TransferModalProps) {
-  const [targetUserId, setTargetUserId] = useState('');
-  const [reason, setReason] = useState('');
+  const [targetUserId, setTargetUserId] = useState("");
+  const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
 
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetUserId) {
-      setError(t('tickets.transferTo'));
+      setError(t("tickets.transferTo"));
       return;
     }
     if (reason.trim().length < 3) {
-      setError(t('tickets.transferReason'));
+      setError(t("tickets.transferReason"));
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    const res = await transferTicketAction(ticketId, targetUserId, reason.trim());
+    const res = await transferTicketAction(
+      ticketId,
+      targetUserId,
+      reason.trim(),
+    );
     setLoading(false);
 
     if (res.success) {
-      setReason('');
-      setTargetUserId('');
+      setReason("");
+      setTargetUserId("");
       onClose();
       if (onSuccess) onSuccess();
     } else {
-      setError(res.error || t('common.error'));
+      setError(errorMessage(res.error, t("common.error")));
     }
   };
 
@@ -60,8 +69,8 @@ export function TransferModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${t('tickets.transfer')} - ${ticketNumber}`}
-      description={t('tickets.transferReason')}
+      title={`${t("tickets.transfer")} - ${ticketNumber}`}
+      description={t("tickets.transferReason")}
     >
       <form onSubmit={handleTransfer} className="space-y-4">
         {error && (
@@ -73,7 +82,7 @@ export function TransferModal({
 
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-            {t('tickets.transferTo')} <span className="text-rose-500">*</span>
+            {t("tickets.transferTo")} <span className="text-rose-500">*</span>
           </label>
           <select
             value={targetUserId}
@@ -81,7 +90,7 @@ export function TransferModal({
             required
             className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:border-brand-500 focus:outline-none"
           >
-            <option value="">{t('tickets.transferTo')}...</option>
+            <option value="">{t("tickets.transferTo")}...</option>
             {teamMembers.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name} ({m.department?.name || m.email})
@@ -92,13 +101,14 @@ export function TransferModal({
 
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-            {t('tickets.transferReason')} <span className="text-rose-500">*</span>
+            {t("tickets.transferReason")}{" "}
+            <span className="text-rose-500">*</span>
           </label>
           <textarea
             rows={4}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder={t('tickets.transferReason')}
+            placeholder={t("tickets.transferReason")}
             required
             className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:border-brand-500 focus:outline-none"
           />
@@ -111,14 +121,14 @@ export function TransferModal({
             disabled={loading}
             className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            {t('tickets.cancel')}
+            {t("tickets.cancel")}
           </button>
           <button
             type="submit"
             disabled={loading}
             className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 transition-colors disabled:opacity-50"
           >
-            {loading ? t('common.loading') : t('tickets.confirmTransfer')}
+            {loading ? t("common.loading") : t("tickets.confirmTransfer")}
           </button>
         </div>
       </form>

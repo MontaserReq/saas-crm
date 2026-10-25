@@ -4,14 +4,16 @@ import { notFound } from 'next/navigation';
 import { TicketDetailClientView } from '@/components/tickets/TicketDetailClientView';
 import prisma from '@/lib/db/prisma';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { isPlatformSuperAdmin } from '@/lib/security/platform';
 import { TicketAccessRestricted } from '@/components/tickets/TicketAccessRestricted';
 
-export default async function TicketDetailsPage({ params }: { params: { id: string } }) {
+export default async function TicketDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const user = (await getCurrentUser())!;
+  const routeParams = await params;
 
   let ticket: any;
   try {
-    ticket = await TicketService.getTicketById(user, params.id);
+    ticket = await TicketService.getTicketById(user, routeParams.id);
   } catch (err: any) {
     return <TicketAccessRestricted />;
   }
@@ -60,7 +62,8 @@ export default async function TicketDetailsPage({ params }: { params: { id: stri
       taskTypes={taskTypes}
       currentUser={user}
       canTransfer={hasPermission(user, PERMISSIONS.TICKETS_TRANSFER)}
-      canDelete={user.role === 'SUPER_ADMIN' && hasPermission(user, PERMISSIONS.TICKETS_DELETE)}
+      canDelete={(isPlatformSuperAdmin(user) || user.role === 'SUPER_ADMIN') && hasPermission(user, PERMISSIONS.TICKETS_DELETE)}
+      canRequestEdit={hasPermission(user, PERMISSIONS.TICKETS_CORRECTION_REQUEST)}
     />
   );
 }

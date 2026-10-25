@@ -13,7 +13,7 @@ export default async function ProposalsPage() {
   }
 
   if (!hasPermission(user, PERMISSIONS.PROPOSALS_VIEW)) {
-    redirect('/');
+    redirect('/dashboard');
   }
 
   const [proposals, templates, schools] = await Promise.all([

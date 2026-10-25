@@ -24,7 +24,7 @@ interface ResearchFormProps {
 }
 
 export function ResearchForm({ isOpen, onClose, maxSchoolsPerJob }: ResearchFormProps) {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const router = useRouter();
   const [location, setLocation] = useState('Amman');
   const [area, setArea] = useState('');
@@ -56,7 +56,7 @@ export function ResearchForm({ isOpen, onClose, maxSchoolsPerJob }: ResearchForm
       onClose();
       router.push(`/ai-school-research/${res.job.id}`);
     } else {
-      setError(res.error || t('aiResearch.errorStart'));
+      setError(errorMessage(res.error, t('aiResearch.errorStart')));
     }
   };
 

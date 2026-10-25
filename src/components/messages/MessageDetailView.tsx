@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n/context';
@@ -240,9 +241,12 @@ export const MessageDetailView: React.FC<MessageDetailProps> = ({ message, curre
                   >
                     {isImage ? (
                       <div className="mb-2 overflow-hidden rounded-lg bg-charcoal-100 dark:bg-charcoal-900 h-32 flex items-center justify-center">
-                        <img
+                        <Image
                           src={`${downloadUrl}?inline=true`}
                           alt={att.originalName}
+                          width={320}
+                          height={128}
+                          unoptimized
                           className="w-full h-full object-cover hover:scale-105 transition-transform"
                           loading="lazy"
                         />

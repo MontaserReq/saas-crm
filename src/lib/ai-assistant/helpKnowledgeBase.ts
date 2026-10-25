@@ -23,7 +23,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       steps: [
         "Open the Tickets section from the sidebar.",
         'Click the "+ Create Ticket" button.',
-        'Enter the Subject (required), and optionally the School and Task Type.',
+        'Enter the Subject (required), and optionally the Customer and Task Type.',
         'Choose the Priority and an optional Due Date.',
         'Optionally add an Initial Note.',
         'Click "Create & Assign Ticket" — it is automatically assigned to your direct manager, you cannot pick a different assignee.',
@@ -34,7 +34,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       steps: [
         'افتح قسم "Tickets" من القائمة الجانبية.',
         'اضغط زر "+ Create Ticket".',
-        'أدخل الموضوع (إلزامي)، ويمكنك اختيار المدرسة ونوع المهمة اختياريًا.',
+        'أدخل الموضوع (إلزامي)، ويمكنك اختيار العميل ونوع المهمة اختياريًا.',
         'حدد الأولوية وتاريخ الاستحقاق إن أردت.',
         'يمكنك إضافة ملاحظة أولية.',
         'اضغط "Create & Assign Ticket" — يتم تعيينها تلقائيًا لمديرك المباشر، لا يمكنك اختيار موظف آخر.',
@@ -123,21 +123,21 @@ export const HELP_TOPICS: HelpTopic[] = [
     permission: 'schools.create',
     keywords: ['add school', 'new school', 'اضافة مدرسة', 'مدرسة جديدة'],
     en: {
-      title: 'Add a School',
+      title: 'Add a Customer',
       steps: [
-        'Open the Schools section from the sidebar.',
-        'Click "Add School".',
-        'Enter the School Name, Classification (A/B/C), and City (required).',
+        'Open the Customers section from the sidebar.',
+        'Click "Add Customer".',
+        'Enter the Customer Name, Classification (A/B/C), and City (required).',
         'Optionally add Contact Person, Phone, WhatsApp, Email, Area, and a Responsible Employee.',
         'Click Save.',
       ],
     },
     ar: {
-      title: 'إضافة مدرسة',
+      title: 'إضافة عميل',
       steps: [
-        'افتح قسم "Schools" من القائمة الجانبية.',
-        'اضغط "Add School".',
-        'أدخل اسم المدرسة، التصنيف (A/B/C)، والمدينة (إلزامية).',
+        'افتح قسم "Customers" من القائمة الجانبية.',
+        'اضغط "Add Customer".',
+        'أدخل اسم العميل، التصنيف (A/B/C)، والمدينة (إلزامية).',
         'يمكنك إضافة جهة الاتصال، الهاتف، واتساب، البريد الإلكتروني، المنطقة، والموظف المسؤول.',
         'اضغط حفظ.',
       ],
@@ -148,19 +148,19 @@ export const HELP_TOPICS: HelpTopic[] = [
     permission: 'schools.update',
     keywords: ['change responsible', 'school responsible', 'مسؤول المدرسة', 'تغيير المسؤول'],
     en: {
-      title: 'Change a School\'s Responsible Employee',
+      title: 'Change a Customer\'s Responsible Employee',
       steps: [
-        'Open the Schools section and find the school (use the search box if needed).',
-        'Click the edit (pencil) icon on that school\'s row.',
+        'Open the Customers section and find the customer (use the search box if needed).',
+        'Click the edit (pencil) icon on that customer\'s row.',
         'Change the "Responsible Employee" dropdown.',
         'Click Save.',
       ],
     },
     ar: {
-      title: 'تغيير الموظف المسؤول عن مدرسة',
+      title: 'تغيير الموظف المسؤول عن عميل',
       steps: [
-        'افتح قسم "Schools" وابحث عن المدرسة (استخدم مربع البحث إن أردت).',
-        'اضغط أيقونة التعديل (القلم) بجانب المدرسة.',
+        'افتح قسم "Customers" وابحث عن العميل (استخدم مربع البحث إن أردت).',
+        'اضغط أيقونة التعديل (القلم) بجانب العميل.',
         'غيّر القائمة المنسدلة "Responsible Employee".',
         'اضغط حفظ.',
       ],
@@ -171,19 +171,19 @@ export const HELP_TOPICS: HelpTopic[] = [
     permission: 'schools.view',
     keywords: ['search school', 'find school', 'بحث عن مدرسة', 'ايجاد مدرسة'],
     en: {
-      title: 'Search for a School',
+      title: 'Search for a Customer',
       steps: [
-        'Open the Schools section from the sidebar.',
-        'Use the search box — it matches by school name, city, contact person, or phone number.',
-        'You can also ask me directly, e.g. "find school X" or "which schools are in Amman?".',
+        'Open the Customers section from the sidebar.',
+        'Use the search box — it matches by customer name, city, contact person, or phone number.',
+        'You can also ask me directly, e.g. "find customer X" or "which customers are in Amman?".',
       ],
     },
     ar: {
-      title: 'البحث عن مدرسة',
+      title: 'البحث عن عميل',
       steps: [
-        'افتح قسم "Schools" من القائمة الجانبية.',
-        'استخدم مربع البحث — يبحث حسب اسم المدرسة، المدينة، جهة الاتصال، أو رقم الهاتف.',
-        'يمكنك أيضًا سؤالي مباشرة، مثل "دورني على مدرسة X" أو "شو المدارس في عمان؟".',
+        'افتح قسم "Customers" من القائمة الجانبية.',
+        'استخدم مربع البحث — يبحث حسب اسم العميل، المدينة، جهة الاتصال، أو رقم الهاتف.',
+        'يمكنك أيضًا سؤالي مباشرة، مثل "دورني على عميل X" أو "شو العملاء في عمان؟".',
       ],
     },
   },
@@ -196,7 +196,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       steps: [
         'Open the Tickets section from the sidebar — it shows your assigned tickets by default.',
         'Use the Status filter (e.g. Pending, Accepted) and Priority filter to narrow the list.',
-        'Use the search box to find a ticket by number, school, or subject.',
+        'Use the search box to find a ticket by number, customer, or subject.',
         'You can also just ask me, e.g. "what are my open tickets?".',
       ],
     },
@@ -205,7 +205,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       steps: [
         'افتح قسم "Tickets" من القائمة الجانبية — يعرض تذاكرك المكلف بها افتراضيًا.',
         'استخدم فلتر الحالة (مثل Pending أو Accepted) وفلتر الأولوية لتضييق القائمة.',
-        'استخدم مربع البحث لإيجاد تذكرة برقمها أو المدرسة أو الموضوع.',
+        'استخدم مربع البحث لإيجاد تذكرة برقمها أو العميل أو الموضوع.',
         'يمكنك أيضًا سؤالي مباشرة، مثل "شو تذاكري المفتوحة؟".',
       ],
     },
@@ -236,15 +236,15 @@ export const HELP_TOPICS: HelpTopic[] = [
     permission: 'schools.view',
     keywords: ['needs follow-up', 'not contacted', 'follow up', 'متابعة', 'لم يتم التواصل'],
     en: {
-      title: 'Find Schools That Need Follow-up',
+      title: 'Find Customers That Need Follow-up',
       steps: [
-        'There isn\'t a dedicated page for this yet — ask me directly, e.g. "which schools need follow-up?", and I\'ll check ticket follow-up dates for you.',
+        'There isn\'t a dedicated page for this yet — ask me directly, e.g. "which customers need follow-up?", and I\'ll check ticket follow-up dates for you.',
       ],
     },
     ar: {
-      title: 'إيجاد المدارس التي تحتاج متابعة',
+      title: 'إيجاد العملاء الذين يحتاجون متابعة',
       steps: [
-        'لا توجد صفحة مخصصة لهذا حاليًا — اسألني مباشرة، مثل "شو المدارس اللي بدها متابعة؟"، وسأتحقق من تواريخ المتابعة في التذاكر نيابة عنك.',
+        'لا توجد صفحة مخصصة لهذا حاليًا — اسألني مباشرة، مثل "شو العملاء اللي بدها متابعة؟"، وسأتحقق من تواريخ المتابعة في التذاكر نيابة عنك.',
       ],
     },
   },

@@ -1,5 +1,6 @@
 ﻿import { getCurrentUser } from '@/lib/auth/session';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { isPlatformSuperAdmin } from '@/lib/security/platform';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/db/prisma';
 import { TaskTypesClientView } from '@/components/admin/TaskTypesClientView';
@@ -7,8 +8,8 @@ import { TaskTypesClientView } from '@/components/admin/TaskTypesClientView';
 export default async function TaskTypesPage() {
   const user = (await getCurrentUser())!;
 
-  if (user.role !== 'SUPER_ADMIN' && !hasPermission(user, PERMISSIONS.TASK_TYPES_MANAGE)) {
-    redirect('/');
+  if (!isPlatformSuperAdmin(user) && !hasPermission(user, PERMISSIONS.TASK_TYPES_MANAGE)) {
+    redirect('/dashboard');
   }
 
   const [taskTypes, departments] = await Promise.all([

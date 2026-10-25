@@ -41,6 +41,7 @@ vi.mock('@/lib/security/rateLimiter', () => ({
 }));
 
 import { forgotPasswordAction, resetPasswordAction } from '@/server/actions/auth';
+const WELL_FORMED_TOKEN = 'unit-reset-token'.padEnd(32, 'x');
 
 describe('Password reset — unit', () => {
   beforeEach(() => {
@@ -101,13 +102,13 @@ describe('Password reset — unit', () => {
   });
 
   it('rejects a password shorter than the policy minimum with a specific error', async () => {
-    const result = await resetPasswordAction('sometoken', 'short1', 'short1');
+    const result = await resetPasswordAction(WELL_FORMED_TOKEN, 'short1', 'short1');
     expect(result).toEqual({ success: false, error: 'PASSWORD_TOO_SHORT' });
     expect(prismaMock.passwordResetToken.findUnique).not.toHaveBeenCalled();
   });
 
   it('rejects mismatched password confirmation with a specific error', async () => {
-    const result = await resetPasswordAction('sometoken', 'longenough1', 'longenough2');
+    const result = await resetPasswordAction(WELL_FORMED_TOKEN, 'longenough1', 'longenough2');
     expect(result).toEqual({ success: false, error: 'PASSWORD_MISMATCH' });
     expect(prismaMock.passwordResetToken.findUnique).not.toHaveBeenCalled();
   });

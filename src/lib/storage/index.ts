@@ -5,16 +5,21 @@ import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, PutObjectComm
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface UploadOptions { keyPrefix?: string }
+export interface DownloadOptions { originalName: string; mimeType: string; disposition?: 'attachment' | 'inline' }
 export interface UploadResult { storageKey: string; size: number; mimeType: string; originalName: string }
 export interface StorageProvider {
   readonly name: string; readonly providerId: 'local' | 's3';
   upload(buffer: Buffer, originalName: string, mimeType: string, options?: UploadOptions): Promise<UploadResult>;
   download(key: string): Promise<Buffer | null>; delete(key: string): Promise<boolean>; exists(key: string): Promise<boolean>;
-  getDownloadUrl(key: string, expiresIn?: number): Promise<string>;
+  getDownloadUrl(key: string, expiresIn?: number, options?: DownloadOptions): Promise<string>;
   healthCheck(): Promise<{ connected: boolean; provider: string; bucket?: string; region?: string; error?: string }>;
 }
 const filename = (name: string) => path.basename(name).normalize('NFKC').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120) || 'file';
 const keyFor = (name: string, prefix = 'attachments') => { const d = new Date(); const p = prefix.replace(/[^a-zA-Z0-9/_-]+/g, '').replace(/^\/+|\/+$/g, '') || 'attachments'; return `${p}/${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${crypto.randomUUID()}-${filename(name)}`; };
+export const safeContentDisposition = (name: string, disposition: 'attachment' | 'inline' = 'attachment') => {
+  const unicodeName = path.basename(name).normalize('NFKC').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 180) || 'file';
+  return `${disposition}; filename="${filename(unicodeName)}"; filename*=UTF-8''${encodeURIComponent(unicodeName)}`;
+};
 
 class LocalStorageProvider implements StorageProvider {
   readonly name = 'Local filesystem'; readonly providerId = 'local' as const;
@@ -36,10 +41,10 @@ class S3StorageProvider implements StorageProvider {
   async download(key: string) { try { const r = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key })); return r.Body ? Buffer.from(await r.Body.transformToByteArray()) : null; } catch (e: any) { if (e?.name === 'NoSuchKey' || e?.$metadata?.httpStatusCode === 404) return null; throw e; } }
   async delete(key: string) { await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key })); return true; }
   async exists(key: string) { try { await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key, Range: 'bytes=0-0' })); return true; } catch (e: any) { if (e?.name === 'NoSuchKey' || e?.$metadata?.httpStatusCode === 404) return false; throw e; } }
-  async getDownloadUrl(key: string, expiresIn = 300) { return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), { expiresIn }); }
+  async getDownloadUrl(key: string, expiresIn = 300, options?: DownloadOptions) { return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key, ...(options ? { ResponseContentDisposition: safeContentDisposition(options.originalName, options.disposition), ResponseContentType: options.mimeType || 'application/octet-stream' } : {}) }), { expiresIn }); }
   async healthCheck() { try { await this.client.send(new HeadBucketCommand({ Bucket: this.bucket })); return { connected: true, provider: this.name, bucket: this.bucket, region: this.region }; } catch (e: any) { return { connected: false, provider: this.name, bucket: this.bucket, region: this.region, error: e?.name || 'Storage connection failed' }; } }
 }
 let provider: StorageProvider | null = null;
-export function getStorageProvider(override?: 'local' | 's3') { if (override === 'local') return new LocalStorageProvider(); if (!provider) provider = (process.env.STORAGE_DRIVER || (process.env.S3_ENDPOINT ? 's3' : 'local')).toLowerCase() === 's3' ? new S3StorageProvider() : new LocalStorageProvider(); return provider; }
+export function getStorageProvider(override?: 'local' | 's3') { if (override === 'local') return new LocalStorageProvider(); if (override === 's3') return new S3StorageProvider(); if (!provider) provider = (process.env.STORAGE_DRIVER || (process.env.S3_ENDPOINT ? 's3' : 'local')).toLowerCase() === 's3' ? new S3StorageProvider() : new LocalStorageProvider(); return provider; }
 export async function storageHealthCheck() { return getStorageProvider().healthCheck(); }
 export function resetStorageProviderForTests() { provider = null; }

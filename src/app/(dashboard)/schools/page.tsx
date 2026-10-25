@@ -8,13 +8,14 @@ import prisma from '@/lib/db/prisma';
 export default async function SchoolsPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | undefined };
+  searchParams: Promise<{ [key: string]: string | undefined }>;
 }) {
   const user = (await getCurrentUser())!;
   if (!hasPermission(user, PERMISSIONS.SCHOOLS_VIEW)) return null;
 
-  const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
-  const rawPageSize = searchParams.pageSize;
+  const params = await searchParams;
+  const page = params.page ? parseInt(params.page, 10) : 1;
+  const rawPageSize = params.pageSize;
   let pageSize = 15;
   if (rawPageSize === 'all') {
     pageSize = 10000;
@@ -25,9 +26,9 @@ export default async function SchoolsPage({
     }
   }
 
-  const search = searchParams.search || '';
-  const classification = searchParams.classification || '';
-  const city = searchParams.city || '';
+  const search = params.search || '';
+  const classification = params.classification || '';
+  const city = params.city || '';
 
   // Registry visibility is governed by schools.view. Responsible employee and
   // ticket assignment are business data, not access filters.

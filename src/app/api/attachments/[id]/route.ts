@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import { canAccessAttachment } from '@/lib/permissions';
 import prisma from '@/lib/db/prisma';
-import { getStorageProvider } from '@/lib/storage';
+import { getStorageProvider, safeContentDisposition } from '@/lib/storage';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -15,7 +15,7 @@ export async function GET(
     }
     if (!user.organizationId) return new NextResponse('Organization context required', { status: 403 });
 
-    const attachmentId = params.id;
+    const attachmentId = (await params).id;
     const isAllowed = await canAccessAttachment(user, attachmentId);
     if (!isAllowed) {
       return new NextResponse('Forbidden: Access to this attachment is restricted', { status: 403 });
@@ -31,7 +31,7 @@ export async function GET(
 
     const storage = attachment.storageProvider === 'local' ? getStorageProvider('local') : getStorageProvider();
     if (attachment.storageProvider === 's3') {
-      return NextResponse.redirect(await storage.getDownloadUrl(attachment.storageKey, 300));
+      return NextResponse.redirect(await storage.getDownloadUrl(attachment.storageKey, 300, { originalName: attachment.originalName, mimeType: attachment.mimeType || 'application/octet-stream', disposition: 'attachment' }));
     }
     const fileBuffer = await storage.download(attachment.storageKey);
 
@@ -42,7 +42,7 @@ export async function GET(
     return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         'Content-Type': attachment.mimeType || 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(attachment.originalName)}"`,
+        'Content-Disposition': safeContentDisposition(attachment.originalName, 'attachment'),
         'Content-Length': attachment.size.toString(),
         'Cache-Control': 'private, no-store',
         'X-Content-Type-Options': 'nosniff',

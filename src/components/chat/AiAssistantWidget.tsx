@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 
@@ -46,7 +46,7 @@ export function AiAssistantWidget() {
     document.body.appendChild(script);
   }, []);
 
-  const openHostedAssistant = () => {
+  const openHostedAssistant = useCallback(() => {
     window.dispatchEvent(new CustomEvent('assistant:open', { detail: { assistant: ASSISTANT_ID } }));
     window.dispatchEvent(new CustomEvent('chatbot:open', { detail: { assistant: ASSISTANT_ID } }));
 
@@ -62,7 +62,7 @@ export function AiAssistantWidget() {
       if (attempts++ < 20) window.setTimeout(trigger, 100);
     };
     trigger();
-  };
+  }, []);
 
   useEffect(() => {
     const handleMenuOpen = () => openHostedAssistant();

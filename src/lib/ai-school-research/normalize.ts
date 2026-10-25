@@ -1,6 +1,10 @@
+import { normalizeEmail } from '@/lib/validation/contactInfo';
 import { normalizeImportPhone } from '@/lib/schools/import';
 
-export { normalizeImportPhone as normalizeResearchPhone };
+export function normalizeResearchPhone(value: string | null | undefined): string {
+  const normalized = normalizeImportPhone(value);
+  return normalized.startsWith('+') ? normalized : '';
+}
 
 /**
  * Arabic-safe school name normalization used for duplicate comparison only
@@ -20,11 +24,7 @@ export function normalizeSchoolName(value: string | null | undefined): string {
 }
 
 export function normalizeResearchEmail(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return null;
-  const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
-  return isValid ? trimmed : null;
+  return normalizeEmail(value);
 }
 
 export function extractWebsiteDomain(value: string | null | undefined): string | null {

@@ -61,6 +61,18 @@ type UnifiedTimelineItem =
 export function TimelineView({ activityEvents, assignmentHistory }: TimelineViewProps) {
   const { t, language } = useI18n();
 
+  // Older activity records were created before the product terminology was
+  // generalized from schools to customers. Normalize those persisted strings
+  // at render time so historical activity does not reintroduce the old label.
+  const customerize = (value?: string | null) => {
+    if (!value) return value;
+    return value
+      .replace(/school ticket/gi, language === 'ar' ? 'تذكرة العميل' : 'customer ticket')
+      .replace(/school/gi, language === 'ar' ? 'العميل' : 'customer')
+      .replace(/مدرسة/gi, 'العميل')
+      .replace(/مدارس/gi, 'العملاء');
+  };
+
   const getActivityIcon = (type: string) => {
     switch (type) {
       case 'CREATED':
@@ -90,8 +102,8 @@ export function TimelineView({ activityEvents, assignmentHistory }: TimelineView
       kind: 'activity' as const,
       id: `act-${a.id}`,
       type: a.type,
-      title: a.title,
-      description: a.description,
+      title: customerize(a.title) || a.title,
+      description: customerize(a.description),
       createdAt: new Date(a.createdAt),
       actorName: a.actor.name,
     })),

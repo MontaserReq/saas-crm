@@ -4,7 +4,7 @@ import { ProposalTemplateService } from '@/server/services/ProposalTemplateServi
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -12,8 +12,9 @@ export async function GET(
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const template = await ProposalTemplateService.getTemplate(user, params.id);
-    const buffer = await ProposalTemplateService.getTemplatePdfBuffer(user, params.id);
+    const templateId = (await params).id;
+    const template = await ProposalTemplateService.getTemplate(user, templateId);
+    const buffer = await ProposalTemplateService.getTemplatePdfBuffer(user, templateId);
 
     const filename = template.originalFileName || `${template.name.replace(/[^a-zA-Z0-9_-]+/g, '_')}.pdf`;
 

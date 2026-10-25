@@ -4,6 +4,7 @@ import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge';
 import { PriorityBadge } from '@/components/tickets/PriorityBadge';
 import { TicketActionButtons } from '@/components/tickets/TicketActionButtons';
 import { RejectedTicketCorrection } from '@/components/tickets/RejectedTicketCorrection';
+import { TicketEditRequestModal } from '@/components/tickets/TicketEditRequestModal';
 import { NoteStream } from '@/components/tickets/NoteStream';
 import { TimelineView } from '@/components/tickets/TimelineView';
 import { MeetingDetailsCard } from '@/components/tickets/MeetingDetailsCard';
@@ -17,7 +18,6 @@ import {
   Mail,
   MapPin,
   ChevronLeft,
-  GraduationCap,
   PhoneCall,
 } from 'lucide-react';
 
@@ -30,6 +30,7 @@ interface TicketDetailClientViewProps {
   currentUser?: any;
   canDelete?: boolean;
   canTransfer?: boolean;
+  canRequestEdit?: boolean;
 }
 
 export function TicketDetailClientView({
@@ -41,6 +42,7 @@ export function TicketDetailClientView({
   currentUser,
   canDelete = false,
   canTransfer = false,
+  canRequestEdit = false,
 }: TicketDetailClientViewProps) {
   const { t, language, getStatusLabel } = useI18n();
   const currentAssignee = ticket.assignees.find((a: any) => a.isCurrent)?.user;
@@ -49,6 +51,11 @@ export function TicketDetailClientView({
   const isViewer = currentUser && currentUser.role !== 'SUPER_ADMIN' && currentUser.role !== 'ADMIN'
     ? userAssigneeRecord ? (!userAssigneeRecord.isCurrent || userAssigneeRecord.role === 'VIEWER') : true
     : false;
+  const pendingEditRequest = ticket.TicketApprovalRequest?.[0] || null;
+  const mayRequestEdit = canRequestEdit
+    && ticket.status !== 'CLOSED'
+    && ticket.status !== 'REJECTED'
+    && !isViewer;
 
   return (
     <div className="space-y-6">
@@ -77,13 +84,23 @@ export function TicketDetailClientView({
               {ticket.subject}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <GraduationCap className="w-4 h-4 text-brand-600" />
+              <Building2 className="w-4 h-4 text-brand-600" />
               <span>{ticket.school ? `${ticket.school.name} • ${ticket.school.city}` : 'General Ticket'}{ticket.taskType ? ` • ${ticket.taskType.name}` : ''}</span>
             </p>
           </div>
 
           {/* Action Buttons */}
-          <TicketActionButtons ticket={ticket} teamMembers={teamMembers} canDelete={canDelete} canTransfer={canTransfer} />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <TicketEditRequestModal
+              ticket={ticket}
+              schools={schools}
+              taskTypes={taskTypes}
+              currentUserId={currentUser?.id || ''}
+              canRequestEdit={mayRequestEdit}
+              pendingRequest={pendingEditRequest}
+            />
+            <TicketActionButtons ticket={ticket} teamMembers={teamMembers} canDelete={canDelete} canTransfer={canTransfer} />
+          </div>
         </div>
 
         {/* Rejection notice if status is REJECTED */}
@@ -103,17 +120,21 @@ export function TicketDetailClientView({
           {/* Meeting Details Card (only for tickets created as Meeting Minutes) */}
           {ticket.meetingDetails && <MeetingDetailsCard meetingDetails={ticket.meetingDetails} />}
 
-          {/* School Contact Card */}
+          {/* Customer contact card */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
               <Building2 className="w-5 h-5 text-brand-600" />
-              <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">{t('tickets.schoolInfo')}</h3>
+              <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                {language === 'ar' ? 'بيانات العميل' : 'Customer information'}
+              </h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
-                <span className="text-slate-400 block mb-0.5">{t('schools.schoolName')}</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">{ticket.school?.name || 'General Ticket'}</span>
+                <span className="text-slate-400 block mb-0.5">
+                  {language === 'ar' ? 'اسم العميل' : 'Customer name'}
+                </span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">{ticket.school?.name || (language === 'ar' ? 'تذكرة عامة' : 'General ticket')}</span>
               </div>
 
               <div>

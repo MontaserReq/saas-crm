@@ -2,7 +2,7 @@
 
 import { useI18n } from '@/lib/i18n/context';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useId, useRef } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -30,6 +30,32 @@ export function ConfirmDialog({
   children,
 }: ConfirmDialogProps) {
   const { t } = useI18n();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !loading) onClose();
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', keydown);
+    window.requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLElement>('button:not([disabled])')?.focus());
+    return () => {
+      document.body.style.overflow = 'unset';
+      window.removeEventListener('keydown', keydown);
+      previouslyFocused?.focus();
+    };
+  }, [isOpen, loading, onClose]);
 
   if (!isOpen) return null;
 
@@ -49,11 +75,13 @@ export function ConfirmDialog({
       />
 
       {/* Dialog */}
-      <div className="relative flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-3xl shadow-2xl max-h-[88dvh] sm:max-h-[calc(100vh-4rem)] max-w-md w-full animate-in fade-in slide-in-from-bottom-4 duration-200 overflow-hidden">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} className="relative flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-3xl shadow-2xl max-h-[88dvh] sm:max-h-[calc(100vh-4rem)] max-w-md w-full animate-in fade-in slide-in-from-bottom-4 duration-200 overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
           {/* Close Button */}
           <button
+            type="button"
             onClick={onClose}
+            aria-label={t('common.close')}
             className="absolute top-4 end-4 p-2.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -77,8 +105,8 @@ export function ConfirmDialog({
               )}
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">{title}</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">{description}</p>
+              <h3 id={titleId} className="text-base font-bold text-slate-900 dark:text-white">{title}</h3>
+              <p id={descriptionId} className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">{description}</p>
             </div>
           </div>
 

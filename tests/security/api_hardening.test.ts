@@ -14,11 +14,17 @@ describe('API hardening', () => {
   });
 
   it('uses the forwarded client IP only behind a configured trusted proxy', () => {
-    process.env.TRUST_PROXY = 'true';
+    process.env.TRUST_PROXY = 'single-hop';
     const first = new Request('http://localhost/api/public-search', { headers: { 'x-forwarded-for': '10.0.0.3' } });
     const second = new Request('http://localhost/api/public-search', { headers: { 'x-forwarded-for': '10.0.0.4' } });
     expect(clientIp(first)).toBe('10.0.0.3');
     expect(clientIp(second)).toBe('10.0.0.4');
+  });
+
+  it('rejects spoofable or ambiguous forwarded values in single-hop mode', () => {
+    process.env.TRUST_PROXY = 'single-hop';
+    expect(clientIp(new Request('http://localhost', { headers: { 'x-forwarded-for': '10.0.0.3, 10.0.0.4', 'x-real-ip': '10.0.0.5' } }))).toBe('anonymous');
+    expect(clientIp(new Request('http://localhost', { headers: { 'x-forwarded-for': 'not-an-ip' } }))).toBe('anonymous');
   });
 
   it('fails closed for unconfigured chatbot proxy paths and does not expose raw template errors', () => {

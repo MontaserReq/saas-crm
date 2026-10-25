@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export const UPLOAD_LIMITS = {
   template: { requestBytes: 11 * 1024 * 1024, fileBytes: 10 * 1024 * 1024, totalFileBytes: 10 * 1024 * 1024 },
   logo: { requestBytes: 6 * 1024 * 1024, fileBytes: 5 * 1024 * 1024, totalFileBytes: 5 * 1024 * 1024 },
-  import: { requestBytes: 11 * 1024 * 1024, fileBytes: 10 * 1024 * 1024, totalFileBytes: 10 * 1024 * 1024 },
+  import: { requestBytes: 6 * 1024 * 1024, fileBytes: 5 * 1024 * 1024, totalFileBytes: 5 * 1024 * 1024 },
   parts: 16,
   fields: 12,
   fieldBytes: 128 * 1024,

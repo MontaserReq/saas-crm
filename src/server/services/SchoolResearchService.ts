@@ -1,4 +1,5 @@
 import prisma from '@/lib/db/prisma';
+import type { Prisma } from '@prisma/client';
 import { UserSession, PaginatedResult } from '@/types';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { schoolResearchJobSchema } from '@/lib/validation';
@@ -12,9 +13,17 @@ import { isLikelyDuplicate } from '@/lib/ai-school-research/duplicate';
 import { isValidJobTransition, ResearchJobStatus } from '@/lib/ai-school-research/stateMachine';
 import { requireOrganizationId, requireOrganizationIdForUserId, requireOrganizationIdValue } from '@/lib/auth/organization';
 import { acquireOperation, assertResearchJobOwner, consumeResearchBudget, finishOperation, RESOURCE_LIMITS, ResearchBudgetExceededError, StaleOperationError, withResearchJobOwner } from '@/lib/security/resourceGuard';
+import { evaluateCurrentOperationAuthorization } from '@/lib/security/operationAuthorization';
 
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_EXTRACTION_ROUNDS = 3;
+
+class ResearchAuthorizationRevokedError extends Error {
+  constructor(public readonly reasonCode: string) {
+    super('Research authorization or plan access was revoked while the job was running.');
+    this.name = 'ResearchAuthorizationRevokedError';
+  }
+}
 
 export interface CreateResearchJobInput {
   location: string;
@@ -26,6 +35,16 @@ export interface CreateResearchJobInput {
 
 export class SchoolResearchService {
   private static async organizationForActor(actorId: string): Promise<string> { return requireOrganizationIdForUserId(actorId); }
+  private static async requireCurrentRunAuthorization(tx: Prisma.TransactionClient, organizationId: string, actorId: string) {
+    const authorization = await evaluateCurrentOperationAuthorization(tx, {
+      organizationId,
+      userId: actorId,
+      feature: 'ai_research',
+      requiredPermissions: [PERMISSIONS.AI_RESEARCH_CREATE, PERMISSIONS.AI_RESEARCH_RUN],
+    });
+    if (!authorization.allowed) throw new ResearchAuthorizationRevokedError(authorization.reasonCode);
+    return authorization;
+  }
   /**
    * A user with ai_research.approve (admin-tier) can see every job, matching
    * the existing pattern where a broader permission implies broader
@@ -96,12 +115,21 @@ export class SchoolResearchService {
         maxTokens: config.maxTokens ?? 100_000,
         maxDurationMs: config.maxDurationMs ?? 15 * 60 * 1000,
       },
+      authorize: async (tx) => {
+        try {
+          await this.requireCurrentRunAuthorization(tx, organizationId, job.createdById);
+          return true;
+        } catch (error) {
+          if (error instanceof ResearchAuthorizationRevokedError) return false;
+          throw error;
+        }
+      },
     });
     if (!execution.acquired || !execution.execution) {
-      if (execution.reason !== 'BUSY') return;
-      const message = execution.reason === 'BUSY'
-        ? 'Research concurrency limit reached. Please try again shortly.'
-        : 'Research execution is already in progress or has completed.';
+      if (execution.reason === 'IN_PROGRESS' || execution.reason === 'COMPLETED') return;
+      const message = execution.reason === 'NOT_AUTHORIZED'
+        ? 'Research authorization or plan access is no longer available.'
+        : 'Research concurrency limit reached. Please try again shortly.';
       await prisma.schoolResearchJob.updateMany({
         where: { id: jobId, status: 'PENDING' },
         data: { status: 'FAILED', completedAt: new Date(), error: message },
@@ -124,8 +152,9 @@ export class SchoolResearchService {
         outputTokens: usage.outputTokens,
         totalTokens: usage.totalTokens,
       });
-      await withResearchJobOwner(jobId, execution.execution!.id, ownerToken, (tx) => tx.schoolResearchAttempt.create({
-          data: {
+      await withResearchJobOwner(jobId, execution.execution!.id, ownerToken, async (tx) => {
+        await this.requireCurrentRunAuthorization(tx, organizationId, job.createdById);
+        return tx.schoolResearchAttempt.create({ data: {
             jobId,
             provider: usage.provider,
             model: usage.model,
@@ -144,8 +173,8 @@ export class SchoolResearchService {
             isFallback: usage.fallback,
             errorCode: usage.errorCode ?? null,
             errorMessage: usage.errorMessage ?? null,
-          },
-        }));
+          } });
+      });
     };
 
     const provider = getAiProvider(onAttempt);
@@ -163,9 +192,16 @@ export class SchoolResearchService {
             requestedCount: job.requestedCount - collected.length,
             requiredFields,
             excludeNames: collected.map((item) => item.name),
-            beforeRequest: async (isRetry = false) => { await consumeResearchBudget(jobId, execution.execution!.id, ownerToken, { providerRequests: 1, retryAttempts: isRetry ? 1 : 0 }); },
+            beforeRequest: async (isRetry = false) => {
+              await withResearchJobOwner(jobId, execution.execution!.id, ownerToken, async (tx) => {
+                await this.requireCurrentRunAuthorization(tx, organizationId, job.createdById);
+              });
+              await consumeResearchBudget(jobId, execution.execution!.id, ownerToken, { providerRequests: 1, retryAttempts: isRetry ? 1 : 0 });
+            },
           });
-          await assertResearchJobOwner(jobId, execution.execution.id, ownerToken);
+          await withResearchJobOwner(jobId, execution.execution.id, ownerToken, async (tx) => {
+            await this.requireCurrentRunAuthorization(tx, organizationId, job.createdById);
+          });
           aiCallCount++;
           if (!result.schools.length) break;
           collected.push(...result.schools);
@@ -223,8 +259,9 @@ export class SchoolResearchService {
         });
         if (matchedSchool || matchedCandidate) status = 'DUPLICATE';
 
-        const candidate = await withResearchJobOwner(jobId, execution.execution.id, ownerToken, (tx) => tx.schoolResearchCandidate.create({
-          data: {
+        const candidate = await withResearchJobOwner(jobId, execution.execution.id, ownerToken, async (tx) => {
+          await this.requireCurrentRunAuthorization(tx, organizationId, job.createdById);
+          return tx.schoolResearchCandidate.create({ data: {
             researchJobId: jobId,
             name,
             normalizedName,
@@ -246,17 +283,20 @@ export class SchoolResearchService {
                 sourceUrl: e.sourceUrl || null,
               })),
             },
-          },
-        }));
+          } });
+        });
 
         createdInThisJob.push({ id: candidate.id, name, city, phone: phone || null, website });
       }
 
       await assertResearchJobOwner(jobId, execution.execution.id, ownerToken);
-      await withResearchJobOwner(jobId, execution.execution.id, ownerToken, (tx) => tx.schoolResearchJob.update({
-        where: { id: jobId },
-        data: { status: 'COMPLETED', completedAt: new Date(), aiCallCount, sourceCount },
-      }));
+      await withResearchJobOwner(jobId, execution.execution.id, ownerToken, async (tx) => {
+        await this.requireCurrentRunAuthorization(tx, organizationId, job.createdById);
+        return tx.schoolResearchJob.update({
+          where: { id: jobId },
+          data: { status: 'COMPLETED', completedAt: new Date(), aiCallCount, sourceCount },
+        });
+      });
 
       const counts = await prisma.schoolResearchCandidate.groupBy({ by: ['status'], where: { researchJobId: jobId }, _count: true });
       const summary = Object.fromEntries(counts.map((c) => [c.status, c._count]));
@@ -275,6 +315,8 @@ export class SchoolResearchService {
       if (err instanceof StaleOperationError) return;
       const message = err instanceof ResearchBudgetExceededError
         ? 'Research budget exhausted. Please start a new research job with a smaller scope.'
+        : err instanceof ResearchAuthorizationRevokedError
+        ? err.message
         : err instanceof AiNotConfiguredError
         ? err.message
         : err instanceof AiExtractionError

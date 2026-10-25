@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { applySecurityHeaders, rejectUntrustedMutation, validateMutationOrigin } from '@/lib/security/web';
+import { validateProductionSecurityConfig } from '@/lib/security/runtimeConfig';
 import { safeExternalUrl } from '@/lib/security/url';
 
 const oldOrigin = process.env.APP_ORIGIN;
@@ -24,6 +25,24 @@ describe('web security controls', () => {
 
     const local = applySecurityHeaders(new Response('ok'), new Request('http://localhost/'));
     expect(local.headers.get('strict-transport-security')).toBeNull();
+  });
+
+  it('sets proxy-derived HSTS only for the explicit single-hop policy', () => {
+    const request = new Request('http://app:3000/', { headers: { 'x-forwarded-proto': 'https' } });
+    process.env.TRUST_PROXY = 'true';
+    expect(applySecurityHeaders(new Response('ok'), request).headers.get('strict-transport-security')).toBeNull();
+    process.env.TRUST_PROXY = 'single-hop';
+    expect(applySecurityHeaders(new Response('ok'), request).headers.get('strict-transport-security')).toContain('max-age=');
+
+    const ambiguous = new Request('http://app:3000/', { headers: { 'x-forwarded-proto': 'https,http' } });
+    expect(applySecurityHeaders(new Response('ok'), ambiguous).headers.get('strict-transport-security')).toBeNull();
+  });
+
+  it('fails production validation for missing, insecure, or broad proxy configuration', () => {
+    expect(() => validateProductionSecurityConfig({ NODE_ENV: 'production', TRUST_PROXY: 'single-hop' })).toThrow('APP_ORIGIN');
+    expect(() => validateProductionSecurityConfig({ NODE_ENV: 'production', APP_ORIGIN: 'http://crm.example.com', TRUST_PROXY: 'single-hop' })).toThrow('APP_ORIGIN');
+    expect(() => validateProductionSecurityConfig({ NODE_ENV: 'production', APP_ORIGIN: 'https://crm.example.com', TRUST_PROXY: 'true' })).toThrow('TRUST_PROXY');
+    expect(() => validateProductionSecurityConfig({ NODE_ENV: 'production', APP_ORIGIN: 'https://crm.example.com', TRUST_PROXY: 'single-hop' })).not.toThrow();
   });
 
   it('requires exact trusted Origin or Referer for mutations', () => {

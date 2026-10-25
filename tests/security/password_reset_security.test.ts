@@ -40,6 +40,7 @@ vi.mock('@/lib/security/rateLimiter', () => ({
 }));
 
 import { forgotPasswordAction, resetPasswordAction, checkResetTokenAction } from '@/server/actions/auth';
+const resetToken = (label: string) => label.padEnd(32, 'x');
 
 type FakeRow = { id: string; userId: string; usedAt: Date | null; expiresAt: Date };
 
@@ -135,14 +136,14 @@ describe('Password reset — security', () => {
 
     it('rejects an expired token even though it is otherwise well-formed and unused, with a distinct error code', async () => {
       installFakeTokenStore({ id: 'r1', userId: 'u1', usedAt: null, expiresAt: new Date(Date.now() - 1000) });
-      const result = await resetPasswordAction('expired-token', 'longenough1', 'longenough1');
+      const result = await resetPasswordAction(resetToken('expired-token'), 'longenough1', 'longenough1');
       expect(result).toEqual({ success: false, error: 'TOKEN_EXPIRED' });
       expect(prismaMock.user.update).not.toHaveBeenCalled();
     });
 
     it('rejects a token that has already been used, with a distinct error code (single-use enforcement)', async () => {
       installFakeTokenStore({ id: 'r1', userId: 'u1', usedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) });
-      const result = await resetPasswordAction('used-token', 'longenough1', 'longenough1');
+      const result = await resetPasswordAction(resetToken('used-token'), 'longenough1', 'longenough1');
       expect(result).toEqual({ success: false, error: 'TOKEN_ALREADY_USED' });
       expect(prismaMock.user.update).not.toHaveBeenCalled();
     });
@@ -153,7 +154,7 @@ describe('Password reset — security', () => {
       prismaMock.user.update.mockResolvedValue({});
       prismaMock.loginSession.updateMany.mockResolvedValue({ count: 2 });
 
-      const result = await resetPasswordAction('good-token', 'longenough1', 'longenough1');
+      const result = await resetPasswordAction(resetToken('good-token'), 'longenough1', 'longenough1');
 
       expect(result).toEqual({ success: true });
       expect(prismaMock.passwordResetToken.updateMany).toHaveBeenCalledWith({
@@ -174,10 +175,10 @@ describe('Password reset — security', () => {
       prismaMock.user.update.mockResolvedValue({});
       prismaMock.loginSession.updateMany.mockResolvedValue({ count: 0 });
 
-      const first = await resetPasswordAction('good-token', 'longenough1', 'longenough1');
+      const first = await resetPasswordAction(resetToken('good-token'), 'longenough1', 'longenough1');
       expect(first).toEqual({ success: true });
 
-      const second = await resetPasswordAction('good-token', 'differentpass2', 'differentpass2');
+      const second = await resetPasswordAction(resetToken('good-token'), 'differentpass2', 'differentpass2');
       expect(second).toEqual({ success: false, error: 'TOKEN_ALREADY_USED' });
       expect(prismaMock.user.update).toHaveBeenCalledTimes(1); // password was not changed a second time
     });
@@ -185,7 +186,7 @@ describe('Password reset — security', () => {
     it('rejects a reset for a token whose owning account was disabled in the meantime, and does not burn the token', async () => {
       const store = installFakeTokenStore({ id: 'r1', userId: 'u1', usedAt: null, expiresAt: new Date(Date.now() + 60_000) });
       prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', isActive: false });
-      const result = await resetPasswordAction('good-token', 'longenough1', 'longenough1');
+      const result = await resetPasswordAction(resetToken('good-token'), 'longenough1', 'longenough1');
       expect(result).toEqual({ success: false, error: 'INVALID_TOKEN' });
       expect(prismaMock.user.update).not.toHaveBeenCalled();
       // The whole operation is one transaction: since the reset failed, the claim must not persist.
@@ -199,8 +200,8 @@ describe('Password reset — security', () => {
       prismaMock.loginSession.updateMany.mockResolvedValue({ count: 0 });
 
       const [a, b] = await Promise.all([
-        resetPasswordAction('good-token', 'longenough1', 'longenough1'),
-        resetPasswordAction('good-token', 'anotherpass2', 'anotherpass2'),
+        resetPasswordAction(resetToken('good-token'), 'longenough1', 'longenough1'),
+        resetPasswordAction(resetToken('good-token'), 'anotherpass2', 'anotherpass2'),
       ]);
 
       const results = [a, b];
@@ -216,7 +217,7 @@ describe('Password reset — security', () => {
   describe('checkResetTokenAction (read-only UX status)', () => {
     it('reports VALID for an unused, unexpired token without mutating it', async () => {
       const store = installFakeTokenStore({ id: 'r1', userId: 'u1', usedAt: null, expiresAt: new Date(Date.now() + 60_000) });
-      const status = await checkResetTokenAction('good-token');
+      const status = await checkResetTokenAction(resetToken('good-token'));
       expect(status).toBe('VALID');
       expect(store.get()?.usedAt).toBeNull();
       expect(prismaMock.passwordResetToken.updateMany).not.toHaveBeenCalled();
@@ -224,12 +225,12 @@ describe('Password reset — security', () => {
 
     it('reports ALREADY_USED for a consumed token', async () => {
       installFakeTokenStore({ id: 'r1', userId: 'u1', usedAt: new Date(), expiresAt: new Date(Date.now() + 60_000) });
-      expect(await checkResetTokenAction('used-token')).toBe('ALREADY_USED');
+      expect(await checkResetTokenAction(resetToken('used-token'))).toBe('ALREADY_USED');
     });
 
     it('reports EXPIRED for an unused but expired token', async () => {
       installFakeTokenStore({ id: 'r1', userId: 'u1', usedAt: null, expiresAt: new Date(Date.now() - 1000) });
-      expect(await checkResetTokenAction('expired-token')).toBe('EXPIRED');
+      expect(await checkResetTokenAction(resetToken('expired-token'))).toBe('EXPIRED');
     });
 
     it('reports INVALID for an unknown token and for an empty token', async () => {
@@ -254,12 +255,13 @@ describe('Password reset — security', () => {
       prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', isActive: true });
       prismaMock.user.update.mockResolvedValue({});
 
-      await resetPasswordAction('the-raw-secret-token', 'MyNewPassw0rd!', 'MyNewPassw0rd!');
+      const rawToken = resetToken('the-raw-secret-token');
+      await resetPasswordAction(rawToken, 'MyNewPassw0rd!', 'MyNewPassw0rd!');
 
       const auditCall = prismaMock.auditLog.create.mock.calls.find((c: any) => c[0].data.action === 'PASSWORD_RESET_COMPLETED');
       expect(auditCall).toBeTruthy();
       const serialized = JSON.stringify(auditCall![0].data);
-      expect(serialized).not.toContain('the-raw-secret-token');
+      expect(serialized).not.toContain(rawToken);
       expect(serialized).not.toContain('MyNewPassw0rd!');
     });
 
@@ -302,7 +304,7 @@ describe('Password reset — security', () => {
 
     it('fails closed before attempting reset-token consumption when the limiter is unavailable', async () => {
       rateLimitMock.mockResolvedValue({ status: 'unavailable', allowed: false });
-      const result = await resetPasswordAction('opaque-token', 'longenough1', 'longenough1');
+      const result = await resetPasswordAction(resetToken('opaque-token'), 'longenough1', 'longenough1');
       expect(result).toEqual({ success: false, error: 'RESET_FAILED' });
       expect(prismaMock.passwordResetToken.updateMany).not.toHaveBeenCalled();
     });

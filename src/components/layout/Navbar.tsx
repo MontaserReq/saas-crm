@@ -4,13 +4,15 @@ import { UserSession } from "@/types";
 import { ThemeToggle } from "./ThemeToggle";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { NotificationDropdown } from "./NotificationDropdown";
-import { Search, User, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Menu, Search, User, Settings, LogOut, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import { logoutAction } from "@/server/actions/auth";
 import Link from "next/link";
 import { useDialog } from "@/lib/dialog/context";
+import { useMobileLayout } from "./MobileLayout";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 
 interface NavbarProps {
   user: UserSession;
@@ -24,6 +26,8 @@ export function Navbar({ user, notifications = [] }: NavbarProps) {
   const router = useRouter();
   const { t } = useI18n();
   const { confirm } = useDialog();
+  const { isMobileMenuOpen, toggleMobileMenu } = useMobileLayout();
+  const canViewSettings = hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_VIEW);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,7 +76,17 @@ export function Navbar({ user, notifications = [] }: NavbarProps) {
   }, []);
 
   return (
-    <header className="h-16 px-3 sm:px-6 ps-16 lg:ps-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 z-20 gap-2">
+    <header className="h-16 px-3 sm:px-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 z-20 gap-2">
+      <button
+        type="button"
+        onClick={toggleMobileMenu}
+        aria-label={isMobileMenuOpen ? t("nav.closeMenu") : t("nav.openMenu")}
+        aria-expanded={isMobileMenuOpen}
+        className="lg:hidden shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-md shadow-brand-500/20 transition-all active:scale-95"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
       {/* Global Search Bar */}
       <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
         <Search className="w-4 h-4 text-slate-400 absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -131,7 +145,7 @@ export function Navbar({ user, notifications = [] }: NavbarProps) {
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block leading-tight truncate max-w-[120px]">
                 {user.name}
               </span>
-              <span className="text-[10px] text-slate-400 block truncate max-w-[120px]">{user.departmentName}</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400 block truncate max-w-[120px]">{user.departmentName}</span>
             </div>
             <ChevronDown
               className={`w-3.5 h-3.5 text-slate-400 transition-transform hidden sm:block ${userMenuOpen ? "rotate-180" : ""}`}
@@ -156,14 +170,14 @@ export function Navbar({ user, notifications = [] }: NavbarProps) {
                   <span>{t("nav.profile")}</span>
                 </Link>
 
-                <Link
+                {canViewSettings && <Link
                   href="/settings"
                   onClick={() => setUserMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors sm:hidden"
+                  className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                   <Settings className="w-4 h-4 text-brand-500 shrink-0" />
                   <span>{t("nav.settings")}</span>
-                </Link>
+                </Link>}
 
                 <div className="sm:hidden border-t border-slate-100 dark:border-slate-800">
                   <LanguageSwitcherInline />

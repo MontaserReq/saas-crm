@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '@/lib/i18n/context';
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const { t } = useI18n();
 
@@ -18,7 +18,7 @@ export function ThemeToggle() {
     return <div className="w-10 h-10" />;
   }
 
-  const isDark = theme === 'dark';
+  const isDark = resolvedTheme === 'dark';
 
   return (
     <button

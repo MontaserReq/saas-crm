@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db/prisma';
 
-export type ResourceOperationType = 'AI_RESEARCH' | 'AI_ASSISTANT' | 'PROPOSAL_GENERATION' | 'SCHOOL_IMPORT';
+export type ResourceOperationType = 'AI_RESEARCH' | 'AI_ASSISTANT' | 'PROPOSAL_GENERATION' | 'SCHOOL_IMPORT' | 'WORKFLOW';
 export type OperationStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
 
 export interface ResourceLimits {
@@ -60,6 +60,12 @@ export const RESOURCE_LIMITS: Record<ResourceOperationType, ResourceLimits> = {
     user: positiveInt(process.env.SCHOOL_IMPORT_USER_CONCURRENCY, 1),
     leaseMs: positiveInt(process.env.SCHOOL_IMPORT_LEASE_MS, 30 * 60 * 1000),
   },
+  WORKFLOW: {
+    global: 1000,
+    organization: 100,
+    user: 100,
+    leaseMs: 5 * 60 * 1000,
+  },
 };
 
 export interface AcquireOperationInput {
@@ -69,6 +75,8 @@ export interface AcquireOperationInput {
   idempotencyKey: string;
   limits?: ResourceLimits;
   researchBudget?: ResearchBudgetLimits;
+  /** Runs inside the acquisition transaction before any lease is granted. */
+  authorize?: (tx: Prisma.TransactionClient) => Promise<boolean>;
 }
 
 export class StaleOperationError extends Error {
@@ -101,7 +109,7 @@ export async function assertOperationOwner(id: string, ownerToken: string): Prom
     WHERE "id" = ${id}
       AND "ownerToken" = ${ownerToken}
       AND "status" = 'RUNNING'
-      AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      AND "leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
     LIMIT 1
   `;
   if (rows.length !== 1) throw new StaleOperationError();
@@ -116,7 +124,7 @@ export async function assertResearchJobOwner(jobId: string, operationId: string,
       AND job."currentOperationId" = ${operationId}
       AND operation."ownerToken" = ${ownerToken}
       AND operation."status" = 'RUNNING'
-      AND operation."leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      AND operation."leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
     LIMIT 1
   `;
   if (rows.length !== 1) throw new StaleOperationError();
@@ -140,7 +148,7 @@ export async function withOperationOwner<T>(
       WHERE "id" = ${id}
         AND "ownerToken" = ${ownerToken}
         AND "status" = 'RUNNING'
-        AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+        AND "leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
       FOR UPDATE
     `;
     if (rows.length !== 1) throw new StaleOperationError();
@@ -163,7 +171,7 @@ export async function withResearchJobOwner<T>(
         AND job."currentOperationId" = ${operationId}
         AND operation."ownerToken" = ${ownerToken}
         AND operation."status" = 'RUNNING'
-        AND operation."leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+        AND operation."leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
       FOR UPDATE OF job, operation
     `;
     if (rows.length !== 1) throw new StaleOperationError();
@@ -173,9 +181,7 @@ export async function withResearchJobOwner<T>(
 
 export async function acquireOperation(input: AcquireOperationInput) {
   const limits = input.limits ?? RESOURCE_LIMITS[input.operationType];
-  const now = new Date();
   const ownerToken = randomUUID();
-  const leaseExpiresAt = new Date(now.getTime() + limits.leaseMs);
 
   return prisma.$transaction(async (tx) => {
     // PostgreSQL advisory transaction locks make the limit check and insert
@@ -188,6 +194,17 @@ export async function acquireOperation(input: AcquireOperationInput) {
     for (const scope of scopes) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${scope}))`;
     }
+
+    if (input.authorize && !(await input.authorize(tx))) {
+      return { acquired: false, reason: 'NOT_AUTHORIZED' as const, execution: null };
+    }
+
+    // Read PostgreSQL time only after lock waits and authorization. Every
+    // comparison and timestamp below is therefore based on one authoritative
+    // instant instead of a process clock captured before the transaction.
+    const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS "now"`;
+    const now = clock.now;
+    const leaseExpiresAt = new Date(now.getTime() + limits.leaseMs);
 
     const existing = await tx.operationExecution.findFirst({
       where: {
@@ -291,11 +308,11 @@ export async function consumeResearchBudget(
         "researchInputTokens" = "researchInputTokens" + ${inputTokens},
         "researchOutputTokens" = "researchOutputTokens" + ${outputTokens},
         "researchTotalTokens" = "researchTotalTokens" + ${totalTokens},
-        "updatedAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+        "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
     WHERE "id" = ${operationId}
       AND "ownerToken" = ${ownerToken}
       AND "status" = 'RUNNING'
-      AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      AND "leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
       AND EXISTS (
         SELECT 1 FROM "SchoolResearchJob" AS job
         WHERE job."id" = ${jobId}
@@ -306,7 +323,7 @@ export async function consumeResearchBudget(
       AND ("researchMaxSourceRequests" IS NULL OR "researchSourceRequests" + ${sourceRequests} <= "researchMaxSourceRequests")
       AND ("researchMaxRetries" IS NULL OR "researchRetryAttempts" + ${retryAttempts} <= "researchMaxRetries")
       AND ("researchMaxTokens" IS NULL OR "researchTotalTokens" + ${totalTokens} <= "researchMaxTokens")
-      AND ("researchMaxDurationMs" IS NULL OR "startedAt" IS NULL OR "startedAt" + ("researchMaxDurationMs" * INTERVAL '1 millisecond') > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))
+      AND ("researchMaxDurationMs" IS NULL OR "startedAt" IS NULL OR "startedAt" + ("researchMaxDurationMs" * INTERVAL '1 millisecond') > (clock_timestamp() AT TIME ZONE 'UTC'))
   `;
   if (rows !== 1) {
     await assertResearchJobOwner(jobId, operationId, ownerToken);
@@ -316,14 +333,14 @@ export async function consumeResearchBudget(
 }
 
 export async function renewOperation(id: string, ownerToken: string, leaseMs: number) {
-  const leaseExpiresAt = new Date(Date.now() + leaseMs);
   const count = await prisma.$executeRaw`
     UPDATE "OperationExecution"
-    SET "leaseExpiresAt" = ${leaseExpiresAt}, "updatedAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+    SET "leaseExpiresAt" = (clock_timestamp() AT TIME ZONE 'UTC') + (${leaseMs} * INTERVAL '1 millisecond'),
+        "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
     WHERE "id" = ${id}
       AND "ownerToken" = ${ownerToken}
       AND "status" = 'RUNNING'
-      AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      AND "leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
   `;
   return { count };
 }
@@ -337,23 +354,31 @@ export async function finishOperation(
   const count = await prisma.$executeRaw`
     UPDATE "OperationExecution"
     SET "status" = ${status},
-        "completedAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
+        "completedAt" = (clock_timestamp() AT TIME ZONE 'UTC'),
         "leaseExpiresAt" = NULL,
         "ownerToken" = NULL,
         "resultPayload" = ${details?.resultPayload ?? null},
         "failureReason" = ${details?.failureReason ?? null},
-        "updatedAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+        "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
     WHERE "id" = ${id}
       AND "ownerToken" = ${ownerToken}
       AND "status" = 'RUNNING'
-      AND "leaseExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      AND "leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
   `;
   return { count };
 }
 
-export async function recoverExpiredOperations(operationType: ResourceOperationType, now = new Date()) {
-  return prisma.operationExecution.updateMany({
-    where: { operationType, status: 'RUNNING', leaseExpiresAt: { lt: now } },
-    data: { status: 'EXPIRED', completedAt: now, ownerToken: null, failureReason: 'Execution lease expired' },
-  });
+export async function recoverExpiredOperations(operationType: ResourceOperationType) {
+  const count = await prisma.$executeRaw`
+    UPDATE "OperationExecution"
+    SET "status" = 'EXPIRED',
+        "completedAt" = (clock_timestamp() AT TIME ZONE 'UTC'),
+        "ownerToken" = NULL,
+        "failureReason" = 'Execution lease expired',
+        "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
+    WHERE "operationType" = ${operationType}
+      AND "status" = 'RUNNING'
+      AND "leaseExpiresAt" < (clock_timestamp() AT TIME ZONE 'UTC')
+  `;
+  return { count };
 }

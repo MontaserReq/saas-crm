@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { closeTicketAction } from '@/server/actions/tickets';
-import { useI18n } from '@/lib/i18n/context';
-import { Archive, AlertCircle } from 'lucide-react';
+import { useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { closeTicketAction } from "@/server/actions/tickets";
+import { useI18n } from "@/lib/i18n/context";
+import { Archive, AlertCircle } from "lucide-react";
 
 interface CloseTicketModalProps {
   isOpen: boolean;
@@ -21,15 +21,15 @@ export function CloseTicketModal({
   ticketNumber,
   onSuccess,
 }: CloseTicketModalProps) {
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { t, language } = useI18n();
+  const { t, language, errorMessage } = useI18n();
 
   const handleClose = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason || reason.trim().length < 3) {
-      setError(t('tickets.closingReasonMinError'));
+      setError(t("tickets.closingReasonMinError"));
       return;
     }
 
@@ -40,11 +40,11 @@ export function CloseTicketModal({
     setLoading(false);
 
     if (res.success) {
-      setReason('');
+      setReason("");
       onClose();
       if (onSuccess) onSuccess();
     } else {
-      setError(res.error || t('common.error'));
+      setError(errorMessage(res.error, t("common.error")));
     }
   };
 
@@ -53,13 +53,13 @@ export function CloseTicketModal({
       isOpen={isOpen}
       onClose={() => {
         if (!loading) {
-          setReason('');
+          setReason("");
           setError(null);
           onClose();
         }
       }}
-      title={`${t('tickets.closeTicket')} - ${ticketNumber}`}
-      description={t('tickets.closeConfirmDesc')}
+      title={`${t("tickets.closeTicket")} - ${ticketNumber}`}
+      description={t("tickets.closeConfirmDesc")}
     >
       <form onSubmit={handleClose} className="space-y-4 text-xs">
         {error && (
@@ -71,13 +71,14 @@ export function CloseTicketModal({
 
         <div>
           <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-            {t('tickets.closingReason')} <span className="text-rose-500">*</span>
+            {t("tickets.closingReason")}{" "}
+            <span className="text-rose-500">*</span>
           </label>
           <textarea
             rows={4}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder={t('tickets.closingReasonPlaceholderDesc')}
+            placeholder={t("tickets.closingReasonPlaceholderDesc")}
             required
             autoFocus
             className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs focus:border-brand-500 focus:outline-none transition-all"
@@ -91,7 +92,7 @@ export function CloseTicketModal({
             disabled={loading}
             className="px-4 py-2 rounded-xl font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            {t('common.cancel')}
+            {t("common.cancel")}
           </button>
           <button
             type="submit"
@@ -100,7 +101,7 @@ export function CloseTicketModal({
           >
             <Archive className="w-3.5 h-3.5 text-amber-400" />
             <span>
-              {loading ? t('common.loading') : t('tickets.confirmCloseAction')}
+              {loading ? t("common.loading") : t("tickets.confirmCloseAction")}
             </span>
           </button>
         </div>

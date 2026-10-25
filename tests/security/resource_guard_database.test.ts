@@ -4,7 +4,7 @@ import prisma from '@/lib/db/prisma';
 import { acquireOperation, assertOperationOwner, consumeResearchBudget, finishOperation, recoverExpiredOperations, renewOperation, ResearchBudgetExceededError, withResearchJobOwner } from '@/lib/security/resourceGuard';
 import { SchoolResearchService } from '@/server/services/SchoolResearchService';
 
-const databaseAvailable = Boolean(process.env.DATABASE_URL);
+const databaseAvailable = process.env.RUN_RESOURCE_GUARD_DB === '1';
 
 describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
   let organizationId = '';
@@ -12,6 +12,8 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
   const prefix = `guard-test-${crypto.randomUUID()}`;
 
   beforeAll(async () => {
+    const databaseUrl = new URL(process.env.DATABASE_URL!);
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(databaseUrl.hostname)) throw new Error('Integration tests require a local PostgreSQL database');
     await prisma.$connect();
     const user = await prisma.user.findFirst({
       where: { isActive: true, organizationMemberships: { some: { status: 'ACTIVE' } } },
@@ -20,7 +22,6 @@ describe.skipIf(!databaseAvailable)('PostgreSQL resource guard', () => {
     if (!user?.organizationMemberships[0]) throw new Error('A seeded active organization member is required for resource guard tests');
     userId = user.id;
     organizationId = user.organizationMemberships[0].organizationId;
-    await prisma.operationExecution.deleteMany({ where: { operationType: { in: ['SCHOOL_IMPORT', 'AI_RESEARCH', 'PROPOSAL_GENERATION', 'AI_ASSISTANT'] } } });
   });
 
   afterAll(async () => {

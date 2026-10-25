@@ -1,0 +1,2 @@
+ALTER TABLE "MessageGroup"
+ADD COLUMN "canMembersSend" BOOLEAN NOT NULL DEFAULT true;

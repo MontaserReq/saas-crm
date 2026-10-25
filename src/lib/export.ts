@@ -1,6 +1,7 @@
 /**
  * Structured report exports (PDF, printable view and Excel).
  */
+import { downloadXlsx, type XlsxSheet } from '@/lib/imports/writeXlsx';
 export function exportToCSV(filename: string, rows: Record<string, any>[], headers?: { key: string; label: string }[]) {
   if (!rows || rows.length === 0) return;
 
@@ -224,7 +225,6 @@ export async function exportToXlsx(
 ) {
   if (!rows || rows.length === 0) return;
 
-  const XLSX = await import('xlsx');
   const cols = headers || Object.keys(rows[0]).map((key) => ({ key, label: key }));
 
   const table: (string | number)[][] = [
@@ -232,28 +232,23 @@ export async function exportToXlsx(
     ...rows.map((row) => cols.map((col) => normalizeExportCell(row[col.key]))),
   ];
 
-  const dataSheet = XLSX.utils.aoa_to_sheet(table);
-  dataSheet['!cols'] = cols.map((col, index) => ({
-    wch: options.widths?.[index] ?? estimateColumnWidth(col.label, rows, col.key),
-  }));
-  dataSheet['!autofilter'] = {
-    ref: XLSX.utils.encode_range({
-      s: { r: 0, c: 0 },
-      e: { r: rows.length, c: Math.max(cols.length - 1, 0) },
-    }),
-  };
-
-  const workbook = XLSX.utils.book_new();
-  if (options.direction === 'rtl') workbook.Workbook = { Views: [{ RTL: true }] };
-
+  const sheets: XlsxSheet[] = [];
   if (options.meta) {
-    const infoSheet = XLSX.utils.aoa_to_sheet(buildInfoRows(options, rows.length));
-    infoSheet['!cols'] = [{ wch: 26 }, { wch: 80 }];
-    XLSX.utils.book_append_sheet(workbook, infoSheet, sanitizeSheetName(options.meta.sheetName, 'Info'));
+    sheets.push({
+      name: sanitizeSheetName(options.meta.sheetName, 'Info'),
+      rows: buildInfoRows(options, rows.length),
+      widths: [26, 80],
+      rtl: options.direction === 'rtl',
+    });
   }
-
-  XLSX.utils.book_append_sheet(workbook, dataSheet, sanitizeSheetName(options.sheetName || filename, 'Data'));
-  XLSX.writeFile(workbook, `${filename}.xlsx`);
+  sheets.push({
+    name: sanitizeSheetName(options.sheetName || filename, 'Data'),
+    rows: table,
+    widths: cols.map((col, index) => options.widths?.[index] ?? estimateColumnWidth(col.label, rows, col.key)),
+    autoFilter: true,
+    rtl: options.direction === 'rtl',
+  });
+  downloadXlsx(filename, sheets);
 }
 
 export interface PrintableTableOptions extends StructuredExportOptions {

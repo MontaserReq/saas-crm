@@ -3,6 +3,7 @@ import { schoolAssignmentSchema } from '@/lib/validation';
 import { AuditService } from './AuditService';
 import { NotificationService } from './NotificationService';
 import { requireOrganizationIdForUserId } from '@/lib/auth/organization';
+import { nextAssignmentBatchNumber, nextTicketNumber } from '@/lib/identifiers';
 
 export interface BulkAssignmentInput {
   taskTypeId: string;
@@ -40,9 +41,8 @@ export class AssignmentService {
    * Generates a batch number and ticket numbers.
    */
   static async generateBatchNumber(organizationId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    const count = await prisma.schoolAssignment.count({ where: { organizationId } });
-    return `ASN-${year}-${String(count + 1).padStart(4, '0')}`;
+    if (!organizationId) throw new Error('Organization context is required');
+    return nextAssignmentBatchNumber(prisma);
   }
 
   /**
@@ -87,29 +87,14 @@ export class AssignmentService {
       throw new Error('Invalid task type selected');
     }
 
-    const batchNumber = `ASN-${new Date().getFullYear()}-${String(await prisma.schoolAssignment.count({ where: { organizationId } }) + 1).padStart(4, '0')}`;
     const distribution = this.distributeSchoolsEqually(
       schools.map((s) => s.id),
       assignees.map((a) => a.id)
     );
 
-    // Get current ticket counter base
-    const lastTicket = await prisma.ticket.findFirst({
-      where: { organizationId },
-      orderBy: { createdAt: 'desc' },
-      select: { ticketNumber: true },
-    });
-
-    let currentTicketSeq = 1000;
-    if (lastTicket && lastTicket.ticketNumber.startsWith('CL-')) {
-      const parsedSeq = parseInt(lastTicket.ticketNumber.replace('CL-', ''), 10);
-      if (!isNaN(parsedSeq)) {
-        currentTicketSeq = parsedSeq;
-      }
-    }
-
     // Execute atomic transaction
     return await prisma.$transaction(async (tx) => {
+      const batchNumber = await nextAssignmentBatchNumber(tx);
       // 1. Create SchoolAssignment record
       const assignmentBatch = await tx.schoolAssignment.create({
         data: {
@@ -134,8 +119,7 @@ export class AssignmentService {
         const assignee = assigneeMap.get(assigneeId)!;
 
         for (const schoolId of assignedSchoolIds) {
-          currentTicketSeq++;
-          const ticketNumber = `CL-${currentTicketSeq}`;
+          const ticketNumber = await nextTicketNumber(tx);
           const school = schoolMap.get(schoolId)!;
 
           // Create individual Ticket

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Menu, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useI18n } from "@/lib/i18n/context";
 import { UserSession } from "@/types";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -24,6 +24,8 @@ export function useMobileLayout() {
 }
 
 interface MobileLayoutProps {
+  enabledModules?: string[];
+  organizationBrand?: { name: string; logoUrl: string | null };
   children: ReactNode;
   user: UserSession;
   directManager: { id: string; name: string; isActive: boolean } | null;
@@ -41,7 +43,7 @@ interface MobileLayoutProps {
  * 1. Inside MobileLayout's drawer (mobile only, lg:hidden)
  * 2. In the layout's normal flow (desktop only, hidden lg:block)
  */
-export function MobileLayout({ children, user, directManager, users = [] }: MobileLayoutProps) {
+export function MobileLayout({ children, user, directManager, users = [], enabledModules, organizationBrand }: MobileLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { t, direction } = useI18n();
 
@@ -84,23 +86,6 @@ export function MobileLayout({ children, user, directManager, users = [] }: Mobi
     <MobileLayoutContext.Provider
       value={{ isMobileMenuOpen, openMobileMenu, closeMobileMenu, toggleMobileMenu }}
     >
-      {/* Mobile Floating Action Button - hamburger menu */}
-      <button
-        type="button"
-        onClick={toggleMobileMenu}
-        aria-label={isMobileMenuOpen ? t("nav.closeMenu") : t("nav.openMenu")}
-        aria-expanded={isMobileMenuOpen}
-        className={`lg:hidden fixed z-40 ${
-          isMobileMenuOpen ? "hidden" : "flex"
-        } items-center justify-center w-12 h-12 rounded-full bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/30 transition-all active:scale-95`}
-        style={{
-          top: "0.875rem",
-          [direction === "rtl" ? "right" : "left"]: "0.875rem",
-        } as React.CSSProperties}
-      >
-        <Menu className="w-5 h-5" />
-      </button>
-
       {/* Mobile Drawer - slides in from the side */}
       {isMobileMenuOpen && (
         <>
@@ -138,6 +123,8 @@ export function MobileLayout({ children, user, directManager, users = [] }: Mobi
               </div>
               <div className="flex-1 overflow-y-auto">
                 <Sidebar
+                  enabledModules={enabledModules}
+                  organizationBrand={organizationBrand}
                   user={user}
                   users={users}
                   directManager={directManager}

@@ -7,15 +7,15 @@ const { prismaMock, cookieState } = vi.hoisted(() => ({
     user: { findUnique: vi.fn() },
     organizationMember: { findFirst: vi.fn(), findMany: vi.fn() },
   },
-  cookieState: { token: undefined as string | undefined },
+  cookieState: { token: undefined as string | undefined, set: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('@/lib/db/prisma', () => ({ default: prismaMock }));
 vi.mock('next/headers', () => ({
-  cookies: () => ({ get: () => cookieState.token ? { value: cookieState.token } : undefined }),
+  cookies: async () => ({ get: () => cookieState.token ? { value: cookieState.token } : undefined, set: cookieState.set, delete: cookieState.delete }),
 }));
 
-import { getCurrentUser, signToken } from '@/lib/auth/session';
+import { createSession, destroySession, getCurrentUser, signToken, verifyToken } from '@/lib/auth/session';
 import { getOrganizationContext, requireOrganizationContext } from '@/lib/auth/organization';
 import { UserSession } from '@/types';
 
@@ -28,7 +28,7 @@ const baseUser: UserSession = {
 function databaseUser(memberships: any[]) {
   return {
     id: 'user-a', name: 'User A', email: 'a@example.test', phone: null, avatar: null, isActive: true,
-    reportsToUserId: null, role: { name: 'MEMBER', displayName: 'Member', rolePermissions: [] }, userPermissions: [],
+    reportsToUserId: null, role: { name: 'MEMBER', displayName: 'Member', rolePermissions: [] as { permission: { code: string } }[] }, userPermissions: [],
     department: { id: 'dept-a', name: 'Dept A' }, organizationMemberships: memberships,
   };
 }
@@ -61,6 +61,23 @@ describe('browser session validation', () => {
   afterEach(() => {
     if (oldSecret === undefined) delete process.env.AUTH_SECRET;
     else process.env.AUTH_SECRET = oldSecret;
+  });
+
+  it('writes and deletes session cookies through the asynchronous cookie API', async () => {
+    await createSession(baseUser);
+    expect(cookieState.set).toHaveBeenCalledWith('codeline_session', expect.any(String), expect.objectContaining({ httpOnly: true, sameSite: 'lax', path: '/' }));
+    const sessionCookie = cookieState.set.mock.calls[0][1] as string;
+    expect(sessionCookie.length).toBeLessThan(1024);
+    await expect(verifyToken(sessionCookie)).resolves.toEqual({ id: 'user-a', sessionId: 'session-a' });
+    await destroySession();
+    expect(cookieState.delete).toHaveBeenCalledWith('codeline_session');
+  });
+
+  it('does not serialize stale authorization or profile data into the session token', async () => {
+    const oversized = { ...baseUser, permissions: Array.from({ length: 500 }, (_, index) => `permission.${index}`), name: 'x'.repeat(5000) };
+    const signed = await signToken(oversized);
+    expect(signed.length).toBeLessThan(1024);
+    expect(await verifyToken(signed)).toEqual({ id: 'user-a', sessionId: 'session-a' });
   });
 
   it('rejects a JWT without sessionId', async () => {
@@ -103,6 +120,15 @@ describe('browser session validation', () => {
 
     cookieState.token = await token();
     await expect(getCurrentUser()).resolves.toMatchObject({ id: 'user-a', organizationId: 'org-a' });
+  });
+
+  it('recomputes plan features and permissions from the database on every request', async () => {
+    cookieState.token = await token();
+    const plannedMembership = { organizationId: 'org-a', organization: { name: 'Org A', platformSubscription: { status: 'ACTIVE', startsAt: new Date(Date.now() - 60_000), endsAt: null, plan: { name: 'Starter', slug: 'starter', features: JSON.stringify(['crm']), isActive: true } } }, role: null };
+    const plannedUser = databaseUser([plannedMembership]);
+    plannedUser.role.rolePermissions = [{ permission: { code: 'deals.view' } }, { permission: { code: 'workflows.view' } }];
+    prismaMock.user.findUnique.mockResolvedValueOnce(plannedUser);
+    await expect(getCurrentUser()).resolves.toMatchObject({ planName: 'Starter', planSlug: 'starter', planFeatures: expect.arrayContaining(['deals']), permissions: ['deals.view'] });
   });
 });
 

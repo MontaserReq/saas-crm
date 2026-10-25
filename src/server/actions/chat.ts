@@ -2,18 +2,24 @@
 import { requireAuth } from '@/lib/auth/session';
 import { ChatService } from '@/server/services/ChatService';
 import { PresenceService } from '@/server/services/PresenceService';
+import { MessageService } from '@/server/services/MessageService';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { requireOrganizationId } from '@/lib/auth/organization';
 
 export async function getChatDataAction() {
   const u = await requireAuth();
   if (!hasPermission(u, PERMISSIONS.CHAT_VIEW)) throw new Error('Forbidden');
-  const [users, conversations] = await Promise.all([prismaUsers(requireOrganizationId(u)), ChatService.list(u)]);
+  const [users, conversations, groups] = await Promise.all([
+    prismaUsers(requireOrganizationId(u)),
+    ChatService.list(u),
+    MessageService.listGroups(u),
+  ]);
   const presence = await PresenceService.getLastSeenMap(users.map((x) => x.id));
-  return { users, conversations, presence };
+  return { users, conversations, groups, presence };
 }
 async function prismaUsers(organizationId: string) { const prisma = (await import('@/lib/db/prisma')).default; return prisma.user.findMany({ where: { isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } } }, select: { id: true, name: true, email: true, avatar: true }, orderBy: { name: 'asc' } }); }
 export async function startChatAction(otherUserId: string) { const u = await requireAuth(); if (!hasPermission(u, PERMISSIONS.CHAT_VIEW)) throw new Error('Forbidden'); return ChatService.direct(u, otherUserId); }
+export async function startGroupChatAction(groupId: string) { const u = await requireAuth(); if (!hasPermission(u, PERMISSIONS.CHAT_VIEW)) throw new Error('Forbidden'); return ChatService.group(u, groupId); }
 export async function getChatConversationAction(id: string) { const u = await requireAuth(); if (!hasPermission(u, PERMISSIONS.CHAT_VIEW)) throw new Error('Forbidden'); return ChatService.getConversation(u, id); }
 export async function sendChatMessageAction(id: string, content: string) { const u = await requireAuth(); if (!hasPermission(u, PERMISSIONS.CHAT_SEND)) throw new Error('Forbidden'); return ChatService.send(u, id, content); }
 export async function markChatReadAction(id: string) { const u = await requireAuth(); if (!hasPermission(u, PERMISSIONS.CHAT_VIEW)) throw new Error('Forbidden'); return ChatService.markRead(u, id); }

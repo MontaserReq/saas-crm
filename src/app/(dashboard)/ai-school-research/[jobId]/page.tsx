@@ -8,18 +8,20 @@ export default async function ResearchJobDetailPage({
   params,
   searchParams,
 }: {
-  params: { jobId: string };
-  searchParams: { [key: string]: string | undefined };
+  params: Promise<{ jobId: string }>;
+  searchParams: Promise<{ [key: string]: string | undefined }>;
 }) {
   const user = (await getCurrentUser())!;
   if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW)) return null;
 
-  const status = searchParams.status || 'ALL';
-  const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
+  const routeParams = await params;
+  const queryParams = await searchParams;
+  const status = queryParams.status || 'ALL';
+  const page = queryParams.page ? parseInt(queryParams.page, 10) : 1;
 
   let result;
   try {
-    result = await SchoolResearchService.listCandidates(user, params.jobId, { status, page });
+    result = await SchoolResearchService.listCandidates(user, routeParams.jobId, { status, page });
   } catch {
     notFound();
   }

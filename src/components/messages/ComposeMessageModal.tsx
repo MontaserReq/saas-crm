@@ -1,7 +1,8 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useI18n } from '@/lib/i18n/context';
+import React, { useCallback, useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useI18n } from "@/lib/i18n/context";
 import {
   X,
   Paperclip,
@@ -14,8 +15,12 @@ import {
   CheckCircle,
   ChevronDown,
   BookOpen,
-} from 'lucide-react';
-import { sendMessageAction, getTeamMembersForMessaging, getMessageTemplatesAction } from '@/server/actions/messages';
+} from "lucide-react";
+import {
+  sendMessageAction,
+  getMessagingRecipientsAction,
+  getMessageTemplatesAction,
+} from "@/server/actions/messages";
 
 interface UserOption {
   id: string;
@@ -41,15 +46,21 @@ interface ComposeMessageModalProps {
   initialSubject?: string;
 }
 
+const EMPTY_INITIAL_RECIPIENTS: Array<{
+  id: string;
+  name: string;
+  email: string;
+}> = [];
+
 export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  initialTo = [],
-  initialSubject = '',
+  initialTo = EMPTY_INITIAL_RECIPIENTS,
+  initialSubject = "",
 }) => {
-  const { t, direction } = useI18n();
-  const isRTL = direction === 'rtl';
+  const { t, direction, errorMessage: localizeError } = useI18n();
+  const isRTL = direction === "rtl";
 
   const [availableUsers, setAvailableUsers] = useState<UserOption[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -59,11 +70,12 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
   const [showCc, setShowCc] = useState(false);
 
   const [subject, setSubject] = useState(initialSubject);
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState("");
+  const [sendEmail, setSendEmail] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
 
-  const [searchToText, setSearchToText] = useState('');
-  const [searchCcText, setSearchCcText] = useState('');
+  const [searchToText, setSearchToText] = useState("");
+  const [searchCcText, setSearchCcText] = useState("");
   const [isToDropdownOpen, setIsToDropdownOpen] = useState(false);
   const [isCcDropdownOpen, setIsCcDropdownOpen] = useState(false);
 
@@ -72,13 +84,84 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Templates
-  const [templates, setTemplates] = useState<Array<{ id: string; name: string; subject?: string | null; body: string }>>([]);
+  const [templates, setTemplates] = useState<
+    Array<{ id: string; name: string; subject?: string | null; body: string }>
+  >([]);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const templateMenuRef = useRef<HTMLDivElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toDropdownRef = useRef<HTMLDivElement>(null);
   const ccDropdownRef = useRef<HTMLDivElement>(null);
+  const loadRequestRef = useRef(0);
+
+  const loadTeamMembers = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    setLoadingUsers(true);
+
+    // The recipient picker must not wait for the optional templates request.
+    // Keeping these requests independent also guarantees that its spinner is
+    // cleared when either request fails or is slow.
+    try {
+      const usersRes = await getMessagingRecipientsAction();
+      if (requestId !== loadRequestRef.current) return;
+
+      if (usersRes.success && usersRes.users) {
+        setAvailableUsers(usersRes.users);
+      } else {
+        setAvailableUsers([]);
+        setErrorMessage(
+          isRTL
+            ? "تعذر تحميل أعضاء الفريق. حاول مرة أخرى."
+            : "Could not load team members. Please try again.",
+        );
+      }
+    } catch {
+      if (requestId === loadRequestRef.current) {
+        setAvailableUsers([]);
+        setErrorMessage(
+          isRTL
+            ? "تعذر تحميل أعضاء الفريق. حاول مرة أخرى."
+            : "Could not load team members. Please try again.",
+        );
+      }
+    } finally {
+      if (requestId === loadRequestRef.current) {
+        setLoadingUsers(false);
+      }
+    }
+
+    try {
+      const templatesRes = await getMessageTemplatesAction();
+      if (
+        requestId !== loadRequestRef.current ||
+        !templatesRes.success ||
+        !templatesRes.templates
+      ) {
+        return;
+      }
+
+      setTemplates(
+        templatesRes.templates.map((tpl: any) => ({
+          id: tpl.id,
+          name:
+            (direction === "rtl" ? tpl.titleAr || tpl.title : tpl.title) ||
+            tpl.code,
+          subject:
+            (direction === "rtl"
+              ? tpl.subjectAr || tpl.subject
+              : tpl.subject) || null,
+          body:
+            (direction === "rtl"
+              ? tpl.contentAr || tpl.content
+              : tpl.content) || "",
+        })),
+      );
+    } catch {
+      // Templates are optional. A slow or unavailable templates endpoint must
+      // never prevent composing a message or selecting a recipient.
+    }
+  }, [direction, isRTL]);
 
   useEffect(() => {
     if (isOpen) {
@@ -89,58 +172,57 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
             id: u.id,
             name: u.name,
             email: u.email,
-          }))
+          })),
         );
       }
       if (initialSubject) {
         setSubject(initialSubject);
       }
     } else {
+      // Invalidate any in-flight request so it cannot update a closed modal.
+      loadRequestRef.current += 1;
+      setLoadingUsers(false);
       setToRecipients([]);
       setCcRecipients([]);
       setShowCc(false);
-      setSubject('');
-      setContent('');
+      setSubject("");
+      setContent("");
+      setSendEmail(false);
       setAttachments([]);
       setErrorMessage(null);
       setSuccessMessage(null);
     }
-  }, [isOpen, initialSubject]);
+  }, [isOpen, initialSubject, initialTo, loadTeamMembers]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (toDropdownRef.current && !toDropdownRef.current.contains(event.target as Node)) {
+      if (
+        toDropdownRef.current &&
+        !toDropdownRef.current.contains(event.target as Node)
+      ) {
         setIsToDropdownOpen(false);
       }
-      if (ccDropdownRef.current && !ccDropdownRef.current.contains(event.target as Node)) {
+      if (
+        ccDropdownRef.current &&
+        !ccDropdownRef.current.contains(event.target as Node)
+      ) {
         setIsCcDropdownOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const loadTeamMembers = async () => {
-    setLoadingUsers(true);
-    const [usersRes, templatesRes] = await Promise.all([
-      getTeamMembersForMessaging(),
-      getMessageTemplatesAction(),
-    ]);
-    if (usersRes.success && usersRes.users) {
-      setAvailableUsers(usersRes.users);
-    }
-    if (templatesRes.success && templatesRes.templates) {
-      setTemplates(
-        templatesRes.templates.map((tpl: any) => ({
-          id: tpl.id,
-          name: (direction === 'rtl' ? tpl.titleAr || tpl.title : tpl.title) || tpl.code,
-          subject: (direction === 'rtl' ? tpl.subjectAr || tpl.subject : tpl.subject) || null,
-          body: (direction === 'rtl' ? tpl.contentAr || tpl.content : tpl.content) || '',
-        }))
-      );
-    }
-    setLoadingUsers(false);
-  };
 
   const applyTemplate = (tpl: { subject?: string | null; body: string }) => {
     if (tpl.subject) setSubject(tpl.subject);
@@ -153,7 +235,7 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
       setToRecipients([...toRecipients, user]);
       setCcRecipients(ccRecipients.filter((r) => r.id !== user.id));
     }
-    setSearchToText('');
+    setSearchToText("");
     setIsToDropdownOpen(false);
   };
 
@@ -162,10 +244,13 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
   };
 
   const handleSelectCc = (user: UserOption) => {
-    if (!ccRecipients.some((r) => r.id === user.id) && !toRecipients.some((r) => r.id === user.id)) {
+    if (
+      !ccRecipients.some((r) => r.id === user.id) &&
+      !toRecipients.some((r) => r.id === user.id)
+    ) {
       setCcRecipients([...ccRecipients, user]);
     }
-    setSearchCcText('');
+    setSearchCcText("");
     setIsCcDropdownOpen(false);
   };
 
@@ -183,7 +268,7 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
         setErrorMessage(
           isRTL
             ? `الملف "${f.name}" يتجاوز الحد الأقصى المسموح (10 ميغابايت).`
-            : `File "${f.name}" is larger than the 10MB limit.`
+            : `File "${f.name}" is larger than the 10MB limit.`,
         );
         continue;
       }
@@ -192,7 +277,7 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
 
     setAttachments((prev) => [...prev, ...validFiles]);
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
@@ -207,9 +292,18 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
   };
 
   const getFileIcon = (mimeType: string, filename: string) => {
-    if (mimeType.startsWith('image/')) return <ImageIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
-    if (mimeType.includes('sheet') || filename.endsWith('.xlsx') || filename.endsWith('.csv'))
-      return <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />;
+    if (mimeType.startsWith("image/"))
+      return (
+        <ImageIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+      );
+    if (
+      mimeType.includes("sheet") ||
+      filename.endsWith(".xlsx") ||
+      filename.endsWith(".csv")
+    )
+      return (
+        <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+      );
     return <FileText className="w-4 h-4 text-brand-600 dark:text-brand-400" />;
   };
 
@@ -218,7 +312,10 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
       !toRecipients.some((r) => r.id === u.id) &&
       (u.name.toLowerCase().includes(searchToText.toLowerCase()) ||
         u.email.toLowerCase().includes(searchToText.toLowerCase()) ||
-        (u.department?.name && u.department.name.toLowerCase().includes(searchToText.toLowerCase())))
+        (u.department?.name &&
+          u.department.name
+            .toLowerCase()
+            .includes(searchToText.toLowerCase()))),
   );
 
   const filteredCcUsers = availableUsers.filter(
@@ -227,7 +324,10 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
       !toRecipients.some((r) => r.id === u.id) &&
       (u.name.toLowerCase().includes(searchCcText.toLowerCase()) ||
         u.email.toLowerCase().includes(searchCcText.toLowerCase()) ||
-        (u.department?.name && u.department.name.toLowerCase().includes(searchCcText.toLowerCase())))
+        (u.department?.name &&
+          u.department.name
+            .toLowerCase()
+            .includes(searchCcText.toLowerCase()))),
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -236,15 +336,23 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
     setSuccessMessage(null);
 
     if (toRecipients.length === 0) {
-      setErrorMessage(isRTL ? 'يرجى اختيار مستلم واحد على الأقل (إلى)' : 'Please select at least one recipient (To)');
+      setErrorMessage(
+        isRTL
+          ? "يرجى اختيار مستلم واحد على الأقل (إلى)"
+          : "Please select at least one recipient (To)",
+      );
       return;
     }
     if (!subject.trim()) {
-      setErrorMessage(isRTL ? 'يرجى كتابة موضوع الرسالة' : 'Please enter message subject');
+      setErrorMessage(
+        isRTL ? "يرجى كتابة موضوع الرسالة" : "Please enter message subject",
+      );
       return;
     }
     if (!content.trim()) {
-      setErrorMessage(isRTL ? 'يرجى كتابة محتوى الرسالة' : 'Please enter message content');
+      setErrorMessage(
+        isRTL ? "يرجى كتابة محتوى الرسالة" : "Please enter message content",
+      );
       return;
     }
 
@@ -252,40 +360,74 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
 
     try {
       const formData = new FormData();
-      formData.append('subject', subject.trim());
-      formData.append('content', content.trim());
-      formData.append('toUserIds', JSON.stringify(toRecipients.map((r) => r.id)));
-      formData.append('ccUserIds', JSON.stringify(ccRecipients.map((r) => r.id)));
+      formData.append("subject", subject.trim());
+      formData.append("content", content.trim());
+      formData.append(
+        "toUserIds",
+        JSON.stringify(toRecipients.map((r) => r.id)),
+      );
+      formData.append(
+        "ccUserIds",
+        JSON.stringify(ccRecipients.map((r) => r.id)),
+      );
+      formData.append("sendEmail", String(sendEmail));
 
       for (const file of attachments) {
-        formData.append('attachments', file);
+        formData.append("attachments", file);
       }
 
       const res = await sendMessageAction(formData);
 
       if (res.success) {
-        setSuccessMessage(t('messages.messageSentSuccess') || (isRTL ? 'تم إرسال الرسالة بنجاح!' : 'Message sent successfully!'));
+        setSuccessMessage(
+          res.emailWarning === "EMAIL_DELIVERY_FAILED"
+            ? isRTL
+              ? "تم حفظ الرسالة داخليًا، لكن إرسال البريد غير مفعّل أو فشل."
+              : "Message saved internally, but email delivery is not configured or failed."
+            : t("messages.messageSentSuccess") ||
+                (isRTL
+                  ? "تم إرسال الرسالة بنجاح!"
+                  : "Message sent successfully!"),
+        );
         setTimeout(() => {
           onSuccess?.();
           onClose();
         }, 700);
       } else {
-        setErrorMessage(res.error || (isRTL ? 'فشل إرسال الرسالة' : 'Failed to send message'));
+        setErrorMessage(
+          localizeError(
+            res.error,
+            isRTL ? "فشل إرسال الرسالة" : "Failed to send message",
+          ),
+        );
       }
     } catch (err: any) {
-      setErrorMessage(err.message || (isRTL ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred'));
+      setErrorMessage(
+        err.message ||
+          (isRTL ? "حدث خطأ غير متوقع" : "An unexpected error occurred"),
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === "undefined") return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-charcoal-950/60 backdrop-blur-sm animate-fade-in">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1000] isolate flex min-h-[100dvh] items-end justify-center overflow-y-auto bg-charcoal-950/60 p-0 backdrop-blur-sm animate-fade-in sm:items-center sm:p-4 md:p-6"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isSubmitting) {
+          onClose();
+        }
+      }}
+    >
       <div
-        className="relative w-full max-w-3xl bg-white dark:bg-charcoal-900 rounded-t-2xl sm:rounded-2xl shadow-2xl border border-charcoal-200 dark:border-charcoal-800 flex flex-col max-h-[90dvh] overflow-hidden"
-        dir={isRTL ? 'rtl' : 'ltr'}
+        className="relative z-[1001] my-0 flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-charcoal-200 bg-white shadow-2xl dark:border-charcoal-800 dark:bg-charcoal-900 sm:my-6 sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl"
+        dir={isRTL ? "rtl" : "ltr"}
+        role="dialog"
+        aria-modal="true"
       >
         {/* Header - Email Composer Style */}
         <div className="flex items-center justify-between px-6 py-4 bg-charcoal-50/80 dark:bg-charcoal-800/60 border-b border-charcoal-200 dark:border-charcoal-800">
@@ -295,10 +437,10 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-charcoal-900 dark:text-charcoal-50">
-                {t('messages.compose')}
+                {t("messages.compose")}
               </h2>
               <p className="text-xs text-charcoal-500 dark:text-charcoal-400">
-                {t('messages.subtitle')}
+                {t("messages.subtitle")}
               </p>
             </div>
           </div>
@@ -311,7 +453,10 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
         </div>
 
         {/* Form Body: To -> CC -> Subject -> Message -> Attachments */}
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-y-auto p-6 space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 flex flex-col overflow-y-auto p-6 space-y-4"
+        >
           {/* Status Alerts */}
           {errorMessage && (
             <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-xl flex items-center gap-3 text-xs sm:text-sm text-rose-700 dark:text-rose-300">
@@ -328,10 +473,13 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
           )}
 
           {/* 1. TO Field */}
-          <div className="relative border-b border-charcoal-100 dark:border-charcoal-800 pb-3" ref={toDropdownRef}>
+          <div
+            className="relative border-b border-charcoal-100 dark:border-charcoal-800 pb-3"
+            ref={toDropdownRef}
+          >
             <div className="flex items-start gap-3">
               <span className="text-xs font-bold text-charcoal-500 dark:text-charcoal-400 pt-2 min-w-[3rem]">
-                {t('messages.to')}:
+                {t("messages.to")}:
               </span>
               <div className="flex-1 flex flex-wrap items-center gap-1.5 min-h-[38px]">
                 {toRecipients.map((user) => (
@@ -362,7 +510,11 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
                     setIsToDropdownOpen(true);
                   }}
                   onFocus={() => setIsToDropdownOpen(true)}
-                  placeholder={toRecipients.length === 0 ? t('messages.selectRecipients') : ''}
+                  placeholder={
+                    toRecipients.length === 0
+                      ? t("messages.selectRecipients")
+                      : ""
+                  }
                   className="flex-1 min-w-[140px] bg-transparent border-none outline-none text-xs sm:text-sm text-charcoal-900 dark:text-charcoal-100 placeholder:text-charcoal-400 py-1"
                 />
               </div>
@@ -372,7 +524,7 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
                   onClick={() => setShowCc(true)}
                   className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline pt-2 focus:outline-none"
                 >
-                  + {t('messages.cc')}
+                  + {t("messages.cc")}
                 </button>
               )}
             </div>
@@ -383,11 +535,11 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
                 {loadingUsers ? (
                   <div className="p-3 text-center text-xs text-charcoal-400 flex items-center justify-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-brand-600" />
-                    {t('common.loading')}
+                    {t("common.loading")}
                   </div>
                 ) : filteredToUsers.length === 0 ? (
                   <div className="p-3 text-center text-xs text-charcoal-400">
-                    {t('common.search')}
+                    {t("common.search")}
                   </div>
                 ) : (
                   filteredToUsers.map((user) => (
@@ -405,7 +557,9 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
                           <div className="text-xs font-bold text-charcoal-900 dark:text-charcoal-100">
                             {user.name}
                           </div>
-                          <div className="text-[11px] text-charcoal-400">{user.email}</div>
+                          <div className="text-[11px] text-charcoal-400">
+                            {user.email}
+                          </div>
                         </div>
                       </div>
                       {user.department && (
@@ -422,10 +576,13 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
 
           {/* 2. CC Field */}
           {showCc && (
-            <div className="relative border-b border-charcoal-100 dark:border-charcoal-800 pb-3" ref={ccDropdownRef}>
+            <div
+              className="relative border-b border-charcoal-100 dark:border-charcoal-800 pb-3"
+              ref={ccDropdownRef}
+            >
               <div className="flex items-start gap-3">
                 <span className="text-xs font-bold text-charcoal-500 dark:text-charcoal-400 pt-2 min-w-[3rem]">
-                  {t('messages.cc')}:
+                  {t("messages.cc")}:
                 </span>
                 <div className="flex-1 flex flex-wrap items-center gap-1.5 min-h-[38px]">
                   {ccRecipients.map((user) => (
@@ -456,7 +613,11 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
                       setIsCcDropdownOpen(true);
                     }}
                     onFocus={() => setIsCcDropdownOpen(true)}
-                    placeholder={ccRecipients.length === 0 ? t('messages.selectCcRecipients') : ''}
+                    placeholder={
+                      ccRecipients.length === 0
+                        ? t("messages.selectCcRecipients")
+                        : ""
+                    }
                     className="flex-1 min-w-[140px] bg-transparent border-none outline-none text-xs sm:text-sm text-charcoal-900 dark:text-charcoal-100 placeholder:text-charcoal-400 py-1"
                   />
                 </div>
@@ -478,11 +639,11 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
                   {loadingUsers ? (
                     <div className="p-3 text-center text-xs text-charcoal-400 flex items-center justify-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-brand-600" />
-                      {t('common.loading')}
+                      {t("common.loading")}
                     </div>
                   ) : filteredCcUsers.length === 0 ? (
                     <div className="p-3 text-center text-xs text-charcoal-400">
-                      {t('common.search')}
+                      {t("common.search")}
                     </div>
                   ) : (
                     filteredCcUsers.map((user) => (
@@ -500,7 +661,9 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
                             <div className="text-xs font-bold text-charcoal-900 dark:text-charcoal-100">
                               {user.name}
                             </div>
-                            <div className="text-[11px] text-charcoal-400">{user.email}</div>
+                            <div className="text-[11px] text-charcoal-400">
+                              {user.email}
+                            </div>
                           </div>
                         </div>
                         {user.department && (
@@ -518,7 +681,10 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
 
           {/* Template Selector */}
           {templates.length > 0 && (
-            <div className="relative border-b border-charcoal-100 dark:border-charcoal-800 pb-3" ref={templateMenuRef}>
+            <div
+              className="relative border-b border-charcoal-100 dark:border-charcoal-800 pb-3"
+              ref={templateMenuRef}
+            >
               <div className="flex items-center gap-3">
                 <span className="text-xs font-bold text-charcoal-500 dark:text-charcoal-400 min-w-[3rem] flex items-center gap-1">
                   <BookOpen className="w-3.5 h-3.5" />
@@ -528,8 +694,10 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
                   onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
                   className="flex-1 flex items-center justify-between px-3 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-950/30 text-brand-700 dark:text-brand-300 text-xs font-semibold hover:bg-brand-100 dark:hover:bg-brand-950/50 transition-colors"
                 >
-                  <span>{t('messages.selectTemplate')}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${templateMenuOpen ? 'rotate-180' : ''}`} />
+                  <span>{t("messages.selectTemplate")}</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform ${templateMenuOpen ? "rotate-180" : ""}`}
+                  />
                 </button>
               </div>
               {templateMenuOpen && (
@@ -541,7 +709,9 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
                       onClick={() => applyTemplate(tpl)}
                       className="w-full flex flex-col items-start px-4 py-3 text-xs hover:bg-brand-50 dark:hover:bg-brand-950/30 transition-colors border-b border-charcoal-100 dark:border-charcoal-700/50 last:border-none"
                     >
-                      <span className="font-bold text-charcoal-800 dark:text-charcoal-200">{tpl.name}</span>
+                      <span className="font-bold text-charcoal-800 dark:text-charcoal-200">
+                        {tpl.name}
+                      </span>
                       {tpl.subject && (
                         <span className="text-[10px] text-charcoal-500 dark:text-charcoal-400 mt-0.5 truncate w-full">
                           {tpl.subject}
@@ -558,14 +728,14 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
           <div className="border-b border-charcoal-100 dark:border-charcoal-800 pb-3">
             <div className="flex items-center gap-3">
               <span className="text-xs font-bold text-charcoal-500 dark:text-charcoal-400 min-w-[3rem]">
-                {t('messages.subject')}:
+                {t("messages.subject")}:
               </span>
               <input
                 type="text"
                 required
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder={isRTL ? 'موضوع الرسالة...' : 'Message subject...'}
+                placeholder={isRTL ? "موضوع الرسالة..." : "Message subject..."}
                 className="flex-1 bg-transparent border-none outline-none text-xs sm:text-sm font-semibold text-charcoal-900 dark:text-charcoal-100 placeholder:text-charcoal-400 py-1"
               />
             </div>
@@ -579,20 +749,35 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder={
-                isRTL
-                  ? 'اكتب نص الرسالة هنا...'
-                  : 'Write your message here...'
+                isRTL ? "اكتب نص الرسالة هنا..." : "Write your message here..."
               }
               className="w-full flex-1 p-3.5 bg-charcoal-50/50 dark:bg-charcoal-800/40 border border-charcoal-200 dark:border-charcoal-700 rounded-xl outline-none text-xs sm:text-sm text-charcoal-900 dark:text-charcoal-100 placeholder:text-charcoal-400 resize-y focus:border-brand-500 dark:focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all leading-relaxed"
             />
           </div>
 
           {/* 5. Attachments Preview List */}
+          <label className="inline-flex items-center gap-2 text-xs text-charcoal-600 dark:text-charcoal-300">
+            <input
+              type="checkbox"
+              checked={sendEmail}
+              onChange={(event) => setSendEmail(event.target.checked)}
+              className="rounded border-charcoal-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span>
+              {isRTL
+                ? "إرسال نسخة إلى البريد الإلكتروني للمستلمين"
+                : "Also send an email copy to recipients"}
+            </span>
+          </label>
+
+          {/* 5. Attachments Preview List */}
           {attachments.length > 0 && (
             <div className="space-y-2 pt-2">
               <div className="text-xs font-bold text-charcoal-700 dark:text-charcoal-300 flex items-center gap-1.5">
                 <Paperclip className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
-                <span>{t('messages.attachments')} ({attachments.length})</span>
+                <span>
+                  {t("messages.attachments")} ({attachments.length})
+                </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {attachments.map((file, idx) => (
@@ -634,7 +819,7 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
               onChange={handleFileChange}
               multiple
               className="hidden"
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,image/*"
+              accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.txt,.csv"
             />
             <button
               type="button"
@@ -642,10 +827,10 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
               className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-charcoal-700 dark:text-charcoal-300 bg-white dark:bg-charcoal-700 border border-charcoal-300 dark:border-charcoal-600 rounded-xl hover:bg-charcoal-50 dark:hover:bg-charcoal-600 transition-colors shadow-xs"
             >
               <Paperclip className="w-4 h-4 text-brand-600 dark:text-brand-400" />
-              <span>{t('messages.attachFiles')}</span>
+              <span>{t("messages.attachFiles")}</span>
             </button>
             <span className="text-[11px] text-charcoal-400 hidden sm:inline">
-              {t('messages.allowedFilesHint')}
+              {t("messages.allowedFilesHint")}
             </span>
           </div>
 
@@ -656,7 +841,7 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
               disabled={isSubmitting}
               className="px-4 py-2 text-xs font-semibold text-charcoal-600 dark:text-charcoal-300 hover:bg-charcoal-200/60 dark:hover:bg-charcoal-700 rounded-xl transition-colors"
             >
-              {t('messages.discard')}
+              {t("messages.discard")}
             </button>
 
             <button
@@ -668,18 +853,19 @@ export const ComposeMessageModal: React.FC<ComposeMessageModalProps> = ({
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{t('messages.sending')}</span>
+                  <span>{t("messages.sending")}</span>
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  <span>{t('messages.send')}</span>
+                  <span>{t("messages.send")}</span>
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

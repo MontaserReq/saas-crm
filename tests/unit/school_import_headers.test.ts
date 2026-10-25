@@ -9,15 +9,15 @@ describe('school Excel import', () => {
     const headers = ['School Name', 'Responsible Employee', 'Area / City', '__EMPTY', 'School Classification', 'Phone', 'Email', contactResult, status];
     const resolved = resolveImportHeaders(headers);
     const row = mapSchoolImportRow(Object.fromEntries(headers.map((h) => [h, h === 'School Name' ? 'Ayla School' : h === 'Responsible Employee' ? 'Hela' : h === 'Area / City' ? 'Tabarbour' : h === 'School Classification' ? 'b' : h === 'Phone' ? '0799631111 arbitrary text' : h === 'Email' ? ' Info@aya.edu.jo ' : 'INVALID STATUS'])), resolved);
-    expect(row).toEqual({ name: 'Ayla School', contactPerson: 'Hela', city: 'Tabarbour', classification: 'B', phone: '0799631111', email: 'Info@aya.edu.jo' });
+    expect(row).toEqual({ name: 'Ayla School', contactPerson: 'Hela', city: 'Tabarbour', classification: 'B', phone: '+962799631111', email: 'Info@aya.edu.jo' });
     expect(resolved.mapped.size).toBe(6);
     expect(resolved.ignored.get(status)?.ignored).toBe(true);
     expect(resolved.ignored.get(contactResult)?.ignored).toBe(true);
   });
 
   it.each([
-    ['0799631111 رقم الاستقبال', '0799631111'], ['(06) 553 5190', '065535190'], ['07 7042 4100', '0770424100'],
-    ['+962780728761', '0780728761'], ['962790203683', '0790203683'], ['هاتف 065343991', '065343991'], ['962795311464//065058666', '0795311464'],
+    ['0799631111 رقم الاستقبال', '+962799631111'], ['(06) 553 5190', '+96265535190'], ['07 7042 4100', '+962770424100'],
+    ['+962780728761', '+962780728761'], ['962790203683', '+962790203683'], ['هاتف 065343991', '+96265343991'], ['962795311464//065058666', '+962795311464'],
   ])('normalizes phone %s', (input, expected) => expect(normalizeImportPhone(input)).toBe(expected));
 
   it.each([

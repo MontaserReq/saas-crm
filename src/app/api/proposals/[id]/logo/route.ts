@@ -9,7 +9,7 @@ import { parseBoundedMultipart, uploadErrorResponse, UPLOAD_LIMITS } from '@/lib
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -23,7 +23,7 @@ export async function GET(
     }
 
     const proposal = await prisma.proposal.findFirst({
-      where: { id: params.id, organizationId: user.organizationId },
+      where: { id: (await params).id, organizationId: user.organizationId },
       select: { logoKey: true, logoProvider: true },
     });
 
@@ -66,7 +66,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const originError = rejectUntrustedMutation(request);
@@ -86,7 +86,7 @@ export async function POST(
 
     const updated = await ProposalService.uploadLogo(
       user,
-      params.id,
+      (await params).id,
       filePart.data,
       filePart.filename || 'logo',
       filePart.contentType || 'image/png'

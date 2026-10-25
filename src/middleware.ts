@@ -18,17 +18,15 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get('codeline_session')?.value;
 
   const isAuthPage = pathname.startsWith('/login');
-  const isPublicPage = pathname.startsWith('/public-search') || pathname.startsWith('/forgot-password') || pathname.startsWith('/reset-password');
+  const isPublicPage = pathname === '/' || pathname === '/pricing' || pathname.startsWith('/legal') || pathname.startsWith('/onboarding') || pathname.startsWith('/public-search') || pathname.startsWith('/forgot-password') || pathname.startsWith('/reset-password');
   const isApiAuthOrAttachment = pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.includes('/favicon.ico');
 
   if (isApiAuthOrAttachment) {
     return applySecurityHeaders(NextResponse.next(), request);
   }
 
-  // If user is accessing login page while already possessing session cookie
-  if (isAuthPage && token) {
-    return authRedirect('/', request);
-  }
+  // The login layout validates the session before redirecting. Cookie presence
+  // alone also includes expired and revoked sessions, which must reach login.
 
   // If user is accessing protected dashboard page without session cookie
   if (!isAuthPage && !isPublicPage && !token) {

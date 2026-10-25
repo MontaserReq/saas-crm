@@ -3,6 +3,7 @@ import prisma from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { z } from 'zod';
+import { hasPlanFeature } from '@/lib/platform/entitlements';
 
 const schema = z.object({ q: z.string().trim().min(2).max(80) });
 export async function GET(request: NextRequest) {
@@ -15,14 +16,22 @@ export async function GET(request: NextRequest) {
   const q = parsed.data.q;
   const results: Array<{ type: string; id: string; title: string; subtitle: string; href: string }> = [];
   if (hasPermission(user, PERMISSIONS.SCHOOLS_VIEW)) {
+    if (hasPlanFeature(user, 'import_export')) {
     const schools = await prisma.school.findMany({ where: { organizationId: user.organizationId, isDeleted: false, AND: [{ OR: [{ name: { contains: q, mode: 'insensitive' } }, { city: { contains: q, mode: 'insensitive' } }] }] }, select: { id: true, name: true, city: true }, take: 8 });
     results.push(...schools.map(x => ({ type: 'School', id: x.id, title: x.name, subtitle: x.city, href: `/schools?search=${encodeURIComponent(x.name)}` })));
+    }
+    if (hasPlanFeature(user, 'clients')) {
     const clients = await prisma.client.findMany({ where: { organizationId: user.organizationId, deletedAt: null, OR: [{ name: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }, { phone: { contains: q, mode: 'insensitive' } }] }, select: { id: true, name: true, type: true }, take: 8 });
-    results.push(...clients.map(x => ({ type: 'Client', id: x.id, title: x.name, subtitle: x.type, href: `/clients?search=${encodeURIComponent(x.name)}` })));
+    results.push(...clients.map(x => ({ type: 'Client', id: x.id, title: x.name, subtitle: x.type, href: `/clients/${x.id}` })));
+    }
+    if (hasPlanFeature(user, 'leads')) {
     const leads = await prisma.lead.findMany({ where: { organizationId: user.organizationId, deletedAt: null, OR: [{ name: { contains: q, mode: 'insensitive' } }, { companyName: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }] }, select: { id: true, name: true, companyName: true }, take: 6 });
-    results.push(...leads.map(x => ({ type: 'Lead', id: x.id, title: x.name, subtitle: x.companyName || 'Lead', href: `/clients?search=${encodeURIComponent(x.name)}` })));
+    results.push(...leads.map(x => ({ type: 'Lead', id: x.id, title: x.name, subtitle: x.companyName || 'Lead', href: `/leads/${x.id}` })));
+    }
+    if (hasPlanFeature(user, 'contacts')) {
     const contacts = await prisma.contact.findMany({ where: { organizationId: user.organizationId, deletedAt: null, OR: [{ firstName: { contains: q, mode: 'insensitive' } }, { lastName: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }] }, select: { id: true, firstName: true, lastName: true, email: true }, take: 6 });
-    results.push(...contacts.map(x => ({ type: 'Contact', id: x.id, title: `${x.firstName} ${x.lastName || ''}`.trim(), subtitle: x.email || 'Contact', href: `/clients?search=${encodeURIComponent(x.firstName)}` })));
+    results.push(...contacts.map(x => ({ type: 'Contact', id: x.id, title: `${x.firstName} ${x.lastName || ''}`.trim(), subtitle: x.email || 'Contact', href: `/contacts/${x.id}` })));
+    }
   }
   if (hasPermission(user, PERMISSIONS.TICKETS_VIEW_ASSIGNED) || hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)) {
     const ticketWhere: any = { organizationId: user.organizationId, OR: [{ ticketNumber: { contains: q, mode: 'insensitive' } }, { subject: { contains: q, mode: 'insensitive' } }] };
@@ -34,15 +43,17 @@ export async function GET(request: NextRequest) {
     const users = await prisma.user.findMany({ where: { isActive: true, organizationMemberships: { some: { organizationId: user.organizationId, status: 'ACTIVE' } }, OR: [{ name: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }] }, select: { id: true, name: true, email: true }, take: 6 });
     results.push(...users.map(x => ({ type: 'User', id: x.id, title: x.name, subtitle: x.email, href: '/admin/users' })));
   }
-  if (hasPermission(user, PERMISSIONS.DEALS_VIEW)) {
+  if (hasPlanFeature(user, 'deals') && hasPermission(user, PERMISSIONS.DEALS_VIEW)) {
     const deals = await prisma.deal.findMany({ where: { organizationId: user.organizationId, deletedAt: null, OR: [{ title: { contains: q, mode: 'insensitive' } }, { description: { contains: q, mode: 'insensitive' } }] }, select: { id: true, title: true, status: true }, take: 8 });
     results.push(...deals.map(x => ({ type: 'Deal', id: x.id, title: x.title, subtitle: x.status, href: `/deals/${x.id}` })));
+  }
+  if (hasPlanFeature(user, 'pipelines') && hasPermission(user, PERMISSIONS.PIPELINES_VIEW)) {
     const pipelines = await prisma.pipeline.findMany({ where: { organizationId: user.organizationId, isActive: true, name: { contains: q, mode: 'insensitive' } }, select: { id: true, name: true }, take: 5 });
     results.push(...pipelines.map(x => ({ type: 'Pipeline', id: x.id, title: x.name, subtitle: 'Pipeline', href: '/pipelines' })));
   }
-  if (hasPermission(user, PERMISSIONS.TASKS_VIEW)) {
+  if (hasPlanFeature(user, 'tasks') && hasPermission(user, PERMISSIONS.TASKS_VIEW)) {
     const tasks = await prisma.crmTask.findMany({ where: { organizationId: user.organizationId, deletedAt: null, OR: [{ title: { contains: q, mode: 'insensitive' } }, { description: { contains: q, mode: 'insensitive' } }] }, select: { id: true, title: true, status: true }, take: 8 });
-    results.push(...tasks.map(x => ({ type: 'Task', id: x.id, title: x.title, subtitle: x.status, href: '/tasks' })));
+    results.push(...tasks.map(x => ({ type: 'Task', id: x.id, title: x.title, subtitle: x.status, href: `/tasks/${x.id}` })));
   }
   return NextResponse.json({ results: results.slice(0, 20) });
 }

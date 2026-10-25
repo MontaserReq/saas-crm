@@ -6,6 +6,7 @@ import { AuditService } from './AuditService';
 import { mapSchoolImportRow, matchImportEmployee, normalizeImportPhone, resolveImportHeaders } from '@/lib/schools/import';
 import { requireOrganizationId, requireOrganizationIdForUserId } from '@/lib/auth/organization';
 import { StaleOperationError } from '@/lib/security/resourceGuard';
+import { nextTicketNumber } from '@/lib/identifiers';
 
 export interface SchoolFilters extends PaginationParams {
   city?: string;
@@ -42,13 +43,44 @@ export class SchoolService {
     return { id, organizationId };
   }
 
+  private static async ensureClientMirror(tx: any, school: any, actorId: string, organizationId: string) {
+    const data = {
+      organizationId,
+      name: school.name,
+      type: 'SCHOOL',
+      status: school.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      description: school.notes || null,
+      email: school.email || null,
+      phone: school.phone || null,
+      address: [school.area, school.city].filter(Boolean).join(', ') || null,
+      logoKey: school.logoKey || null,
+      logoProvider: school.logoProvider || 'local',
+    };
+    if (tx.client?.findUnique && tx.client?.create && tx.client?.update) {
+      const existing = await tx.client.findUnique({ where: { id: school.id }, select: { organizationId: true, type: true } });
+      if (existing && existing.organizationId !== organizationId) throw new Error('School client mirror belongs to another organization');
+      if (existing && existing.type !== 'SCHOOL') throw new Error('School client mirror id conflicts with an existing non-school Client');
+      if (existing) {
+        return tx.client.update({
+          where: { id: school.id },
+          data: { ...data, updatedById: actorId, deletedAt: null },
+        });
+      }
+      // A concurrent same-id insert fails on the primary key instead of
+      // allowing an upsert update to repurpose a non-school Client.
+      return tx.client.create({ data: { id: school.id, ...data, createdById: actorId } });
+    }
+    if (tx.client?.create) return tx.client.create({ data: { id: school.id, ...data, createdById: actorId } });
+  }
+
   static async createApprovalRequest(schoolId: string, type: 'EDIT' | 'DELETE', requesterId: string, proposedData?: any) {
     const organizationId = await this.organizationForActor(requesterId);
+    const validatedProposedData = type === 'EDIT' ? schoolSchema.parse(proposedData) : null;
     const school = await prisma.school.findFirst({ where: this.scopedSchoolWhere(organizationId, schoolId) });
     if (!school) throw new Error('School not found');
     const pending = await prisma.schoolApprovalRequest.findFirst({ where: { schoolId, organizationId, type, status: 'PENDING' } });
     if (pending) throw new Error('A pending approval request already exists for this school');
-    const request = await prisma.schoolApprovalRequest.create({ data: { schoolId, requesterId, organizationId, type, previousData: JSON.stringify(school), proposedData: proposedData ? JSON.stringify(proposedData) : null } });
+    const request = await prisma.schoolApprovalRequest.create({ data: { schoolId, requesterId, organizationId, type, previousData: JSON.stringify(school), proposedData: validatedProposedData ? JSON.stringify(validatedProposedData) : null } });
     await AuditService.logAudit({ actorId: requesterId, action: `SCHOOL_${type}_REQUESTED`, entityType: 'SchoolApprovalRequest', entityId: request.id, metadata: { schoolId } });
     const approvers = await prisma.user.findMany({
       where: { isActive: true, organizationMemberships: { some: { organizationId, status: 'ACTIVE' } }, role: { rolePermissions: { some: { permission: { code: type === 'EDIT' ? 'schools.approve_edit' : 'schools.approve_delete' } } } } },
@@ -233,22 +265,7 @@ export class SchoolService {
           organizationId,
         },
       });
-      if (tx.client?.create) await tx.client.create({
-        data: {
-          id: createdSchool.id,
-          organizationId,
-          name: createdSchool.name,
-          type: 'SCHOOL',
-          status: createdSchool.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
-          description: createdSchool.notes,
-          email: createdSchool.email,
-          phone: createdSchool.phone,
-          address: [createdSchool.area, createdSchool.city].filter(Boolean).join(', ') || null,
-          logoKey: createdSchool.logoKey,
-          logoProvider: createdSchool.logoProvider || 'local',
-          createdById: actorId,
-        },
-      });
+      await this.ensureClientMirror(tx, createdSchool, actorId, organizationId);
       if (createdSchool.responsibleEmployeeId) {
         await this.createResponsibleEmployeeTicket(tx, createdSchool, createdSchool.responsibleEmployeeId, actorId, organizationId);
       }
@@ -279,20 +296,7 @@ export class SchoolService {
           ...validated,
         },
       });
-      if (tx.client?.updateMany) await tx.client.updateMany({
-        where: { id: updatedSchool.id, organizationId },
-        data: {
-          name: updatedSchool.name,
-          status: updatedSchool.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
-          description: updatedSchool.notes,
-          email: updatedSchool.email,
-          phone: updatedSchool.phone,
-          address: [updatedSchool.area, updatedSchool.city].filter(Boolean).join(', ') || null,
-          logoKey: updatedSchool.logoKey,
-          logoProvider: updatedSchool.logoProvider || 'local',
-          updatedById: actorId,
-        },
-      });
+      await this.ensureClientMirror(tx, updatedSchool, actorId, organizationId);
       if (updatedSchool.responsibleEmployeeId) {
         await this.createResponsibleEmployeeTicket(tx, updatedSchool, updatedSchool.responsibleEmployeeId, actorId, organizationId);
       }
@@ -327,18 +331,13 @@ export class SchoolService {
     });
     if (!employee || !employee.isActive) throw new Error('The selected responsible employee is inactive or could not be found.');
 
-    let sequence = 1000;
-    const lastTicket = await tx.ticket.findFirst({ where: { organizationId }, orderBy: { createdAt: 'desc' }, select: { ticketNumber: true } });
-    if (lastTicket?.ticketNumber.startsWith('CL-')) {
-      const parsed = parseInt(lastTicket.ticketNumber.slice(3), 10);
-      if (!Number.isNaN(parsed)) sequence = parsed;
-    }
-
+    const ticketNumber = await nextTicketNumber(tx);
     const ticket = await tx.ticket.create({
       data: {
-        ticketNumber: `CL-${sequence + 1}`,
+        ticketNumber,
         organizationId,
         schoolId: school.id,
+        clientId: school.id,
         departmentId: employee.departmentId,
         subject: `School follow-up: ${school.name}`,
         priority: 'MEDIUM',
@@ -371,7 +370,7 @@ export class SchoolService {
         userId: employee.id,
         organizationId,
         type: 'TICKET_ASSIGNED',
-        title: 'New school ticket assigned',
+        title: 'New customer ticket assigned',
         message: `A new ticket for ${school.name} has been assigned to you.`,
         entityType: 'ticket',
         entityId: ticket.id,
@@ -444,7 +443,7 @@ export class SchoolService {
     if (rawRows.length > 5000) throw new Error('The maximum allowed import size is 5,000 rows');
     const headerResolution = resolveImportHeaders(Object.keys(rawRows[0] || {}));
     if (headerResolution.missingRequired.length) {
-      const labels = headerResolution.missingRequired.map((field) => field === 'name' ? 'School Name / اسم المدرسة' : field);
+      const labels = headerResolution.missingRequired.map((field) => field === 'name' ? 'Customer Name / اسم العميل' : field);
       throw new Error(`Required column is missing: ${labels.join(', ')}.`);
     }
     if (headerResolution.duplicates.length) {
@@ -638,38 +637,25 @@ export class SchoolService {
             organizationId,
           },
         });
+        await this.ensureClientMirror(tx, school, actorId, organizationId);
         createdSchools.push(school);
       }
 
       // A school responsible employee is also the initial owner of the
       // outreach ticket created by this import.
-      // Serialize import-generated ticket allocation per organization. The
-      // lock is transaction-scoped and prevents two imports from observing
-      // the same latest ticket number.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ticket-sequence:${organizationId}`}))`;
-      let ticketSequence = 1000;
-      const lastTicket = await tx.ticket.findFirst({
-        where: { organizationId },
-        orderBy: { createdAt: 'desc' },
-        select: { ticketNumber: true },
-      });
-      if (lastTicket?.ticketNumber.startsWith('CL-')) {
-        const parsedSequence = parseInt(lastTicket.ticketNumber.slice(3), 10);
-        if (!Number.isNaN(parsedSequence)) ticketSequence = parsedSequence;
-      }
-
       let createdTickets = 0;
       for (const school of createdSchools) {
         if (!school.responsibleEmployeeId) continue;
         const employee = employeeMap.get(school.responsibleEmployeeId);
         if (!employee) throw new Error('One or more responsible employees are no longer active. Please re-run the import preview.');
 
-        ticketSequence += 1;
+        const ticketNumber = await nextTicketNumber(tx);
         const ticket = await tx.ticket.create({
           data: {
-            ticketNumber: `CL-${ticketSequence}`,
+            ticketNumber,
             organizationId,
             schoolId: school.id,
+            clientId: school.id,
             departmentId: employee.departmentId,
             subject: `School follow-up: ${school.name}`,
             priority: 'MEDIUM',
@@ -704,7 +690,7 @@ export class SchoolService {
             userId: employee.id,
             organizationId,
             type: 'TICKET_ASSIGNED',
-            title: 'New school ticket assigned',
+            title: 'New customer ticket assigned',
             message: `A new ticket for ${school.name} has been assigned to you.`,
             entityType: 'ticket',
             entityId: ticket.id,

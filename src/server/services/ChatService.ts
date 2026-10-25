@@ -5,7 +5,7 @@ import { requireOrganizationId } from '@/lib/auth/organization';
 export class ChatService {
   static async list(user: UserSession) {
     const organizationId = requireOrganizationId(user);
-    const rows = await prisma.chatConversation.findMany({ where: { organizationId, participants: { some: { userId: user.id } } }, orderBy: { updatedAt: 'desc' }, include: { participants: { include: { user: { select: { id: true, name: true, email: true, avatar: true, isActive: true } } } }, messages: { orderBy: { createdAt: 'desc' }, take: 1 } } });
+    const rows = await prisma.chatConversation.findMany({ where: { organizationId, participants: { some: { userId: user.id } } }, orderBy: { updatedAt: 'desc' }, include: { messageGroup: { select: { id: true, name: true, description: true, canMembersSend: true, createdById: true } }, participants: { include: { user: { select: { id: true, name: true, email: true, avatar: true, isActive: true } } } }, messages: { orderBy: { createdAt: 'desc' }, take: 1 } } });
     return rows.map((c) => ({ ...c, unreadCount: c.messages.length && c.messages[0].senderId !== user.id && c.participants.find((p) => p.userId === user.id)?.lastReadAt && c.messages[0].createdAt > (c.participants.find((p) => p.userId === user.id)?.lastReadAt as Date) ? 1 : 0 }));
   }
 
@@ -13,7 +13,7 @@ export class ChatService {
     const organizationId = requireOrganizationId(user);
     const member = await prisma.chatParticipant.findFirst({ where: { conversationId, userId: user.id, conversation: { organizationId } } });
     if (!member) throw new Error('Unauthorized chat access');
-    const conversation = await prisma.chatConversation.findFirst({ where: { id: conversationId, organizationId }, include: { participants: { include: { user: { select: { id: true, name: true, email: true, avatar: true, isActive: true } } } }, messages: { orderBy: { createdAt: 'asc' }, take: 100, include: { sender: { select: { id: true, name: true, avatar: true } } } } } });
+    const conversation = await prisma.chatConversation.findFirst({ where: { id: conversationId, organizationId }, include: { messageGroup: { select: { id: true, name: true, description: true, canMembersSend: true, createdById: true } }, participants: { include: { user: { select: { id: true, name: true, email: true, avatar: true, isActive: true } } } }, messages: { orderBy: { createdAt: 'asc' }, take: 100, include: { sender: { select: { id: true, name: true, avatar: true } } } } } });
     return conversation;
   }
 
@@ -27,12 +27,47 @@ export class ChatService {
     return prisma.chatConversation.create({ data: { organizationId, participants: { create: [{ userId: user.id }, { userId: otherUserId }] } } });
   }
 
+  static async group(user: UserSession, groupId: string) {
+    const organizationId = requireOrganizationId(user);
+    const group = await prisma.messageGroup.findFirst({
+      where: { id: groupId, organizationId, members: { some: { userId: user.id } } },
+      include: { members: { select: { userId: true } } },
+    });
+    if (!group) throw new Error('Unauthorized team group access');
+
+    const include = {
+      messageGroup: { select: { id: true, name: true, description: true, canMembersSend: true, createdById: true } },
+      participants: { include: { user: { select: { id: true, name: true, email: true, avatar: true, isActive: true } } } },
+    } as const;
+    const existing = await prisma.chatConversation.findUnique({ where: { messageGroupId: groupId }, include });
+    if (existing) return existing;
+
+    try {
+      return await prisma.chatConversation.create({
+        data: {
+          organizationId,
+          messageGroupId: groupId,
+          participants: { create: group.members.map((member) => ({ userId: member.userId })) },
+        },
+        include,
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        const concurrent = await prisma.chatConversation.findUnique({ where: { messageGroupId: groupId }, include });
+        if (concurrent) return concurrent;
+      }
+      throw error;
+    }
+  }
+
   static async send(user: UserSession, conversationId: string, content: string) {
     const clean = content.trim();
     if (!clean || clean.length > 4000) throw new Error('Message must be between 1 and 4000 characters');
     const organizationId = requireOrganizationId(user);
-    const member = await prisma.chatParticipant.findFirst({ where: { conversationId, userId: user.id, conversation: { organizationId } } });
+    const member = await prisma.chatParticipant.findFirst({ where: { conversationId, userId: user.id, conversation: { organizationId } }, include: { conversation: { select: { messageGroup: { select: { createdById: true, canMembersSend: true } } } } } });
     if (!member) throw new Error('Unauthorized chat access');
+    const group = member.conversation.messageGroup;
+    if (group && !group.canMembersSend && group.createdById !== user.id) throw new Error('Only the group creator can send messages in this group');
     return prisma.$transaction(async (tx) => {
       const message = await tx.chatMessage.create({ data: { conversationId, senderId: user.id, content: clean }, include: { sender: { select: { id: true, name: true, avatar: true } } } });
       await tx.chatConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
