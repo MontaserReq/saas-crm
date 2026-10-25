@@ -63,15 +63,6 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
     setConsent(next);
   };
 
-  const resetConsent = () => {
-    try {
-      window.localStorage.removeItem(CONSENT_KEY);
-    } catch {
-      // The in-memory state can still reopen the consent prompt.
-    }
-    setConsent('unknown');
-  };
-
   // Do not render the consent UI until the saved browser decision has been
   // read. This makes an accepted or rejected choice disappear immediately
   // and avoids a hydration/flash cycle on navigation.
@@ -131,15 +122,7 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
             </button>
           </div>
         </aside>
-      ) : (
-        <button
-          type="button"
-          onClick={resetConsent}
-          className="fixed bottom-4 left-4 z-[90] rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-lg transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-        >
-          إعدادات الخصوصية
-        </button>
-      )}
+      ) : null}
     </>
   );
 }
