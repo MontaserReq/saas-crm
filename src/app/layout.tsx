@@ -3,6 +3,7 @@ import { ThemeProvider } from 'next-themes';
 import { I18nProvider } from '@/lib/i18n/context';
 import { DialogProvider } from '@/lib/dialog/context';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
+import { getCurrentUser } from '@/lib/auth/session';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -18,7 +19,19 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Theme and language are personal preferences. Scoping the browser storage
+  // key to the authenticated user prevents one account from affecting another
+  // account on the same browser or device.
+  let preferenceScope = 'guest';
+  try {
+    preferenceScope = (await getCurrentUser())?.id ?? 'guest';
+  } catch {
+    // Public/auth pages must still render if the session cannot be read.
+  }
+
+  const themeStorageKey = `satrcrm:theme:${preferenceScope}`;
+
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
@@ -31,8 +44,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen bg-background text-foreground dark:bg-slate-950 antialiased">
         <GoogleAnalytics measurementId={process.env.GA_MEASUREMENT_ID} />
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <I18nProvider>
+        <ThemeProvider
+          key={themeStorageKey}
+          attribute="class"
+          storageKey={themeStorageKey}
+          defaultTheme="system"
+          enableSystem
+        >
+          <I18nProvider key={preferenceScope} preferenceScope={preferenceScope}>
             <DialogProvider>{children}</DialogProvider>
           </I18nProvider>
         </ThemeProvider>

@@ -17,11 +17,20 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
-export function I18nProvider({ children }: { children: React.ReactNode }) {
+interface I18nProviderProps {
+  children: React.ReactNode;
+  preferenceScope?: string;
+}
+
+export function I18nProvider({
+  children,
+  preferenceScope = "guest",
+}: I18nProviderProps) {
   const [language, setLanguageState] = useState<Language>("ar");
+  const languageStorageKey = `satrcrm:language:${preferenceScope}`;
 
   useEffect(() => {
-    const saved = localStorage.getItem("codeline_lang") as Language;
+    const saved = localStorage.getItem(languageStorageKey) as Language;
     if (saved && (saved === "en" || saved === "ar")) {
       setLanguageState(saved);
       document.documentElement.lang = saved;
@@ -30,7 +39,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.lang = "ar";
       document.documentElement.dir = "rtl";
     }
-  }, []);
+  }, [languageStorageKey]);
 
   useEffect(() => {
     const validationText = (
@@ -120,7 +129,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem("codeline_lang", lang);
+    localStorage.setItem(languageStorageKey, lang);
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
   };
