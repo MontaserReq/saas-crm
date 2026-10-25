@@ -43,5 +43,33 @@ export default async function AdminUsersPage() {
     prisma.permission.findMany({ orderBy: [{ module: 'asc' }, { code: 'asc' }] }),
   ]);
 
-  return <UsersClientView users={users} roles={roles} departments={departments} permissions={permissions} />;
+  const [activeUserCount, subscription] = await Promise.all([
+    prisma.organizationMember.count({
+      where: {
+        organizationId: user.organizationId,
+        status: 'ACTIVE',
+        user: { isActive: true },
+      },
+    }),
+    prisma.platformSubscription.findUnique({
+      where: { organizationId: user.organizationId },
+      select: { plan: { select: { userLimit: true, isActive: true } } },
+    }),
+  ]);
+
+  const userLimit = subscription?.plan.isActive ? subscription.plan.userLimit : 0;
+  const canCreateUser = hasPermission(user, PERMISSIONS.USERS_CREATE)
+    && (userLimit === null || activeUserCount < userLimit);
+
+  return (
+    <UsersClientView
+      users={users}
+      roles={roles}
+      departments={departments}
+      permissions={permissions}
+      activeUserCount={activeUserCount}
+      userLimit={userLimit}
+      canCreateUser={canCreateUser}
+    />
+  );
 }

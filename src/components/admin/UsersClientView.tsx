@@ -36,6 +36,9 @@ interface UsersClientViewProps {
   roles: any[];
   departments: any[];
   permissions: any[];
+  activeUserCount: number;
+  userLimit: number | null;
+  canCreateUser: boolean;
 }
 
 export function UsersClientView({
@@ -43,6 +46,9 @@ export function UsersClientView({
   roles,
   departments,
   permissions,
+  activeUserCount,
+  userLimit,
+  canCreateUser,
 }: UsersClientViewProps) {
   const { t, language, errorMessage } = useI18n();
   const router = useRouter();
@@ -60,6 +66,8 @@ export function UsersClientView({
   const [permissionsUser, setPermissionsUser] = useState<any | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const userLimitReached = userLimit !== null && activeUserCount >= userLimit;
+  const createDisabled = !canCreateUser || userLimitReached;
 
   const handleDeleteConfirm = async () => {
     if (!deletingUser) return;
@@ -128,16 +136,31 @@ export function UsersClientView({
             columns={exportColumns}
           />
           <button
+            disabled={createDisabled}
             onClick={() => {
+              if (createDisabled) return;
               setEditingUser(null);
               setIsOpen(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-md shadow-brand-500/20 transition-all"
+            title={userLimitReached
+              ? (language === "ar" ? "تم الوصول إلى الحد الأقصى لمستخدمي الباقة" : "The plan user limit has been reached")
+              : undefined}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-md shadow-brand-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-600 disabled:shadow-none"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>{t("admin.users.addMember")}</span>
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs dark:border-slate-800 dark:bg-slate-900">
+        <span className="font-semibold text-slate-600 dark:text-slate-300">
+          {language === "ar" ? "المستخدمون النشطون" : "Active users"}
+        </span>
+        <span className={`font-bold ${userLimitReached ? "text-rose-600" : "text-emerald-600"}`}>
+          {activeUserCount} / {userLimit === null ? (language === "ar" ? "غير محدود" : "Unlimited") : userLimit}
+          {userLimitReached && <span className="ms-2 font-semibold">({language === "ar" ? "تم الوصول للحد" : "Limit reached"})</span>}
+        </span>
       </div>
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
