@@ -47,6 +47,12 @@ describe('Smart Setup templates and input boundaries', () => {
     expect(registerOrganizationSchema.safeParse({ ...signup, organizationId: 'foreign-org' }).success).toBe(false);
     expect(registerOrganizationSchema.safeParse({ ...signup, confirmPassword: 'different' }).success).toBe(false);
   });
+  it('requires a professional password for public registration', () => {
+    const base = { workspace: 'Example', name: 'Owner', email: 'owner@example.test', confirmPassword: 'Example123!' };
+    expect(registerOrganizationSchema.safeParse({ ...base, password: 'short', confirmPassword: 'short' }).success).toBe(false);
+    expect(registerOrganizationSchema.safeParse({ ...base, password: 'alllowercase1!', confirmPassword: 'alllowercase1!' }).success).toBe(false);
+    expect(registerOrganizationSchema.safeParse({ ...base, password: 'Example123!', confirmPassword: 'Example123!' }).success).toBe(true);
+  });
   it('provides an honest fallback for unsupported inventory and enrollment modules', () => {
     for (const industry of ['real_estate', 'education']) {
       const config = recommendWorkspace({ workspace: 'Example', industry });

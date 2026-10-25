@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { resetPasswordAction, checkResetTokenAction } from '@/server/actions/auth';
 import { useI18n } from '@/lib/i18n/context';
-import { Loader2 } from 'lucide-react';
+import { Check, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 type LinkStatus = 'checking' | 'VALID' | 'EXPIRED' | 'ALREADY_USED' | 'INVALID';
 
@@ -13,7 +13,7 @@ type LinkStatus = 'checking' | 'VALID' | 'EXPIRED' | 'ALREADY_USED' | 'INVALID';
 // transient server failure worth retrying). Token-state errors are handled separately below,
 // via SUBMIT_ERROR_TO_LINK_STATUS, because they replace the form with a dedicated screen.
 const INLINE_SUBMIT_ERROR_KEY: Record<string, string> = {
-  PASSWORD_TOO_SHORT: 'settings.passwordLength',
+  PASSWORD_WEAK: 'settings.passwordStrength',
   PASSWORD_MISMATCH: 'settings.passwordMismatch',
   RESET_FAILED: 'auth.resetFailed',
 };
@@ -34,7 +34,7 @@ const SUBMIT_ERROR_TO_LINK_STATUS: Record<string, LinkStatus> = {
 };
 
 export default function ResetPasswordPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const router = useRouter();
   const [token, setToken] = useState('');
   const [linkStatus, setLinkStatus] = useState<LinkStatus>('checking');
@@ -43,6 +43,16 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const passwordRules = [
+    { key: 'length', valid: password.length >= 8, en: 'At least 8 characters', ar: '8 أحرف على الأقل' },
+    { key: 'lowercase', valid: /[a-z]/.test(password), en: 'One lowercase letter', ar: 'حرف إنجليزي صغير واحد' },
+    { key: 'uppercase', valid: /[A-Z]/.test(password), en: 'One uppercase letter', ar: 'حرف إنجليزي كبير واحد' },
+    { key: 'number', valid: /\d/.test(password), en: 'One number', ar: 'رقم واحد' },
+    { key: 'special', valid: /[^A-Za-z0-9\s]/.test(password), en: 'One special character', ar: 'رمز خاص واحد مثل ! أو @' },
+  ] as const;
 
   useEffect(() => {
     const urlToken = new URLSearchParams(window.location.search).get('token') || '';
@@ -54,7 +64,7 @@ export default function ResetPasswordPage() {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
-    if (password.length < 8) { setError(t('settings.passwordLength')); return; }
+    if (passwordRules.some(rule => !rule.valid)) { setError(t('settings.passwordStrength')); return; }
     if (password !== confirm) { setError(t('settings.passwordMismatch')); return; }
     setLoading(true);
     const result = await resetPasswordAction(token, password, confirm);
@@ -90,8 +100,8 @@ export default function ResetPasswordPage() {
           <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 text-xs flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />{t('auth.passwordResetSuccess')}</div>
         ) : (
           <form onSubmit={submit} className="space-y-4">
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{t('auth.newPassword')}<input required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1 w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm" /></label>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{t('auth.confirmPassword')}<input required minLength={8} type="password" value={confirm} onChange={(event) => setConfirm(event.target.value)} className="mt-1 w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm" /></label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{t('auth.newPassword')}<span className="relative block"><input required minLength={8} type={showPassword ? 'text' : 'password'} dir="ltr" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pe-11 text-sm dark:border-slate-700 dark:bg-slate-800" /><button type="button" onClick={() => setShowPassword(value => !value)} className="absolute end-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 dark:hover:bg-white/10" aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></span><span className="mt-2 grid gap-1 text-xs font-normal text-slate-500 dark:text-slate-400">{passwordRules.map(rule => <span key={rule.key} className={rule.valid ? 'text-emerald-700 dark:text-emerald-300' : ''}><Check className="me-1 inline h-3 w-3" aria-hidden="true" />{language === 'ar' ? rule.ar : rule.en}</span>)}</span></label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{t('auth.confirmPassword')}<span className="relative block"><input required minLength={8} type={showConfirm ? 'text' : 'password'} dir="ltr" value={confirm} onChange={(event) => setConfirm(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 pe-11 text-sm dark:border-slate-700 dark:bg-slate-800" /><button type="button" onClick={() => setShowConfirm(value => !value)} className="absolute end-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 dark:hover:bg-white/10" aria-label={showConfirm ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}>{showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></span></label>
             <button disabled={loading} className="w-full py-3 rounded-xl bg-brand-600 text-white text-sm font-bold disabled:opacity-50">{loading ? <Loader2 className="w-4 h-4 mx-auto animate-spin" /> : t('auth.resetPassword')}</button>
           </form>
         )}

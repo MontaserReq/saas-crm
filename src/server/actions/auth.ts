@@ -128,7 +128,7 @@ export async function resetPasswordAction(token: string, newPassword: string, co
   if (!parsedInput.success) {
     const issue = parsedInput.error.issues[0]?.message || 'RESET_FAILED';
     if (issue === 'Passwords do not match') return { success: false, error: 'PASSWORD_MISMATCH' };
-    if (issue.includes('at least 8')) return { success: false, error: 'PASSWORD_TOO_SHORT' };
+    if (parsedInput.error.issues.some(item => item.path[0] === 'newPassword')) return { success: false, error: 'PASSWORD_WEAK' };
     return { success: false, error: 'INVALID_TOKEN' };
   }
   ({ token, newPassword, confirmPassword } = parsedInput.data);

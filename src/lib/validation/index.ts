@@ -13,11 +13,21 @@ export const loginSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters').max(256, 'Password is too long'),
 });
 
+// Public account and password-reset credentials use the same baseline policy.
+// Keeping this server-side makes the policy effective even when the UI is bypassed.
+export const strongPasswordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(256, 'Password is too long')
+  .refine(value => /[a-z]/.test(value), 'Password must include a lowercase letter')
+  .refine(value => /[A-Z]/.test(value), 'Password must include an uppercase letter')
+  .refine(value => /\d/.test(value), 'Password must include a number')
+  .refine(value => /[^A-Za-z0-9\s]/.test(value), 'Password must include a special character');
+
 export const registerOrganizationSchema = z.object({
   workspace: z.string().trim().min(2, 'Workspace name is required').max(120, 'Workspace name is too long'),
   name: z.string().trim().min(2, 'Name is required').max(120, 'Name is too long'),
   email: emailSchema,
-  password: z.string().min(8, 'Password must be at least 8 characters').max(256, 'Password is too long'),
+  password: strongPasswordSchema,
   confirmPassword: z.string().max(256),
   language: z.enum(['en', 'ar']).default('en'),
 }).strict().refine((value) => value.password === value.confirmPassword, {
@@ -27,7 +37,7 @@ export const registerOrganizationSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   token: z.string().trim().min(32).max(256),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters').max(256, 'Password is too long'),
+  newPassword: strongPasswordSchema,
   confirmPassword: z.string().max(256),
 }).refine((value) => value.newPassword === value.confirmPassword, {
   path: ['confirmPassword'],
