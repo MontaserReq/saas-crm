@@ -754,7 +754,7 @@ async function validateRolePermissionIds(
     const allowed = new Set(allowedCodes);
     const forbidden = permissions.find((permission) => !allowed.has(permission.code));
     if (forbidden) {
-      throw new Error("You cannot grant a permission that is not available to your account");
+      throw new Error("Permission is not available on the current plan");
     }
   }
 

@@ -10,6 +10,10 @@ const ARABIC_ERRORS: Array<[RegExp, string]> = [
     "ارفع شعارًا بصيغة PNG أو JPG أو WebP وبحجم لا يتجاوز 5MB.",
   ],
   [
+    /not available.*plan|current plan|باقة/i,
+    "هذه الصلاحية غير متاحة في باقتك الحالية. راجع الباقة أو اطلب من مدير المنصة تفعيلها.",
+  ],
+  [
     /forbidden|not authorized|permission/i,
     "ليس لديك صلاحية لتنفيذ هذه العملية.",
   ],

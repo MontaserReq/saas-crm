@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import prisma from '@/lib/db/prisma';
 import { RolesClientView } from '@/components/admin/RolesClientView';
 import { isPlatformSuperAdmin } from '@/lib/security/platform';
+import { filterPermissionsForPlan } from '@/lib/platform/entitlements';
 
 export default async function AdminRolesPage() {
   const user = (await getCurrentUser())!;
@@ -29,6 +30,12 @@ export default async function AdminRolesPage() {
   const canCreate = hasPermission(user, PERMISSIONS.ROLES_CREATE);
   const canEdit = hasPermission(user, PERMISSIONS.ROLES_UPDATE);
   const canDelete = hasPermission(user, PERMISSIONS.ROLES_DELETE);
+  const availablePermissionCodes = isPlatformSuperAdmin(user)
+    ? permissions.map((permission) => permission.code)
+    : filterPermissionsForPlan(
+        permissions.map((permission) => permission.code),
+        user.planFeatures ?? null,
+      );
 
   return (
     <RolesClientView
@@ -37,6 +44,7 @@ export default async function AdminRolesPage() {
       canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canDelete}
+      availablePermissionCodes={availablePermissionCodes}
     />
   );
 }

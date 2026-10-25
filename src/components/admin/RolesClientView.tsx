@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { LockKeyhole, Pencil, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createRoleAction, deleteRoleAction, updateRoleAction, updateRolePermissionsAction } from "@/server/actions/admin";
@@ -15,9 +15,10 @@ interface RolesClientViewProps {
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  availablePermissionCodes?: string[];
 }
 
-export function RolesClientView({ roles, permissions, canCreate = false, canEdit = false, canDelete = false }: RolesClientViewProps) {
+export function RolesClientView({ roles, permissions, canCreate = false, canEdit = false, canDelete = false, availablePermissionCodes = [] }: RolesClientViewProps) {
   const { t, language, errorMessage } = useI18n();
   const router = useRouter();
   const isArabic = language === "ar";
@@ -42,6 +43,7 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
   const currentRole = roles.find((role) => role.id === selectedRole);
   const currentPerms = rolePermissionsMap[selectedRole] || [];
   const currentRoleIsSystem = Boolean(currentRole?.isSystem);
+  const availablePermissionSet = useMemo(() => new Set(availablePermissionCodes), [availablePermissionCodes]);
 
   const showMessage = (text: string, error = false) => { setMessage(text); setMessageIsError(error); };
 
@@ -65,10 +67,15 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {modulePermissions.map((permission) => {
                   const checked = selected.includes(permission.id);
+                  const isAvailable = availablePermissionSet.has(permission.code);
+                  const permissionDisabled = !isAvailable && !checked;
                   return (
-                    <button type="button" key={permission.id} disabled={disabled} onClick={() => togglePermission(permission.id, target)} className={`flex items-start gap-2 rounded-xl border p-3 text-start text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${checked ? "border-brand-500 bg-brand-50 text-brand-950 dark:bg-brand-950/30 dark:text-brand-100" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"}`}>
+                    <button type="button" key={permission.id} disabled={disabled || permissionDisabled} onClick={() => togglePermission(permission.id, target)} title={!isAvailable ? (isArabic ? "هذه الصلاحية غير متاحة في باقتك الحالية" : "This permission is not available on the current plan") : undefined} className={`flex items-start gap-2 rounded-xl border p-3 text-start text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${checked ? "border-brand-500 bg-brand-50 text-brand-950 dark:bg-brand-950/30 dark:text-brand-100" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"} ${permissionDisabled ? "bg-slate-50 text-slate-400" : ""}`}>
                       <input type="checkbox" checked={checked} readOnly tabIndex={-1} className="mt-0.5 rounded text-brand-600" />
-                      <span className="font-semibold">{getPermissionLabel(permission.code, permission.name, language)}</span>
+                      <span className="flex items-center gap-1.5 font-semibold">
+                        {getPermissionLabel(permission.code, permission.name, language)}
+                        {!isAvailable && <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-label={isArabic ? "غير متاحة في الباقة" : "Unavailable on this plan"} />}
+                      </span>
                     </button>
                   );
                 })}
@@ -146,6 +153,7 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
       {currentRole && <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{currentRole.displayName || currentRole.name}</h3><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">{currentRole.isSystem ? (isArabic ? "دور نظامي" : "System role") : (isArabic ? "دور مخصص للشركة" : "Company custom role")}</span></div>{currentRole.description && <p className="mt-1 text-xs text-slate-500">{currentRole.description}</p>}</div>{!currentRole.isSystem && <div className="flex flex-wrap gap-2">{canEdit && <button type="button" onClick={openEdit} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Pencil className="h-3.5 w-3.5" />{isArabic ? "تعديل البيانات" : "Edit details"}</button>}{canDelete && <button type="button" onClick={handleDeleteRole} disabled={saving} className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" />{isArabic ? "حذف الدور" : "Delete role"}</button>}</div>}</div></div>}
 
       {currentRole && renderPermissionGroups("current")}
+      {currentRoleIsSystem && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">{isArabic ? "هذا دور نظامي محمي. أنشئ دوراً مخصصاً للشركة لتحديد صلاحياته." : "This is a protected system role. Create a company custom role to configure its permissions."}</div>}
       {canEdit && currentRole && !currentRoleIsSystem && <div className="flex justify-end pt-1"><button type="button" onClick={handleSavePermissions} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-brand-500/20 hover:bg-brand-700 disabled:opacity-50"><Save className="h-4 w-4" />{saving ? t("common.loading") : t("admin.roles.savePermissions")}</button></div>}
 
       <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title={isArabic ? "إضافة دور مخصص" : "Add custom role"} description={isArabic ? "أنشئ دوراً بصلاحيات محددة لفريق شركتك." : "Create a role with the permissions your team needs."} maxWidth="4xl">
