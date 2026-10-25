@@ -15,16 +15,27 @@ function isValidMeasurementId(value: string) {
 export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
   const pathname = usePathname();
   const [consent, setConsent] = useState<ConsentState>('unknown');
+  const [mounted, setMounted] = useState(false);
 
   const id = measurementId?.trim() ?? '';
   const enabled = isValidMeasurementId(id);
 
   useEffect(() => {
-    if (!enabled) return;
-    const saved = window.localStorage.getItem(CONSENT_KEY);
-    if (saved === 'granted' || saved === 'denied') {
-      setConsent(saved);
+    if (!enabled) {
+      setMounted(true);
+      return;
     }
+
+    // Reading consent only after mount keeps the server and browser markup
+    // identical, while preventing the banner from flashing on every page
+    // when a decision was already saved.
+    try {
+      const saved = window.localStorage.getItem(CONSENT_KEY);
+      if (saved === 'granted' || saved === 'denied') setConsent(saved);
+    } catch {
+      // If storage is blocked, the banner remains available for this visit.
+    }
+    setMounted(true);
   }, [enabled]);
 
   useEffect(() => {
@@ -36,14 +47,35 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
   if (!enabled) return null;
 
   const chooseConsent = (next: Exclude<ConsentState, 'unknown'>) => {
-    window.localStorage.setItem(CONSENT_KEY, next);
+    try {
+      window.localStorage.setItem(CONSENT_KEY, next);
+    } catch {
+      // The in-memory state still applies for the current visit.
+    }
+    if (next === 'denied' && typeof window.gtag === 'function') {
+      window.gtag('consent', 'update', {
+        analytics_storage: 'denied',
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+      });
+    }
     setConsent(next);
   };
 
   const resetConsent = () => {
-    window.localStorage.removeItem(CONSENT_KEY);
+    try {
+      window.localStorage.removeItem(CONSENT_KEY);
+    } catch {
+      // The in-memory state can still reopen the consent prompt.
+    }
     setConsent('unknown');
   };
+
+  // Do not render the consent UI until the saved browser decision has been
+  // read. This makes an accepted or rejected choice disappear immediately
+  // and avoids a hydration/flash cycle on navigation.
+  if (!mounted) return null;
 
   return (
     <>
