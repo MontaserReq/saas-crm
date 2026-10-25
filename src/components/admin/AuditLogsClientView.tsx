@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 import { formatDate } from '@/lib/utils';
 import { MobileCardField } from '@/components/ui/MobileCard';
@@ -30,6 +32,10 @@ interface AuditLogsClientViewProps {
 
 export function AuditLogsClientView({ logs, total, page, totalPages, platformView = false }: AuditLogsClientViewProps) {
   const { t, language } = useI18n();
+  const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1)
+    .filter((pageNumber) => totalPages <= 7 || pageNumber === 1 || pageNumber === totalPages || Math.abs(pageNumber - page) <= 1);
+  const pageHref = (targetPage: number) => `?page=${targetPage}`;
+  const paginationButton = 'inline-flex min-h-9 items-center justify-center gap-1 rounded-lg border px-3 font-semibold transition-colors';
 
   return (
     <div className="space-y-6">
@@ -134,13 +140,49 @@ export function AuditLogsClientView({ logs, total, page, totalPages, platformVie
         </div>
 
         {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 font-sans">
-            <span>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 p-4 text-xs font-sans text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <span className="order-2 sm:order-1">
               {t('admin.auditLogs.pageOfTotal')
                 .replace('{page}', String(page))
                 .replace('{totalPages}', String(totalPages))
                 .replace('{total}', String(total))}
             </span>
+            <nav className="order-1 flex items-center gap-1.5 sm:order-2" aria-label={language === 'ar' ? 'التنقل بين صفحات سجل التدقيق' : 'Audit log pagination'}>
+              {page > 1 ? (
+                <Link href={pageHref(page - 1)} className={`${paginationButton} border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-600 dark:hover:bg-slate-800`}>
+                  <ChevronRight className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
+                  {t('common.previous')}
+                </Link>
+              ) : null}
+
+              <div className="hidden items-center gap-1 sm:flex">
+                {pageNumbers.map((pageNumber, index) => {
+                  const previousPage = pageNumbers[index - 1];
+                  const showGap = previousPage !== undefined && pageNumber - previousPage > 1;
+                  return (
+                    <React.Fragment key={pageNumber}>
+                      {showGap && <span className="px-1 text-slate-400">…</span>}
+                      <Link
+                        href={pageHref(pageNumber)}
+                        aria-current={pageNumber === page ? 'page' : undefined}
+                        className={`${paginationButton} min-w-9 px-2 ${pageNumber === page
+                          ? 'border-brand-600 bg-brand-600 text-white shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-600 dark:hover:bg-slate-800'}`}
+                      >
+                        {pageNumber}
+                      </Link>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              {page < totalPages ? (
+                <Link href={pageHref(page + 1)} className={`${paginationButton} border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-600 dark:hover:bg-slate-800`}>
+                  {t('common.next')}
+                  <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
+                </Link>
+              ) : null}
+            </nav>
           </div>
         )}
       </div>
