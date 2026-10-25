@@ -43,6 +43,7 @@ export default function LoginPage() {
           return;
         }
         router.push('/settings?integration=smtp-setup');
+        router.refresh();
         return;
       } catch {
         localStorage.removeItem('codeline_pending_email_connect');
