@@ -5,13 +5,19 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  AlertTriangle,
   CheckCircle2,
   Download,
+  Eye,
   FileSpreadsheet,
   Loader2,
+  MinusCircle,
+  PlusCircle,
+  RefreshCw,
   RotateCcw,
   UploadCloud,
 } from "lucide-react";
+import { Modal } from "@/components/ui/Modal";
 import { useI18n } from "@/lib/i18n/context";
 import type {
   ColumnMapping,
@@ -178,6 +184,15 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
         status: "الحالة",
         result: "النتيجة",
         date: "التاريخ",
+        actions: "الإجراءات",
+        details: "التفاصيل",
+        created: "أُنشئت",
+        updated: "حُدّثت",
+        skipped: "تخطّيت",
+        failed: "أخطاء",
+        processed: "تمت معالجة",
+        viewImportDetails: "تفاصيل عملية الاستيراد",
+        noEditDelete: "عمليات الاستيراد المكتملة غير قابلة للتعديل أو الحذف للحفاظ على سجل التدقيق.",
         fieldName: "اسم الحقل",
         options: "الخيارات (مفصولة بفواصل)",
       }
@@ -230,6 +245,15 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
         status: "Status",
         result: "Result",
         date: "Date",
+        actions: "Actions",
+        details: "Details",
+        created: "Created",
+        updated: "Updated",
+        skipped: "Skipped",
+        failed: "Errors",
+        processed: "Processed",
+        viewImportDetails: "Import operation details",
+        noEditDelete: "Completed imports cannot be edited or deleted so the audit history remains reliable.",
         fieldName: "Field name",
         options: "Options (comma separated)",
       };
@@ -262,6 +286,7 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
     failed: number;
     status: string;
   } | null>(null);
+  const [selectedHistory, setSelectedHistory] = useState<HistoryItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
@@ -500,6 +525,46 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
   const secondaryClass =
     "inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200";
   const BackIcon = direction === "rtl" ? ArrowRight : ArrowLeft;
+
+  const statusPresentation = (status: string) => {
+    if (status === "COMPLETED") {
+      return {
+        label: ar ? "مكتمل" : "Completed",
+        className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        icon: CheckCircle2,
+      };
+    }
+    if (status === "PARTIAL") {
+      return {
+        label: ar ? "مكتمل جزئياً" : "Partially completed",
+        className: "border-amber-200 bg-amber-50 text-amber-700",
+        icon: AlertTriangle,
+      };
+    }
+    if (status === "FAILED") {
+      return {
+        label: ar ? "فشل" : "Failed",
+        className: "border-rose-200 bg-rose-50 text-rose-700",
+        icon: AlertCircle,
+      };
+    }
+    return {
+      label: status,
+      className: "border-slate-200 bg-slate-50 text-slate-600",
+      icon: Loader2,
+    };
+  };
+
+  const historyMetric = (icon: typeof PlusCircle, label: string, value: number, className: string) => {
+    const Icon = icon;
+    return (
+      <div className={`flex min-w-[92px] items-center gap-1.5 rounded-lg border px-2 py-1.5 ${className}`}>
+        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span className="text-[11px] font-semibold">{label}</span>
+        <strong className="ms-auto text-sm leading-none">{value}</strong>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-8" dir={direction}>
@@ -921,7 +986,7 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
             </div>
           )}
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[980px] text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500 dark:bg-slate-800">
                 <tr>
                   <th className="px-3 py-2 text-start">#</th>
@@ -983,11 +1048,12 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
           <h2 className="mt-3 text-xl font-black text-emerald-900 dark:text-emerald-100">
             {copy.done}
           </h2>
-          <p className="mt-2 text-sm text-emerald-800 dark:text-emerald-200">
-            {copy.createCount}: {result.imported} · {copy.updateCount}:{" "}
-            {result.updated} · {copy.skipCount}: {result.skipped} ·{" "}
-            {copy.rejectCount}: {result.failed}
-          </p>
+          <div className="mx-auto mt-5 grid max-w-2xl grid-cols-2 gap-2 text-start sm:grid-cols-4">
+            {historyMetric(PlusCircle, copy.created, result.imported, "border-emerald-200 bg-white/70 text-emerald-800")}
+            {historyMetric(RefreshCw, copy.updated, result.updated, "border-sky-200 bg-white/70 text-sky-800")}
+            {historyMetric(MinusCircle, copy.skipped, result.skipped, "border-slate-200 bg-white/70 text-slate-700")}
+            {historyMetric(AlertCircle, copy.failed, result.failed, "border-rose-200 bg-white/70 text-rose-800")}
+          </div>
           {result.failed > 0 && analysis && (
             <a
               className={`${secondaryClass} mt-4`}
@@ -1020,15 +1086,18 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
                   <th className="px-3 py-2 text-start">{copy.status}</th>
                   <th className="px-3 py-2 text-start">{copy.result}</th>
                   <th className="px-3 py-2 text-start">{copy.date}</th>
-                  <th />
+                  <th className="px-3 py-2 text-start">{copy.actions}</th>
                 </tr>
               </thead>
               <tbody>
-                {history.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-t border-slate-100 dark:border-slate-800"
-                  >
+                {history.map((item) => {
+                  const status = statusPresentation(item.status);
+                  const StatusIcon = status.icon;
+                  return (
+                    <tr
+                      key={item.id}
+                      className="border-t border-slate-100 align-top transition-colors hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/40"
+                    >
                     <td className="px-3 py-3">
                       <div className="font-semibold">
                         {item.originalFilename}
@@ -1044,13 +1113,19 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
                         : "—"}
                     </td>
                     <td className="px-3 py-3">
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold dark:bg-slate-800">
-                        {item.status}
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${status.className}`}>
+                        <StatusIcon className={`h-3.5 w-3.5 ${item.status === "PROCESSING" ? "animate-spin" : ""}`} />
+                        {status.label}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-xs">
-                      +{item.importedRows} · ↻{item.updatedRows} · ⊘
-                      {item.skippedRows} · !{item.failedRows}
+                    <td className="min-w-[270px] px-3 py-3">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {historyMetric(PlusCircle, copy.created, item.importedRows, "border-emerald-100 bg-emerald-50/70 text-emerald-800")}
+                        {historyMetric(RefreshCw, copy.updated, item.updatedRows, "border-sky-100 bg-sky-50/70 text-sky-800")}
+                        {historyMetric(MinusCircle, copy.skipped, item.skippedRows, "border-slate-200 bg-slate-50 text-slate-700")}
+                        {historyMetric(AlertCircle, copy.failed, item.failedRows, "border-rose-100 bg-rose-50/70 text-rose-800")}
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">{copy.processed}: {item.processedRows} / {item.totalRows}</div>
                     </td>
                     <td className="px-3 py-3 text-xs text-slate-500">
                       {new Intl.DateTimeFormat(ar ? "ar-JO" : "en", {
@@ -1059,22 +1134,72 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
                       }).format(new Date(item.createdAt))}
                     </td>
                     <td className="px-3 py-3">
-                      {item.failedRows > 0 && (
-                        <a
-                          className="text-brand-700 underline"
-                          href={`/api/imports/${item.id}/failures`}
-                        >
-                          {copy.download}
-                        </a>
-                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => setSelectedHistory(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:text-slate-200">
+                          <Eye className="h-3.5 w-3.5" />
+                          {copy.details}
+                        </button>
+                        {item.failedRows > 0 && (
+                          <a className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50" href={`/api/imports/${item.id}/failures`}>
+                            <Download className="h-3.5 w-3.5" />
+                            {copy.download}
+                          </a>
+                        )}
+                      </div>
                     </td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </section>
+
+      <Modal
+        isOpen={!!selectedHistory}
+        onClose={() => setSelectedHistory(null)}
+        title={copy.viewImportDetails}
+        maxWidth="2xl"
+      >
+        {selectedHistory && (() => {
+          const status = statusPresentation(selectedHistory.status);
+          const StatusIcon = status.icon;
+          return (
+            <div className="space-y-5">
+              <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-start sm:justify-between dark:border-slate-800 dark:bg-slate-800/50">
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100">{selectedHistory.originalFilename}</h3>
+                  <p className="mt-1 text-xs text-slate-500">{selectedHistory.sheetName} · {selectedHistory.initiatedBy.name}</p>
+                </div>
+                <span className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${status.className}`}>
+                  <StatusIcon className="h-3.5 w-3.5" />
+                  {status.label}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {historyMetric(PlusCircle, copy.created, selectedHistory.importedRows, "border-emerald-100 bg-emerald-50/70 text-emerald-800")}
+                {historyMetric(RefreshCw, copy.updated, selectedHistory.updatedRows, "border-sky-100 bg-sky-50/70 text-sky-800")}
+                {historyMetric(MinusCircle, copy.skipped, selectedHistory.skippedRows, "border-slate-200 bg-slate-50 text-slate-700")}
+                {historyMetric(AlertCircle, copy.failed, selectedHistory.failedRows, "border-rose-100 bg-rose-50/70 text-rose-800")}
+              </div>
+              <div className="grid gap-3 rounded-2xl border border-slate-200 p-4 text-sm text-slate-600 sm:grid-cols-2 dark:border-slate-800 dark:text-slate-300">
+                <div><span className="text-xs text-slate-500">{copy.destination}</span><p className="mt-1 font-bold">{selectedHistory.destination ? labels[selectedHistory.destination as ImportDestination] || selectedHistory.destination : "—"}</p></div>
+                <div><span className="text-xs text-slate-500">{copy.mode}</span><p className="mt-1 font-bold">{selectedHistory.mode}</p></div>
+                <div><span className="text-xs text-slate-500">{copy.processed}</span><p className="mt-1 font-bold">{selectedHistory.processedRows} / {selectedHistory.totalRows}</p></div>
+                <div><span className="text-xs text-slate-500">{copy.date}</span><p className="mt-1 font-bold">{new Intl.DateTimeFormat(ar ? "ar-JO" : "en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(selectedHistory.createdAt))}</p></div>
+              </div>
+              {selectedHistory.failedRows > 0 && (
+                <a className={`${secondaryClass} w-full sm:w-auto`} href={`/api/imports/${selectedHistory.id}/failures`}>
+                  <Download className="h-4 w-4" />
+                  {copy.download}
+                </a>
+              )}
+              <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-800">{copy.noEditDelete}</p>
+            </div>
+          );
+        })()}
+      </Modal>
     </div>
   );
 }

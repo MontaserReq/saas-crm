@@ -52,9 +52,12 @@ export async function createUserAction(data: any) {
     const department = await prisma.department.findFirst({ where: { id: validated.departmentId, organizationId }, select: { id: true } });
     if (!department) return { success: false, error: 'Selected department does not belong to the active organization' };
     await validateReportingManager(null, validated.reportsToUserId, organizationId);
-    const requestedRole = await prisma.role.findUnique({ where: { id: validated.roleId }, select: { id: true, name: true } });
+    const requestedRole = await prisma.role.findFirst({
+      where: { id: validated.roleId, OR: [{ organizationId: null }, { organizationId }] },
+      select: { id: true, name: true },
+    });
     if (!requestedRole) return { success: false, error: 'Selected role is invalid' };
-    const canManageRoles = hasPermission(user, PERMISSIONS.USERS_MANAGE_ROLES);
+    const canManageRoles = hasPermission(user, PERMISSIONS.USERS_MANAGE_ROLES) || hasPermission(user, PERMISSIONS.ROLES_ASSIGN);
     if (requestedRole.name === 'PLATFORM_ADMIN') return { success: false, error: 'Platform Admin cannot be granted from a company account' };
     if (requestedRole.name === 'SUPER_ADMIN' && !isPlatformSuperAdmin(user) && user.role !== 'SUPER_ADMIN') return { success: false, error: 'Only a Company Super Admin can grant this role' };
     if (!canManageRoles && requestedRole.name !== 'MEMBER') {
@@ -160,10 +163,13 @@ export async function updateUserAction(id: string, data: any) {
     let currentAllowedIps: string[] = [];
     try { currentAllowedIps = existingUser.allowedIps ? JSON.parse(existingUser.allowedIps) : []; } catch { currentAllowedIps = []; }
     if ((validated.accessMode !== existingUser.accessMode || JSON.stringify(validated.allowedIps) !== JSON.stringify(currentAllowedIps)) && !canManageAccess) return { success: false, error: 'Forbidden: access restriction permission required' };
-    const canManageRoles = hasPermission(user, PERMISSIONS.USERS_MANAGE_ROLES);
+    const canManageRoles = hasPermission(user, PERMISSIONS.USERS_MANAGE_ROLES) || hasPermission(user, PERMISSIONS.ROLES_ASSIGN);
     if (validated.roleId !== existingUser.roleId && !canManageRoles) return { success: false, error: 'Forbidden: role assignment permission required' };
     if (validated.roleId !== existingUser.roleId && canManageRoles) {
-      const requestedRole = await prisma.role.findUnique({ where: { id: validated.roleId }, select: { name: true } });
+      const requestedRole = await prisma.role.findFirst({
+        where: { id: validated.roleId, OR: [{ organizationId: null }, { organizationId }] },
+        select: { name: true },
+      });
       if (!requestedRole) return { success: false, error: 'Selected role is invalid' };
       if (requestedRole.name === 'PLATFORM_ADMIN') return { success: false, error: 'Platform Admin cannot be granted from a company account' };
       if (requestedRole.name === 'SUPER_ADMIN' && !isPlatformSuperAdmin(user) && user.role !== 'SUPER_ADMIN') return { success: false, error: 'Only a Company Super Admin can grant this role' };
@@ -211,6 +217,12 @@ export async function updateUserAction(id: string, data: any) {
         data: updateData,
         select: { id: true, name: true, email: true, phone: true, roleId: true, departmentId: true, reportsToUserId: true, isActive: true, accessMode: true, allowedIps: true },
       });
+      if (validated.roleId !== existingUser.roleId && canManageRoles) {
+        await tx.organizationMember.update({
+          where: { organizationId_userId: { organizationId, userId: id } },
+          data: { roleId: updated.roleId },
+        });
+      }
       if (permissionsChanged) {
         await tx.userPermission.deleteMany({ where: { userId: id } });
         if (requestedPermissionIds.length) await tx.userPermission.createMany({ data: requestedPermissionIds.map((permissionId) => ({ userId: id, permissionId })) });

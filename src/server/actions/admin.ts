@@ -12,6 +12,7 @@ import { AuditService } from "@/server/services/AuditService";
 import { requireOrganizationId } from "@/lib/auth/organization";
 import { revalidatePath } from "next/cache";
 import { OperationApprovalService } from "@/server/services/OperationApprovalService";
+import { filterPermissionsForPlan } from "@/lib/platform/entitlements";
 
 // ==========================================
 // ADMIN PASSWORD CONFIRMATION (Server-Side)
@@ -719,24 +720,244 @@ export async function toggleTaskTypeStatusAction(id: string) {
 // ROLES & PERMISSIONS MANAGEMENT
 // ==========================================
 
+type RoleDefinitionInput = {
+  displayName: string;
+  description?: string;
+  permissionIds?: string[];
+};
+
+function cleanPermissionIds(permissionIds: string[] = []) {
+  return Array.from(new Set(permissionIds.filter((id) => typeof id === "string" && id.trim())));
+}
+
+async function validateRolePermissionIds(
+  actor: Awaited<ReturnType<typeof requireAuth>>,
+  permissionIds: string[],
+) {
+  const ids = cleanPermissionIds(permissionIds);
+  const permissions = await prisma.permission.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, code: true },
+  });
+
+  if (permissions.length !== ids.length) {
+    throw new Error("One or more permissions are invalid");
+  }
+
+  // Company administrators can delegate only permissions they themselves
+  // possess. This prevents a custom role from bypassing plan entitlements or
+  // the administrator's own access boundary.
+  if (!isPlatformSuperAdmin(actor)) {
+    const allowedCodes = actor.role === "SUPER_ADMIN"
+      ? filterPermissionsForPlan(permissions.map((permission) => permission.code), actor.planFeatures ?? null)
+      : actor.permissions;
+    const allowed = new Set(allowedCodes);
+    const forbidden = permissions.find((permission) => !allowed.has(permission.code));
+    if (forbidden) {
+      throw new Error("You cannot grant a permission that is not available to your account");
+    }
+  }
+
+  return ids;
+}
+
+async function getManagedRole(roleId: string, organizationId: string) {
+  return prisma.role.findFirst({
+    where: {
+      id: roleId,
+      OR: [
+        { organizationId },
+        { organizationId: null },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      displayName: true,
+      description: true,
+      isSystem: true,
+      organizationId: true,
+    },
+  });
+}
+
+export async function createRoleAction(data: RoleDefinitionInput) {
+  try {
+    const user = await requireAuth();
+    const organizationId = requireOrganizationId(user);
+    if (!hasPermission(user, PERMISSIONS.ROLES_CREATE)) {
+      return { success: false, error: "Forbidden: role creation permission required" };
+    }
+
+    const displayName = String(data?.displayName || "").trim();
+    const description = String(data?.description || "").trim() || null;
+    if (displayName.length < 2 || displayName.length > 80) {
+      return { success: false, error: "Role name must be between 2 and 80 characters" };
+    }
+    if (description && description.length > 240) {
+      return { success: false, error: "Role description cannot exceed 240 characters" };
+    }
+
+    const duplicate = await prisma.role.findFirst({
+      where: { organizationId, displayName },
+      select: { id: true },
+    });
+    if (duplicate) {
+      return { success: false, error: "A role with this name already exists in this organization" };
+    }
+
+    const permissionIds = await validateRolePermissionIds(user, data?.permissionIds || []);
+    const role = await prisma.$transaction(async (tx) => {
+      const created = await tx.role.create({
+        data: {
+          name: `CUSTOM_${organizationId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          displayName,
+          description,
+          isSystem: false,
+          organizationId,
+        },
+      });
+      if (permissionIds.length) {
+        await tx.rolePermission.createMany({
+          data: permissionIds.map((permissionId) => ({ roleId: created.id, permissionId })),
+        });
+      }
+      return created;
+    });
+
+    await AuditService.logAudit({
+      actorId: user.id,
+      action: "ROLE_CREATED",
+      entityType: "Role",
+      entityId: role.id,
+      metadata: { displayName, permissionCount: permissionIds.length, organizationId },
+    });
+
+    revalidatePath("/admin/roles");
+    revalidatePath("/admin/users");
+    return { success: true, role };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to create role" };
+  }
+}
+
+export async function updateRoleAction(
+  roleId: string,
+  data: Pick<RoleDefinitionInput, "displayName" | "description">,
+) {
+  try {
+    const user = await requireAuth();
+    const organizationId = requireOrganizationId(user);
+    if (!hasPermission(user, PERMISSIONS.ROLES_UPDATE)) {
+      return { success: false, error: "Forbidden: role update permission required" };
+    }
+    const role = await getManagedRole(roleId, organizationId);
+    if (!role || role.isSystem || role.organizationId !== organizationId) {
+      return { success: false, error: "Only custom roles in your organization can be edited" };
+    }
+
+    const displayName = String(data?.displayName || "").trim();
+    const description = String(data?.description || "").trim() || null;
+    if (displayName.length < 2 || displayName.length > 80) {
+      return { success: false, error: "Role name must be between 2 and 80 characters" };
+    }
+    if (description && description.length > 240) {
+      return { success: false, error: "Role description cannot exceed 240 characters" };
+    }
+    const duplicate = await prisma.role.findFirst({
+      where: { organizationId, displayName, id: { not: roleId } },
+      select: { id: true },
+    });
+    if (duplicate) return { success: false, error: "A role with this name already exists in this organization" };
+
+    const updated = await prisma.role.update({
+      where: { id: roleId },
+      data: { displayName, description },
+    });
+    await AuditService.logAudit({
+      actorId: user.id,
+      action: "ROLE_UPDATED",
+      entityType: "Role",
+      entityId: roleId,
+      metadata: { displayName, organizationId },
+    });
+    revalidatePath("/admin/roles");
+    revalidatePath("/admin/users");
+    return { success: true, role: updated };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to update role" };
+  }
+}
+
+export async function deleteRoleAction(roleId: string) {
+  try {
+    const user = await requireAuth();
+    const organizationId = requireOrganizationId(user);
+    if (!hasPermission(user, PERMISSIONS.ROLES_DELETE)) {
+      return { success: false, error: "Forbidden: role deletion permission required" };
+    }
+    const role = await getManagedRole(roleId, organizationId);
+    if (!role || role.isSystem || role.organizationId !== organizationId) {
+      return { success: false, error: "Only custom roles in your organization can be deleted" };
+    }
+
+    const [memberCount, inviteCount] = await Promise.all([
+      prisma.organizationMember.count({ where: { roleId, organizationId, status: { not: "REMOVED" } } }),
+      prisma.organizationInvite.count({ where: { roleId, organizationId } }),
+    ]);
+    if (memberCount || inviteCount) {
+      return {
+        success: false,
+        error: "Remove this role from active users and pending invitations before deleting it",
+      };
+    }
+
+    await prisma.role.delete({ where: { id: roleId } });
+    await AuditService.logAudit({
+      actorId: user.id,
+      action: "ROLE_DELETED",
+      entityType: "Role",
+      entityId: roleId,
+      metadata: { displayName: role.displayName, organizationId },
+    });
+    revalidatePath("/admin/roles");
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to delete role" };
+  }
+}
+
 export async function updateRolePermissionsAction(
   roleId: string,
   permissionIds: string[],
 ) {
   try {
     const user = await requireAuth();
-    if (!isPlatformSuperAdmin(user)) {
-      return {
-        success: false,
-        error: "Only Platform Admin can update shared role permissions",
-      };
+    const organizationId = requireOrganizationId(user);
+    if (!hasPermission(user, PERMISSIONS.ROLES_UPDATE)) {
+      return { success: false, error: "Forbidden: role update permission required" };
     }
+    const role = await getManagedRole(roleId, organizationId);
+    if (!role) return { success: false, error: "Role not found" };
+    if (role.isSystem && !isPlatformSuperAdmin(user)) {
+      return { success: false, error: "System roles cannot be edited from a company account" };
+    }
+    if (role.isSystem && ["PLATFORM_ADMIN", "SUPER_ADMIN"].includes(role.name)) {
+      return { success: false, error: "Protected system roles cannot be edited" };
+    }
+    if (!role.isSystem && role.organizationId !== organizationId && !isPlatformSuperAdmin(user)) {
+      return { success: false, error: "This role does not belong to the active organization" };
+    }
+    const validatedPermissionIds = await validateRolePermissionIds(user, permissionIds);
 
     await prisma.$transaction(async (tx) => {
       await tx.rolePermission.deleteMany({ where: { roleId } });
-      await tx.rolePermission.createMany({
-        data: permissionIds.map((pId) => ({ roleId, permissionId: pId })),
-      });
+      if (validatedPermissionIds.length) {
+        await tx.rolePermission.createMany({
+          data: validatedPermissionIds.map((permissionId) => ({ roleId, permissionId })),
+        });
+      }
     });
 
     await AuditService.logAudit({
@@ -744,7 +965,7 @@ export async function updateRolePermissionsAction(
       action: "ROLE_PERMISSIONS_UPDATED",
       entityType: "Role",
       entityId: roleId,
-      metadata: { permissionCount: permissionIds.length },
+      metadata: { permissionCount: validatedPermissionIds.length },
     });
 
     revalidatePath("/admin/roles");

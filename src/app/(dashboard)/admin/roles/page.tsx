@@ -14,7 +14,10 @@ export default async function AdminRolesPage() {
 
   const [roles, permissions] = await Promise.all([
     prisma.role.findMany({
-      where: isPlatformSuperAdmin(user) ? {} : { name: { not: 'PLATFORM_ADMIN' } },
+      where: {
+        name: { not: 'PLATFORM_ADMIN' },
+        OR: [{ organizationId: null }, { organizationId: user.organizationId }],
+      },
       orderBy: { createdAt: 'asc' },
       include: {
         rolePermissions: true,
@@ -23,7 +26,17 @@ export default async function AdminRolesPage() {
     prisma.permission.findMany({ orderBy: [{ module: 'asc' }, { name: 'asc' }] }),
   ]);
 
-  const canEdit = isPlatformSuperAdmin(user);
+  const canCreate = hasPermission(user, PERMISSIONS.ROLES_CREATE);
+  const canEdit = hasPermission(user, PERMISSIONS.ROLES_UPDATE);
+  const canDelete = hasPermission(user, PERMISSIONS.ROLES_DELETE);
 
-  return <RolesClientView roles={roles} permissions={permissions} canEdit={canEdit} />;
+  return (
+    <RolesClientView
+      roles={roles}
+      permissions={permissions}
+      canCreate={canCreate}
+      canEdit={canEdit}
+      canDelete={canDelete}
+    />
+  );
 }

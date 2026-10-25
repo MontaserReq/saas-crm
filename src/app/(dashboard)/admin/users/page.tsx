@@ -32,7 +32,13 @@ export default async function AdminUsersPage() {
         userPermissions: { select: { permissionId: true } },
       },
     }),
-    prisma.role.findMany({ where: { name: { notIn: isPlatformSuperAdmin(user) || user.role === 'SUPER_ADMIN' ? ['PLATFORM_ADMIN'] : ['PLATFORM_ADMIN', 'SUPER_ADMIN'] } }, orderBy: { name: 'asc' } }),
+    prisma.role.findMany({
+      where: {
+        name: { notIn: isPlatformSuperAdmin(user) || user.role === 'SUPER_ADMIN' ? ['PLATFORM_ADMIN'] : ['PLATFORM_ADMIN', 'SUPER_ADMIN'] },
+        ...(isPlatformSuperAdmin(user) ? {} : { OR: [{ organizationId: null }, { organizationId: user.organizationId }] }),
+      },
+      orderBy: [{ isSystem: 'desc' }, { displayName: 'asc' }],
+    }),
     prisma.department.findMany({ where: { organizationId: user.organizationId }, orderBy: { name: 'asc' } }),
     prisma.permission.findMany({ orderBy: [{ module: 'asc' }, { code: 'asc' }] }),
   ]);

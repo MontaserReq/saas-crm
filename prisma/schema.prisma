@@ -123,6 +123,7 @@ model Organization {
   isActive     Boolean @default(true)
 
   members                   OrganizationMember[]
+  roles                     Role[]
   teams                     Team[]
   settings                  OrganizationSettings?
   invitations               OrganizationInvite[]
@@ -531,10 +532,12 @@ model OrganizationInvite {
 
 model Role {
   id          String  @id @default(cuid())
-  name        String  @unique // PLATFORM_ADMIN, SUPER_ADMIN, ADMIN, SCHOOL_MANAGER, MEMBER
+  name        String  @unique // Internal key. System roles keep their names; custom roles use a tenant-scoped key.
   displayName String
   description String?
   isSystem    Boolean @default(false)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   rolePermissions     RolePermission[]
   userPermissions     UserPermission[]
@@ -544,6 +547,8 @@ model Role {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
 }
 
 model Permission {
