@@ -19,7 +19,10 @@ export function middleware(request: NextRequest) {
 
   const isAuthPage = pathname.startsWith('/login');
   const isPublicPage = pathname === '/' || pathname === '/pricing' || pathname.startsWith('/legal') || pathname.startsWith('/onboarding') || pathname.startsWith('/public-search') || pathname.startsWith('/forgot-password') || pathname.startsWith('/reset-password');
-  const isApiAuthOrAttachment = pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.includes('/favicon.ico');
+  // Public branding assets are required by the login page before a session
+  // exists. If they pass through the auth redirect, the browser receives the
+  // login HTML instead of the SVG/PNG and renders a broken image.
+  const isApiAuthOrAttachment = pathname.startsWith('/api/') || pathname.startsWith('/_next') || pathname.startsWith('/branding/') || pathname.includes('/favicon.ico');
 
   if (isApiAuthOrAttachment) {
     return applySecurityHeaders(NextResponse.next(), request);
