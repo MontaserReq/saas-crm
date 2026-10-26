@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Bot, Headphones, Send, Sparkles, X } from 'lucide-react';
+import { Bot, Headphones, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n/context';
 
@@ -32,6 +32,11 @@ export function SatrBotWidget() {
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
+
+  function clearChat() {
+    setMessage('');
+    setMessages([{ id: `welcome-${Date.now()}`, role: 'bot', content: welcome }]);
+  }
 
   useEffect(() => {
     const openBot = () => setOpen(true);
@@ -75,7 +80,10 @@ export function SatrBotWidget() {
           <div className="relative flex items-center gap-3">
             <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20"><Bot className="h-7 w-7" /><span className="absolute bottom-2 start-3 h-1 w-1 rounded-full bg-amber-300" /><span className="absolute bottom-2 end-3 h-1 w-1 rounded-full bg-amber-300" /></span>
             <div className="min-w-0 flex-1"><p className="text-lg font-black">SatrBot</p><p className="text-xs text-violet-100">{ar ? 'مساعد معرفة SatrCRM' : 'SatrCRM knowledge assistant'}</p></div>
-            <button type="button" onClick={() => setOpen(false)} aria-label={ar ? 'إغلاق SatrBot' : 'Close SatrBot'} className="rounded-xl p-2 text-white/80 transition hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={clearChat} disabled={busy} aria-label={ar ? 'حذف المحادثة الحالية' : 'Clear current chat'} title={ar ? 'حذف المحادثة الحالية' : 'Clear current chat'} className="rounded-xl p-2 text-white/80 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Trash2 className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setOpen(false)} aria-label={ar ? 'إغلاق SatrBot' : 'Close SatrBot'} className="rounded-xl p-2 text-white/80 transition hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
+            </div>
           </div>
           <div className="relative mt-3 flex items-center gap-2 text-[11px] text-violet-100"><Sparkles className="h-3.5 w-3.5 text-amber-300" />{ar ? 'إجابات من دليل النظام، وتحويل للدعم عند الحاجة' : 'Answers from the system guide, with support when needed'}</div>
         </header>
@@ -89,7 +97,7 @@ export function SatrBotWidget() {
             </div>
           </div>)}
           {busy && <div className="flex justify-start"><div className="rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900"><span className="inline-flex gap-1"><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-500" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-500 [animation-delay:120ms]" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-500 [animation-delay:240ms]" /></span></div></div>}
-          {messages.length <= 1 && !busy && <div className="flex flex-wrap gap-2 pt-1">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => ask(suggestion)} className="rounded-full border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-700 transition hover:border-violet-400 hover:bg-violet-50 dark:border-violet-900/60 dark:bg-slate-900 dark:text-violet-300 dark:hover:bg-violet-950/30">{suggestion}</button>)}</div>}
+          <div className="flex flex-wrap gap-2 pt-1">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => ask(suggestion)} disabled={busy} className="rounded-full border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-700 transition hover:border-violet-400 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-violet-900/60 dark:bg-slate-900 dark:text-violet-300 dark:hover:bg-violet-950/30">{suggestion}</button>)}</div>
         </div>
 
         <form onSubmit={(event) => { event.preventDefault(); void ask(); }} className="flex gap-2 border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
