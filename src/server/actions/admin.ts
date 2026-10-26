@@ -12,7 +12,7 @@ import { AuditService } from "@/server/services/AuditService";
 import { requireOrganizationId } from "@/lib/auth/organization";
 import { revalidatePath } from "next/cache";
 import { OperationApprovalService } from "@/server/services/OperationApprovalService";
-import { filterPermissionsForPlan, isCompanyAssignablePermissionCode } from "@/lib/platform/entitlements";
+import { filterPermissionsForPlan, isCompanyAssignablePermissionCode, isComingSoonPermissionCode } from "@/lib/platform/entitlements";
 
 // ==========================================
 // ADMIN PASSWORD CONFIRMATION (Server-Side)
@@ -734,6 +734,8 @@ async function validateRolePermissionIds(
   actor: Awaited<ReturnType<typeof requireAuth>>,
   permissionIds: string[],
 ) {
+  // Unreleased capabilities remain visible in the matrix for transparency,
+  // but cannot be assigned through a crafted request either.
   const ids = cleanPermissionIds(permissionIds);
   const permissions = await prisma.permission.findMany({
     where: { id: { in: ids } },
@@ -742,6 +744,16 @@ async function validateRolePermissionIds(
 
   if (permissions.length !== ids.length) {
     throw new Error("One or more permissions are invalid");
+  }
+
+  const permissionCodes = new Set(permissions.map((permission) => permission.code));
+  const groupManagementCodes = [
+    PERMISSIONS.MESSAGES_GROUPS_CREATE,
+    PERMISSIONS.MESSAGES_GROUPS_UPDATE,
+    PERMISSIONS.MESSAGES_GROUPS_DELETE,
+  ];
+  if (groupManagementCodes.some((code) => permissionCodes.has(code)) && !permissionCodes.has(PERMISSIONS.MESSAGES_GROUPS_VIEW)) {
+    throw new Error("Message group create, update, and delete permissions require message group view permission");
   }
 
   // Company Super Admin is the tenant RBAC authority and may define any
@@ -763,7 +775,12 @@ async function validateRolePermissionIds(
     }
   }
 
-  return ids;
+  const lockedPermissionIds = new Set(
+    permissions
+      .filter((permission) => isComingSoonPermissionCode(permission.code))
+      .map((permission) => permission.id),
+  );
+  return ids.filter((id) => !lockedPermissionIds.has(id));
 }
 
 async function getManagedRole(roleId: string, organizationId: string) {
@@ -1053,14 +1070,17 @@ export async function updateUserPermissionsAction(
         permissionIds.filter((id) => typeof id === "string" && id.length > 0),
       ),
     );
-    const valid = await prisma.permission.count({ where: { id: { in: ids } } });
-    if (valid !== ids.length)
+    const validPermissions = await prisma.permission.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, code: true },
+    });
+    if (validPermissions.length !== ids.length)
       return { success: false, error: "One or more permissions are invalid" };
+    const assignableIds = validPermissions
+      .filter((permission) => !isComingSoonPermissionCode(permission.code))
+      .map((permission) => permission.id);
     if (!isPlatformSuperAdmin(actor)) {
-      const delegated = await prisma.permission.findMany({
-        where: { id: { in: ids } },
-        select: { code: true },
-      });
+      const delegated = validPermissions.filter((permission) => !isComingSoonPermissionCode(permission.code));
       const actorPermissions = new Set(actor.permissions);
       if (
         delegated.some((permission) => !actorPermissions.has(permission.code))
@@ -1073,9 +1093,9 @@ export async function updateUserPermissionsAction(
     }
     await prisma.$transaction(async (tx) => {
       await tx.userPermission.deleteMany({ where: { userId } });
-      if (ids.length)
+      if (assignableIds.length)
         await tx.userPermission.createMany({
-          data: ids.map((permissionId) => ({ userId, permissionId })),
+          data: assignableIds.map((permissionId) => ({ userId, permissionId })),
         });
     });
     await AuditService.logAudit({
@@ -1083,7 +1103,7 @@ export async function updateUserPermissionsAction(
       action: "USER_PERMISSIONS_UPDATED",
       entityType: "User",
       entityId: userId,
-      metadata: { permissionIds: ids, permissionCount: ids.length },
+      metadata: { permissionIds: assignableIds, permissionCount: assignableIds.length },
     });
     revalidatePath("/admin/users");
     return { success: true };

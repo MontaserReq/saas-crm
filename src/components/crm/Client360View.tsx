@@ -24,6 +24,7 @@ import { Modal } from "@/components/ui/Modal";
 import { deleteClientAction, updateClientAction } from "@/server/actions/crm";
 import { useDialog } from "@/lib/dialog/context";
 import { useI18n } from "@/lib/i18n/context";
+import { CustomerEmailComposer } from "./CustomerEmailComposer";
 export function Client360View({
   client,
   timeline,
@@ -35,6 +36,7 @@ export function Client360View({
   canCreateTask = false,
   canCreateTicket = false,
   canCreateCalendar = false,
+  canSendCustomerEmail = false,
 }: {
   client: any;
   timeline: any[];
@@ -46,6 +48,7 @@ export function Client360View({
   canCreateTask?: boolean;
   canCreateTicket?: boolean;
   canCreateCalendar?: boolean;
+  canSendCustomerEmail?: boolean;
 }) {
   const router = useRouter();
   const { confirm } = useDialog();
@@ -275,6 +278,7 @@ export function Client360View({
                   <ArrowUpRight className="h-3.5 w-3.5 opacity-60" />
                 </Link>
               )}
+              <CustomerEmailComposer recordType="CLIENT" recordId={client.id} recipientEmail={client.email} canSend={canSendCustomerEmail} />
             </div>
           </div>
         </div>

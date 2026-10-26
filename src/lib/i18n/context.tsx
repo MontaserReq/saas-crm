@@ -20,26 +20,32 @@ const I18nContext = createContext<I18nContextType | undefined>(undefined);
 interface I18nProviderProps {
   children: React.ReactNode;
   preferenceScope?: string;
+  initialLanguage?: Language;
+  lockInitialLanguage?: boolean;
 }
 
 export function I18nProvider({
   children,
   preferenceScope = "guest",
+  initialLanguage = "ar",
+  lockInitialLanguage = false,
 }: I18nProviderProps) {
-  const [language, setLanguageState] = useState<Language>("ar");
+  const [language, setLanguageState] = useState<Language>(initialLanguage);
   const languageStorageKey = `satrcrm:language:${preferenceScope}`;
 
   useEffect(() => {
-    const saved = localStorage.getItem(languageStorageKey) as Language;
+    const saved = lockInitialLanguage
+      ? null
+      : (localStorage.getItem(languageStorageKey) as Language);
     if (saved && (saved === "en" || saved === "ar")) {
       setLanguageState(saved);
       document.documentElement.lang = saved;
       document.documentElement.dir = saved === "ar" ? "rtl" : "ltr";
     } else {
-      document.documentElement.lang = "ar";
-      document.documentElement.dir = "rtl";
+      document.documentElement.lang = initialLanguage;
+      document.documentElement.dir = initialLanguage === "ar" ? "rtl" : "ltr";
     }
-  }, [languageStorageKey]);
+  }, [initialLanguage, languageStorageKey, lockInitialLanguage]);
 
   useEffect(() => {
     const validationText = (

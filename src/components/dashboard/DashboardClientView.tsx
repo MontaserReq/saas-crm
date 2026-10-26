@@ -52,6 +52,7 @@ interface DashboardClientViewProps {
     department?: { name: string } | null;
   }>;
   directManager?: { id: string; name: string; isActive: boolean } | null;
+  canCreateTicket: boolean;
 }
 
 export function DashboardClientView({
@@ -61,6 +62,7 @@ export function DashboardClientView({
   taskTypes = [],
   users = [],
   directManager,
+  canCreateTicket,
 }: DashboardClientViewProps) {
   const { t, language, getStatusLabel, getRoleLabel } = useI18n();
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
@@ -128,13 +130,15 @@ export function DashboardClientView({
         </div>
 
         <div className="flex items-center flex-wrap gap-2.5">
-          <button
-            onClick={() => setIsNewTicketOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-brand-900 bg-amber-300 hover:bg-amber-200 transition-all shadow-md"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{t("tickets.createTicket")}</span>
-          </button>
+          {canCreateTicket && (
+            <button
+              onClick={() => setIsNewTicketOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-brand-900 bg-amber-300 hover:bg-amber-200 transition-all shadow-md"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{t("tickets.createTicket")}</span>
+            </button>
+          )}
           <Link
             href="/tickets"
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-brand-900 bg-white hover:bg-purple-50 transition-all shadow-md"
@@ -209,7 +213,7 @@ export function DashboardClientView({
                 if (item.assistant) {
                   event.preventDefault();
                   window.dispatchEvent(
-                    new CustomEvent("codeline:open-hosted-assistant"),
+                    new CustomEvent("satrbot:open"),
                   );
                 }
               }}

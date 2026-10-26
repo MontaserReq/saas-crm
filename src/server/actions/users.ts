@@ -160,9 +160,17 @@ export async function updateUserAction(id: string, data: any) {
     if (!canManageProtectedAccount(user, existingUser)) return protectedAccountError();
     if (validated.isActive !== existingUser.isActive && !hasPermission(user, validated.isActive ? PERMISSIONS.USERS_ENABLE : PERMISSIONS.USERS_DISABLE)) return { success: false, error: 'Forbidden: account status permission required' };
     const canManageAccess = hasPermission(user, PERMISSIONS.USERS_MANAGE_ACCESS_RESTRICTIONS);
+    const canManageDepartment = hasPermission(user, PERMISSIONS.USERS_UPDATE_DEPARTMENT);
+    const passwordRequested = Boolean(validated.password && validated.password.trim() !== '');
+    if (passwordRequested && !hasPermission(user, PERMISSIONS.USERS_CHANGE_PASSWORD)) {
+      return { success: false, error: 'USER_PASSWORD_PERMISSION_REQUIRED' };
+    }
     let currentAllowedIps: string[] = [];
     try { currentAllowedIps = existingUser.allowedIps ? JSON.parse(existingUser.allowedIps) : []; } catch { currentAllowedIps = []; }
     if ((validated.accessMode !== existingUser.accessMode || JSON.stringify(validated.allowedIps) !== JSON.stringify(currentAllowedIps)) && !canManageAccess) return { success: false, error: 'Forbidden: access restriction permission required' };
+    if (validated.departmentId !== existingUser.departmentId && !canManageDepartment) {
+      return { success: false, error: 'USER_DEPARTMENT_PERMISSION_REQUIRED' };
+    }
     const canManageRoles = hasPermission(user, PERMISSIONS.USERS_MANAGE_ROLES) || hasPermission(user, PERMISSIONS.ROLES_ASSIGN);
     if (validated.roleId !== existingUser.roleId && !canManageRoles) return { success: false, error: 'Forbidden: role assignment permission required' };
     if (validated.roleId !== existingUser.roleId && canManageRoles) {
@@ -185,7 +193,7 @@ export async function updateUserAction(id: string, data: any) {
       email: validated.email.toLowerCase(),
       phone: validated.phone || null,
       roleId: canManageRoles ? validated.roleId : existingUser.roleId,
-      departmentId: validated.departmentId,
+      departmentId: canManageDepartment ? validated.departmentId : existingUser.departmentId,
       isActive: validated.isActive,
       accessMode: canManageAccess ? validated.accessMode : existingUser.accessMode,
       allowedIps: canManageAccess ? JSON.stringify(validated.allowedIps) : existingUser.allowedIps,
@@ -203,8 +211,8 @@ export async function updateUserAction(id: string, data: any) {
       if (validPermissionCount !== requestedPermissionIds.length) return { success: false, error: 'One or more permissions are invalid' };
     }
 
-    if (validated.password && validated.password.trim() !== '') {
-      updateData.passwordHash = await hashPassword(validated.password);
+    if (passwordRequested) {
+      updateData.passwordHash = await hashPassword(validated.password!);
     }
 
     const passwordChanged = Boolean(updateData.passwordHash);
@@ -317,8 +325,8 @@ export async function deleteUserAction(id: string) {
   try {
     const user = await requireAuth();
     const organizationId = requireOrganizationId(user);
-    if (!isPlatformSuperAdmin(user) && user.role !== 'SUPER_ADMIN') {
-      return { success: false, error: 'Forbidden: Super Admin access required' };
+    if (!hasPermission(user, PERMISSIONS.USERS_DELETE)) {
+      return { success: false, error: 'Forbidden: user deletion permission required' };
     }
     if (id === user.id) {
       return { success: false, error: 'Cannot delete your own account' };
@@ -331,9 +339,56 @@ export async function deleteUserAction(id: string) {
         _count: {
           select: {
             ticketAssignees: true,
+            createdAssignments: true,
             notes: true,
+            communicationAttempts: true,
+            assignmentHistoryFrom: true,
+            assignmentHistoryTo: true,
+            assignmentHistoryAction: true,
             createdTickets: true,
+            customerEmailsSent: true,
+            auditLogs: true,
+            activityEvents: true,
+            createdSchools: true,
+            responsibleSchools: true,
+            createdClients: true,
+            updatedClients: true,
+            assignedLeads: true,
+            assignedContacts: true,
+            ownedDeals: true,
+            createdDeals: true,
+            dealAssignments: true,
+            ownedCrmTasks: true,
+            assignedCrmTasks: true,
+            createdCrmTasks: true,
+            managedDepartments: true,
             sentMessages: true,
+            receivedMessages: true,
+            createdMessageGroups: true,
+            messageGroupMemberships: true,
+            chatMemberships: true,
+            sentChatMessages: true,
+            schoolApprovalRequests: true,
+            schoolApprovalDecisions: true,
+            ticketApprovalRequests: true,
+            ticketApprovalDecisions: true,
+            operationApprovalRequests: true,
+            operationApprovalDecisions: true,
+            assignedCalendarEvents: true,
+            createdCalendarEvents: true,
+            calendarEventAssignees: true,
+            taskTypeMemberships: true,
+            schoolResearchJobs: true,
+            schoolResearchDecisions: true,
+            createdMeetingDetails: true,
+            createdProposals: true,
+            createdProposalTemplates: true,
+            createdCustomFieldDefinitions: true,
+            updatedCustomFieldDefinitions: true,
+            createdWorkflows: true,
+            updatedWorkflows: true,
+            sentInvitations: true,
+            initiatedDataImports: true,
           },
         },
       },
@@ -342,30 +397,42 @@ export async function deleteUserAction(id: string) {
     if (!targetUser) return { success: false, error: 'User not found' };
     if (isProtectedPlatformAccount(targetUser)) return protectedAccountError();
 
-    const count = (targetUser as any)._count;
-    const hasRelations =
-      (count?.ticketAssignees || 0) > 0 ||
-      (count?.notes || 0) > 0 ||
-      (count?.createdTickets || 0) > 0 ||
-      (count?.sentMessages || 0) > 0;
+    const count = targetUser._count;
+    const currentTicketAssignments = await prisma.ticketAssignee.count({
+      where: { userId: id, isCurrent: true },
+    });
+    // A transferred ticket keeps an assignment trail for auditability. Those
+    // historical assignment rows are cleaned up below before a hard delete;
+    // current assignments and every other business relation remain blockers.
+    const linkedDataCount = Object.entries(count).reduce(
+      (total, [relation, value]) =>
+        total + (relation === 'ticketAssignees' || relation === 'assignmentHistoryFrom' ? 0 : value),
+      currentTicketAssignments,
+    );
 
-    if (hasRelations) {
-      await prisma.user.update({
-        where: { id },
-        data: { isActive: false },
-      });
-      await AuditService.logAudit({
-        actorId: user.id,
-        action: 'USER_DISABLED',
-        entityType: 'User',
-        entityId: id,
-        metadata: { reason: 'Deactivated due to historical audit relations', name: targetUser.name },
-      });
-      revalidatePath('/admin/users');
-      return { success: true, deactivated: true, message: 'User deactivated to preserve historical audit data' };
+    if (linkedDataCount > 0) {
+      return {
+        success: false,
+        error: 'USER_LINKED_DATA_TRANSFER_REQUIRED',
+        linkedDataCount,
+      };
     }
 
-    await prisma.user.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      const activeAssignments = await tx.ticketAssignee.count({
+        where: { userId: id, isCurrent: true },
+      });
+      if (activeAssignments > 0) {
+        throw new Error('USER_LINKED_DATA_TRANSFER_REQUIRED');
+      }
+
+      await tx.ticketAssignee.deleteMany({ where: { userId: id } });
+      await tx.assignmentHistory.updateMany({
+        where: { fromUserId: id },
+        data: { fromUserId: null },
+      });
+      await tx.user.delete({ where: { id } });
+    });
     await AuditService.logAudit({
       actorId: user.id,
       action: 'USER_DELETED',

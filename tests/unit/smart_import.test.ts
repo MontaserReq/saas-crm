@@ -35,6 +35,21 @@ describe('smart CRM import mapping', () => {
 });
 
 describe('smart spreadsheet parsing', () => {
+  it('resolves safe import capacity by plan', async () => {
+    const { resolveSmartImportLimits } = await import('@/lib/imports/parseSpreadsheet');
+    const starter = resolveSmartImportLimits('starter');
+    const growth = resolveSmartImportLimits('growth');
+    const scale = resolveSmartImportLimits('scale');
+    const enterprise = resolveSmartImportLimits('enterprise');
+
+    expect(starter.maxFileBytes).toBe(25 * 1024 * 1024);
+    expect(starter.maxRows).toBe(10_000);
+    expect(growth.maxRows).toBeGreaterThan(starter.maxRows);
+    expect(scale.maxRows).toBeGreaterThan(growth.maxRows);
+    expect(enterprise.maxRows).toBeGreaterThan(scale.maxRows);
+    expect(resolveSmartImportLimits('unknown-plan')).toEqual(starter);
+  });
+
   it('parses standard XLSX and preserves reordered columns', async () => {
     const { parseSpreadsheet } = await import('@/lib/imports/parseSpreadsheet');
     const buffer = Buffer.from(createXlsx([{ name: 'Clients', rows: [['Email', 'Client Name'], ['a@example.com', 'A']] }]));

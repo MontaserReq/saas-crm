@@ -13,6 +13,14 @@ export default async function TodosPage() {
   if (!hasPlanFeature(user, 'todos') || !hasPermission(user, PERMISSIONS.TODO_VIEW)) return null;
 
   const todos = await TodoService.listTodos(user.id);
+  const canManageOwn = hasPermission(user, PERMISSIONS.TODO_MANAGE_OWN);
 
-  return <StickyNoteBoard initialTodos={todos as any} />;
+  return (
+    <StickyNoteBoard
+      initialTodos={todos as any}
+      canCreate={hasPermission(user, PERMISSIONS.TODO_CREATE) || canManageOwn}
+      canUpdate={hasPermission(user, PERMISSIONS.TODO_UPDATE) || canManageOwn}
+      canDelete={hasPermission(user, PERMISSIONS.TODO_DELETE) || canManageOwn}
+    />
+  );
 }

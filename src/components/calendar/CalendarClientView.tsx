@@ -14,6 +14,9 @@ interface CalendarClientViewProps {
   users: Array<{ id: string; name: string; email: string }>;
   initialClientId?: string;
   openCreate?: boolean;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
 }
 
 export function CalendarClientView({
@@ -24,6 +27,9 @@ export function CalendarClientView({
   users,
   initialClientId = "",
   openCreate = false,
+  canCreate,
+  canUpdate,
+  canDelete,
 }: CalendarClientViewProps) {
   const { t, language } = useI18n();
   const router = useRouter();
@@ -159,6 +165,7 @@ export function CalendarClientView({
     event: any | null,
     date: Date | null,
   ) => {
+    if (event ? !canUpdate && !canDelete : !canCreate) return;
     returnFocusRef.current = triggerEl;
     setSelectedEvent(event);
     setModalInitialDate(date);
@@ -225,15 +232,17 @@ export function CalendarClientView({
             </option>
           </select>
 
-          <button
-            type="button"
-            aria-label={addEventLabel}
-            onClick={(e) => openModal(e.currentTarget, null, new Date())}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-md shadow-brand-500/20 transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-            <span aria-hidden="true">{t("calendar.addEvent")}</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              aria-label={addEventLabel}
+              onClick={(e) => openModal(e.currentTarget, null, new Date())}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-md shadow-brand-500/20 transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+              <span aria-hidden="true">{t("calendar.addEvent")}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -409,6 +418,9 @@ export function CalendarClientView({
           clients={clients}
           tickets={tickets}
           users={users}
+          canCreate={canCreate}
+          canUpdate={canUpdate}
+          canDelete={canDelete}
           initialDate={modalInitialDate}
           initialClientId={initialClientId}
           returnFocusRef={returnFocusRef}

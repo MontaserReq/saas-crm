@@ -14,6 +14,7 @@ import { isValidJobTransition, ResearchJobStatus } from '@/lib/ai-school-researc
 import { requireOrganizationId, requireOrganizationIdForUserId, requireOrganizationIdValue } from '@/lib/auth/organization';
 import { acquireOperation, assertResearchJobOwner, consumeResearchBudget, finishOperation, RESOURCE_LIMITS, ResearchBudgetExceededError, StaleOperationError, withResearchJobOwner } from '@/lib/security/resourceGuard';
 import { evaluateCurrentOperationAuthorization } from '@/lib/security/operationAuthorization';
+import { isFeatureComingSoon } from '@/lib/platform/entitlements';
 
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_EXTRACTION_ROUNDS = 3;
@@ -96,6 +97,7 @@ export class SchoolResearchService {
   }
 
   static async runJob(jobId: string) {
+    if (isFeatureComingSoon('ai_research')) return;
     const job = await prisma.schoolResearchJob.findUnique({ where: { id: jobId } });
     if (!job || !isValidJobTransition(job.status as ResearchJobStatus, 'RUNNING')) return;
 

@@ -28,12 +28,14 @@ export class MessageService {
   }
 
   static async listGroups(user: UserSession) {
-    if (!hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_VIEW) && !hasPermission(user, PERMISSIONS.CHAT_VIEW)) return [];
+    if (!hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_VIEW)) return [];
     const organizationId = requireOrganizationId(user);
+    const canManageAllGroups = hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_UPDATE)
+      || hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_DELETE);
     return prisma.messageGroup.findMany({
       where: {
         organizationId,
-        members: { some: { userId: user.id } },
+        ...(canManageAllGroups ? {} : { members: { some: { userId: user.id } } }),
       },
       orderBy: { name: 'asc' },
       include: {
@@ -48,6 +50,7 @@ export class MessageService {
   }
 
   static async createGroup(user: UserSession, input: { name: string; description?: string; memberIds: string[]; canMembersSend?: boolean }) {
+    if (!hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_VIEW)) throw new Error('Forbidden: message group view permission required');
     if (!hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_CREATE)) throw new Error('Forbidden: message group creation permission required');
     const organizationId = requireOrganizationId(user);
     const name = input.name.trim();
@@ -68,7 +71,70 @@ export class MessageService {
     });
   }
 
+  private static async getManagedGroup(user: UserSession, groupId: string, permission: string) {
+    if (!hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_VIEW)) throw new Error('Forbidden: message group view permission required');
+    const group = await prisma.messageGroup.findFirst({
+      where: { id: groupId, organizationId: requireOrganizationId(user) },
+      include: { chatConversation: { select: { id: true } } },
+    });
+    if (!group) throw new Error('Message group not found');
+    if (group.createdById !== user.id && !hasPermission(user, permission)) {
+      throw new Error('Forbidden: you cannot manage this message group');
+    }
+    return group;
+  }
+
+  static async updateGroup(
+    user: UserSession,
+    groupId: string,
+    input: { name: string; description?: string; memberIds: string[]; canMembersSend?: boolean },
+  ) {
+    const group = await this.getManagedGroup(user, groupId, PERMISSIONS.MESSAGES_GROUPS_UPDATE);
+    const name = input.name.trim();
+    if (name.length < 2 || name.length > 80) throw new Error('Group name must be between 2 and 80 characters');
+    const memberIds = [...new Set([group.createdById, ...input.memberIds.filter(Boolean)])];
+    const organizationId = requireOrganizationId(user);
+    const memberCount = await prisma.organizationMember.count({ where: { organizationId, userId: { in: memberIds }, status: 'ACTIVE' } });
+    if (memberCount !== memberIds.length) throw new Error('All group members must belong to the active organization');
+
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.messageGroup.update({
+        where: { id: groupId },
+        data: {
+          name,
+          description: input.description?.trim() || null,
+          canMembersSend: input.canMembersSend !== false,
+        },
+      });
+      await tx.messageGroupMember.deleteMany({ where: { groupId } });
+      await tx.messageGroupMember.createMany({ data: memberIds.map((userId) => ({ groupId, userId })) });
+
+      if (group.chatConversation) {
+        const participants = await tx.chatParticipant.findMany({
+          where: { conversationId: group.chatConversation.id },
+          select: { userId: true },
+        });
+        const existing = new Set(participants.map((participant) => participant.userId));
+        await tx.chatParticipant.deleteMany({
+          where: { conversationId: group.chatConversation.id, userId: { notIn: memberIds } },
+        });
+        const newParticipants = memberIds
+          .filter((userId) => !existing.has(userId))
+          .map((userId) => ({ conversationId: group.chatConversation!.id, userId }));
+        if (newParticipants.length) await tx.chatParticipant.createMany({ data: newParticipants });
+      }
+      return updated;
+    });
+  }
+
+  static async deleteGroup(user: UserSession, groupId: string) {
+    await this.getManagedGroup(user, groupId, PERMISSIONS.MESSAGES_GROUPS_DELETE);
+    await prisma.messageGroup.delete({ where: { id: groupId } });
+    return { id: groupId };
+  }
+
   static async resolveGroupMemberIds(user: UserSession, groupIds: string[]) {
+    if (!hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_VIEW)) throw new Error('Forbidden: message group view permission required');
     const organizationId = requireOrganizationId(user);
     const uniqueGroupIds = [...new Set(groupIds.filter(Boolean))];
     if (uniqueGroupIds.length === 0) return [];

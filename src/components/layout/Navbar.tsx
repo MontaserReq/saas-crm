@@ -60,6 +60,13 @@ export function Navbar({ user, notifications = [] }: NavbarProps) {
     });
     if (!confirmed) return;
     await logoutAction();
+    // The app and marketing site use separate hosts. After invalidating the
+    // session, leave the app host completely instead of returning to its
+    // login screen on a relative navigation.
+    if (window.location.hostname === "app.satrcrm.com") {
+      window.location.replace("https://satrcrm.com");
+      return;
+    }
     router.push("/login");
     router.refresh();
   };

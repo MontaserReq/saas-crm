@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n/context';
 import { requestPlanUpgradeAction } from '@/server/actions/plan-upgrades';
+import { activateOrganizationTrialAction } from '@/server/actions/platform';
 import type { PlanUpgradeService } from '@/server/services/PlanUpgradeService';
 import { planFeatureLabels } from '@/lib/platform/entitlements';
 import { usePlanSubmission } from './usePlanSubmission';
@@ -78,4 +79,27 @@ export function CompanyPlanEditor({ organizationId, plans, current }: { organiza
   void organizationId; void plans; void current;
   const { language } = useI18n(); const ar = language === 'ar';
   return <section className={`${planPanel} space-y-3`}><h2 className="text-xl font-bold">{ar ? 'تفعيل اشتراك الشركة' : 'Activate company subscription'}</h2><p className="text-sm text-slate-500">{ar ? 'التفعيل المباشر معطل. استخدم طلب التفعيل، ثم سجّل تأكيد التحويل البنكي من شاشة طلبات الدفع.' : 'Direct activation is disabled. Use an activation request, then record verified bank-transfer payment from the payment requests screen.'}</p><Link href="/admin/platform/upgrade-requests" className={planButton}>{ar ? 'عرض طلبات الدفع' : 'View payment requests'}</Link></section>;
+}
+
+export function CompanyTrialEditor({ organizationId, plans, current }: { organizationId: string; plans: { id: string; name: string }[]; current: { planId: string; status: string; trialEndsAt: string | null; endsAt: string | null } | null }) {
+  const { language } = useI18n(); const ar = language === 'ar';
+  const [planId, setPlanId] = useState(current?.planId ?? plans[0]?.id ?? '');
+  const [durationDays, setDurationDays] = useState('7');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState(false);
+  const [pending, startTransition] = usePlanSubmission(() => { setError(true); setMessage(ar ? 'تعذر تفعيل التجربة المجانية.' : 'Unable to activate the free trial.'); });
+  return <section className={`${planPanel} space-y-4`} dir={ar ? 'rtl' : 'ltr'}>
+    <div>
+      <h2 className="text-xl font-bold">{ar ? 'تفعيل تجربة مجانية للشركة' : 'Activate a company free trial'}</h2>
+      <p className="mt-2 text-sm text-slate-500">{ar ? 'حدد الخطة والمدة. بعد انتهاء المدة سيُطبّق نفس سلوك انتهاء التجربة الحالي تلقائياً.' : 'Choose the plan and duration. After the duration ends, the existing trial-expiry behavior is applied automatically.'}</p>
+    </div>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <label className="block text-sm font-semibold">{ar ? 'الخطة' : 'Plan'}<select className={`${planField} mt-2`} value={planId} onChange={event => setPlanId(event.target.value)} disabled={pending}><option value="">{ar ? 'اختر الخطة' : 'Select a plan'}</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+      <label className="block text-sm font-semibold">{ar ? 'مدة التجربة (بالأيام)' : 'Trial duration (days)'}<input className={`${planField} mt-2`} type="number" min={1} max={3650} value={durationDays} onChange={event => setDurationDays(event.target.value)} disabled={pending} required /></label>
+    </div>
+    {current?.status === 'TRIAL' && current.trialEndsAt && <p className="rounded-xl bg-amber-500/10 p-3 text-sm font-semibold">{ar ? 'هذه الشركة لديها تجربة حالية تنتهي في: ' : 'This company currently has a trial ending: '}{new Date(current.trialEndsAt).toLocaleString(ar ? 'ar-JO' : 'en-US')}</p>}
+    {current?.status === 'ACTIVE' && <p className="rounded-xl bg-slate-500/10 p-3 text-sm">{ar ? 'يوجد اشتراك مدفوع نشط؛ لا يمكن استبداله بتجربة مجانية.' : 'A paid subscription is active; it cannot be replaced with a free trial.'}</p>}
+    <button type="button" className={planButton} disabled={pending || !planId} onClick={() => startTransition(async () => { const response = await activateOrganizationTrialAction({ organizationId, planId, durationDays: Number(durationDays) }); setError(!response.success); setMessage(response.success ? (ar ? `تم تفعيل التجربة حتى ${new Date(response.endsAt).toLocaleString('ar-JO')}.` : `Trial activated until ${new Date(response.endsAt).toLocaleString('en-US')}.`) : (ar ? 'تعذر تفعيل التجربة المجانية.' : 'Unable to activate the free trial.')); })}>{pending ? (ar ? 'جارٍ التفعيل…' : 'Activating…') : (ar ? 'تفعيل التجربة المجانية' : 'Activate free trial')}</button>
+    {message && <p role={error ? 'alert' : 'status'} className={error ? 'text-sm text-red-600' : 'text-sm text-emerald-600'}>{message}</p>}
+  </section>;
 }

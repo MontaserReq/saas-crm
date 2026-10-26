@@ -39,6 +39,8 @@ export default async function MessagesPage({
         sentMessages={sentResult.data}
         unreadCount={unreadCount}
         initialTab={initialTab}
+        canSend={hasPermission(user, PERMISSIONS.MESSAGES_SEND)}
+        canDelete={hasPermission(user, PERMISSIONS.MESSAGES_DELETE)}
       />
     </div>
   );

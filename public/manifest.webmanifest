@@ -1,0 +1,26 @@
+{
+  "name": "SatrCRM — منصة إدارة العملاء والمبيعات والفرق",
+  "short_name": "SatrCRM",
+  "description": "منصة CRM عربية وإنجليزية لإدارة العملاء والمبيعات والمهام والتذاكر وعمل الفريق.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "https://app.satrcrm.com/login",
+  "scope": "https://app.satrcrm.com/",
+  "display": "standalone",
+  "background_color": "#f7f5fb",
+  "theme_color": "#482080",
+  "icons": [
+    {
+      "src": "/branding/icons/app-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/branding/icons/app-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

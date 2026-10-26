@@ -121,7 +121,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   {
     key: 'addSchool',
     permission: 'schools.create',
-    keywords: ['add school', 'new school', 'اضافة مدرسة', 'مدرسة جديدة'],
+    keywords: ['add school', 'new school', 'add customer', 'new customer', 'اضافة مدرسة', 'مدرسة جديدة', 'اضافة عميل', 'إضافة عميل', 'اضيف عميل', 'أضيف عميل', 'عميل جديد', 'انشاء عميل', 'إنشاء عميل'],
     en: {
       title: 'Add a Customer',
       steps: [

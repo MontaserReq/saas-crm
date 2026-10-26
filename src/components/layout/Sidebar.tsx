@@ -28,6 +28,7 @@ import {
   BellRing,
   SlidersHorizontal,
   LifeBuoy,
+  LockKeyhole,
 } from "lucide-react";
 import { UserSession } from "@/types";
 import { useI18n } from "@/lib/i18n/context";
@@ -93,7 +94,8 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       label: labels.aiResearch,
       href: "/ai-school-research",
       icon: Sparkles,
-      show: hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW),
+      show: hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW) || hasPermission(user, PERMISSIONS.SCHOOLS_VIEW),
+      comingSoon: true,
     },
     {
       label: labels.assignments,
@@ -257,6 +259,24 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
                       : pathname === "/tickets" && searchParams.get("view") !== "all")
                     : item.exact ? pathname === itemPath : pathname.startsWith(itemPath);
                   const Icon = item.icon;
+                  if ("comingSoon" in item && item.comingSoon) {
+                    return (
+                      <button
+                        key={item.href}
+                        type="button"
+                        disabled
+                        title={language === 'ar' ? 'هذه الميزة ستتوفر قريبًا' : 'This feature will be available soon'}
+                        className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-start text-sm font-medium text-slate-400 opacity-75"
+                      >
+                        <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 dark:bg-amber-950/40 dark:text-amber-300">
+                          <LockKeyhole className="h-2.5 w-2.5" />
+                          {language === 'ar' ? 'قريبًا' : 'Soon'}
+                        </span>
+                      </button>
+                    );
+                  }
                   return (
                     <Link
                       key={item.href}
@@ -264,7 +284,7 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
                       onClick={(event) => {
                         if ("action" in item && item.action === "openAssistant") {
                           event.preventDefault();
-                          window.dispatchEvent(new CustomEvent("codeline:open-hosted-assistant"));
+                          window.dispatchEvent(new CustomEvent("satrbot:open"));
                         }
                         handleLinkClick();
                       }}

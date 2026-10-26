@@ -45,6 +45,7 @@ export default async function ClientPage({
       canCreateTask={hasPermission(user, PERMISSIONS.TASKS_CREATE)}
       canCreateTicket={hasPermission(user, PERMISSIONS.TICKETS_CREATE)}
       canCreateCalendar={hasPermission(user, PERMISSIONS.CALENDAR_CREATE)}
+      canSendCustomerEmail={Boolean(user.planFeatures?.includes('email_customer_send') && hasPermission(user, PERMISSIONS.CUSTOMER_EMAIL_SEND))}
     />
   );
 }

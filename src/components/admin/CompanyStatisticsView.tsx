@@ -8,6 +8,7 @@ import type {
 } from "@/server/services/CompanyStatisticsService";
 import {
   CompanyPlanEditor,
+  CompanyTrialEditor,
   planPanel,
   planStatus,
 } from "@/components/settings/SubscriptionView";
@@ -226,7 +227,7 @@ export function CompanyStatisticsView({ data }: { data: CompanyStatistics }) {
         </p>
         {data.subscription?.endsAt && (
           <p className="mt-2 text-sm">
-            {ar ? "نهاية الاشتراك" : "Subscription ends"}:{" "}
+            {data.subscription.status === "TRIAL" ? (ar ? "نهاية التجربة" : "Trial ends") : (ar ? "نهاية الاشتراك" : "Subscription ends")}:{" "}
             {date(data.subscription.endsAt)}
           </p>
         )}
@@ -352,6 +353,11 @@ export function CompanyStatisticsView({ data }: { data: CompanyStatistics }) {
         ))}
       </div>
       <CompanyPlanEditor
+        organizationId={data.organization.id}
+        plans={data.plans}
+        current={data.subscription}
+      />
+      <CompanyTrialEditor
         organizationId={data.organization.id}
         plans={data.plans}
         current={data.subscription}

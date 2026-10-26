@@ -1,12 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import { ArrowUpRight, Check, Minus, UsersRound } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n/context';
 import { expandPlanFeatures, planFeatureLabels, type PlanFeatureId } from '@/lib/platform/entitlements';
 import { getAnnualSavings, type BillingInterval, type PlanConfig } from '@/lib/plans';
-import { SALES_HREF } from './MarketingShell';
+import { APP_URL, SALES_HREF } from './MarketingShell';
 import s from './marketing.module.css';
 
 const FEATURE_PRIORITY: PlanFeatureId[] = [
@@ -132,7 +131,7 @@ export function PricingSection({ standalone = false, plans }: { standalone?: boo
         <div className={s.planPrice}>{price === null ? <strong className={s.customPrice}>{t.custom}</strong> : <><strong>{number.format(Number(price))}</strong><span><b>{plan.currency}</b><br />{annual ? t.year : t.month}</span></>}</div>
         {savings !== null && <p className={s.savings}>{t.save} {number.format(Number(savings))} {plan.currency}</p>}
         <p className={s.userAllowance}><UsersRound aria-hidden="true" />{plan.userLimit === null ? t.customUsers : `${number.format(plan.userLimit)} ${t.users}`}</p>
-        {plan.availability === 'contact_sales' ? <a href={SALES_HREF} className={s.planButton}>{t.contact}<ArrowUpRight aria-hidden="true" /></a> : <Link href="/onboarding" className={s.planButton}>{t.start}<ArrowUpRight aria-hidden="true" /></Link>}
+        {plan.availability === 'contact_sales' ? <a href={SALES_HREF} className={s.planButton}>{t.contact}<ArrowUpRight aria-hidden="true" /></a> : <a href={`${APP_URL}/onboarding`} className={s.planButton}>{t.start}<ArrowUpRight aria-hidden="true" /></a>}
         <ul>{visibleFeatures(plan).map(feature => <li key={feature}><Check aria-hidden="true" /><span>{planFeatureLabels[feature][language]}</span></li>)}</ul>
       </article>;
     })}</div>

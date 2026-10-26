@@ -314,9 +314,9 @@ export const translations = {
       rejectedCorrectTitle: "Correct Rejected Ticket",
       oldNewValuesSavedInActivity:
         "The old and new values will be saved in the activity log.",
-      requestEdit: "Request Ticket Edit",
+      requestEdit: "Request Information Correction",
       reviseEditRequest: "Revise Pending Request",
-      requestEditTitle: "Propose Ticket Information Changes",
+      requestEditTitle: "Request Ticket Information Correction",
       requestEditDescription:
         "The current ticket will remain unchanged until another authorized reviewer approves this request.",
       editPendingReview: "Edit pending review",
@@ -687,9 +687,9 @@ export const translations = {
         name: "Full Name",
         status: "Status",
         transferWorkTooltip: "Transfer Work / Offboard",
-        confirmDeleteTitle: "Confirm Deleting / Archiving User: {name}",
+        confirmDeleteTitle: "Confirm Deleting User: {name}",
         confirmDeleteDesc:
-          "You are about to delete or deactivate user account ({name} - {email}). If this user has audit history, the account will be safely archived.",
+          "You are about to permanently delete ({name} - {email}). Deletion is allowed only when no data is linked to this user; transfer the user's work first if needed.",
         deleteFailed: "Failed to delete user",
         enableFailed: "Failed to enable account",
         enableDesc:
@@ -1599,9 +1599,9 @@ export const translations = {
       rejectedCorrectTitle: "تصحيح التذكرة المرفوضة",
       oldNewValuesSavedInActivity:
         "سيتم حفظ القيم القديمة والجديدة في سجل النشاطات.",
-      requestEdit: "طلب تعديل التذكرة",
+      requestEdit: "طلب تصحيح المعلومات",
       reviseEditRequest: "تعديل الطلب المعلق",
-      requestEditTitle: "اقتراح تعديل معلومات التذكرة",
+      requestEditTitle: "طلب تصحيح معلومات التذكرة",
       requestEditDescription:
         "ستبقى معلومات التذكرة الحالية كما هي إلى أن يراجع الطلب مسؤول مخوّل آخر ويوافق عليه.",
       editPendingReview: "التعديل بانتظار المراجعة",
@@ -1964,9 +1964,9 @@ export const translations = {
         name: "الاسم",
         status: "الحالة",
         transferWorkTooltip: "نقل المهام / إنهاء الخدمة",
-        confirmDeleteTitle: "تأكيد حذف / أرشفة المستخدم: {name}",
+        confirmDeleteTitle: "تأكيد حذف المستخدم: {name}",
         confirmDeleteDesc:
-          "أنت على وشك حذف أو تعطيل حساب المستخدم ({name} - {email}). سيتم تعطيل الحساب لحماية سجلات التدقيق والملاحظات التاريخية.",
+          "أنت على وشك حذف المستخدم نهائيًا ({name} - {email}). لا يُسمح بالحذف إذا كانت هناك بيانات مرتبطة؛ انقل أعماله إلى موظف آخر أولًا.",
         deleteFailed: "فشل حذف المستخدم",
         enableFailed: "فشل تفعيل الحساب",
         enableDesc: "سيتم تفعيل حساب {name} وسيتمكن من تسجيل الدخول مجدداً.",

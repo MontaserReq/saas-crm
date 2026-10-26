@@ -8,7 +8,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createRoleAction, deleteRoleAction, updateRoleAction, updateRolePermissionsAction } from "@/server/actions/admin";
 import { useI18n } from "@/lib/i18n/context";
 import { getPermissionLabel, getPermissionModuleLabel } from "@/lib/i18n/permissionLabels";
-import { isCompanyAssignablePermissionCode } from "@/lib/platform/entitlements";
+import { isCompanyAssignablePermissionCode, isComingSoonPermissionCode } from "@/lib/platform/entitlements";
+import { PERMISSIONS } from "@/lib/permissions";
 
 interface RolesClientViewProps {
   roles: any[];
@@ -49,12 +50,38 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
   const currentPerms = rolePermissionsMap[selectedRole] || [];
   const currentRoleIsSystem = Boolean(currentRole?.isSystem);
   const availablePermissionSet = useMemo(() => new Set(availablePermissionCodes), [availablePermissionCodes]);
+  const groupPermissionIds = useMemo(() => {
+    const byCode = new Map(permissions.map((permission) => [permission.code, permission.id]));
+    return {
+      view: byCode.get(PERMISSIONS.MESSAGES_GROUPS_VIEW),
+      dependents: [
+        byCode.get(PERMISSIONS.MESSAGES_GROUPS_CREATE),
+        byCode.get(PERMISSIONS.MESSAGES_GROUPS_UPDATE),
+        byCode.get(PERMISSIONS.MESSAGES_GROUPS_DELETE),
+      ].filter(Boolean) as string[],
+    };
+  }, [permissions]);
 
   const showMessage = (text: string, error = false) => { setMessage(text); setMessageIsError(error); };
 
+  const normalizePermissionDependencies = (ids: string[]) => {
+    const unique = Array.from(new Set(ids));
+    const hasGroupDependent = groupPermissionIds.dependents.some((id) => unique.includes(id));
+    if (hasGroupDependent && groupPermissionIds.view) {
+      return Array.from(new Set([...unique, groupPermissionIds.view]));
+    }
+    if (!groupPermissionIds.view || unique.includes(groupPermissionIds.view)) return unique;
+    return unique.filter((id) => !groupPermissionIds.dependents.includes(id));
+  };
+
   const togglePermission = (permissionId: string, target: "current" | "new") => {
     const value = target === "new" ? newRolePermissionIds : currentPerms;
-    const updated = value.includes(permissionId) ? value.filter((id) => id !== permissionId) : [...value, permissionId];
+    const removing = value.includes(permissionId);
+    const updated = removing && permissionId === groupPermissionIds.view
+      ? value.filter((id) => id !== permissionId && !groupPermissionIds.dependents.includes(id))
+      : removing
+        ? normalizePermissionDependencies(value.filter((id) => id !== permissionId))
+        : normalizePermissionDependencies([...value, permissionId]);
     if (target === "new") setNewRolePermissionIds(updated);
     else setRolePermissionsMap((previous) => ({ ...previous, [selectedRole]: updated }));
   };
@@ -76,9 +103,10 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
           ...preservedUnavailableIds,
         ]))
       : selected.filter((permissionId) => !moduleIds.has(permissionId));
+    const normalized = normalizePermissionDependencies(updated);
 
-    if (target === "new") setNewRolePermissionIds(updated);
-    else setRolePermissionsMap((previous) => ({ ...previous, [selectedRole]: updated }));
+    if (target === "new") setNewRolePermissionIds(normalized);
+    else setRolePermissionsMap((previous) => ({ ...previous, [selectedRole]: normalized }));
   };
 
   const renderPermissionGroups = (target: "current" | "new") => {
@@ -115,13 +143,16 @@ export function RolesClientView({ roles, permissions, canCreate = false, canEdit
                 {modulePermissions.map((permission) => {
                   const checked = selected.includes(permission.id);
                   const isAvailable = availablePermissionSet.has(permission.code);
-                  const permissionDisabled = !isAvailable && !checked;
+                  const isComingSoon = isComingSoonPermissionCode(permission.code);
+                  const permissionDisabled = isComingSoon || (!isAvailable && !checked);
                   return (
-                    <button type="button" key={permission.id} disabled={disabled || permissionDisabled} onClick={() => togglePermission(permission.id, target)} title={!isAvailable ? (isArabic ? "هذه الصلاحية غير متاحة في باقتك الحالية" : "This permission is not available on the current plan") : undefined} className={`flex items-start gap-2 rounded-xl border p-3 text-start text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${checked ? "border-brand-500 bg-brand-50 text-brand-950 dark:bg-brand-950/30 dark:text-brand-100" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"} ${permissionDisabled ? "bg-slate-50 text-slate-400" : ""}`}>
+                    <button type="button" key={permission.id} disabled={disabled || permissionDisabled} onClick={() => togglePermission(permission.id, target)} title={isComingSoon ? (isArabic ? "هذه الميزة قيد التطوير وستتوفر قريبًا" : "This feature is under development and will be available soon") : !isAvailable ? (isArabic ? "هذه الصلاحية غير متاحة في باقتك الحالية" : "This permission is not available on the current plan") : undefined} className={`flex items-start gap-2 rounded-xl border p-3 text-start text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${checked ? "border-brand-500 bg-brand-50 text-brand-950 dark:bg-brand-950/30 dark:text-brand-100" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"} ${permissionDisabled ? "bg-slate-50 text-slate-400" : ""}`}>
                       <input type="checkbox" checked={checked} readOnly tabIndex={-1} className="mt-0.5 rounded text-brand-600" />
                       <span className="flex items-center gap-1.5 font-semibold">
                         {getPermissionLabel(permission.code, permission.name, language)}
-                        {!isAvailable && <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-label={isArabic ? "غير متاحة في الباقة" : "Unavailable on this plan"} />}
+                        {isComingSoon
+                          ? <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label={isArabic ? "قريبًا" : "Coming soon"} />
+                          : !isAvailable && <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-label={isArabic ? "غير متاحة في الباقة" : "Unavailable on this plan"} />}
                       </span>
                     </button>
                   );

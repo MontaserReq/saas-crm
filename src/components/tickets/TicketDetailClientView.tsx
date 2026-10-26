@@ -29,8 +29,13 @@ interface TicketDetailClientViewProps {
   taskTypes: Array<{ id: string; name: string }>;
   currentUser?: any;
   canDelete?: boolean;
+  canAddNote?: boolean;
+  canAcceptReject?: boolean;
+  canContactAttempt?: boolean;
+  canClose?: boolean;
   canTransfer?: boolean;
   canRequestEdit?: boolean;
+  canViewAll?: boolean;
 }
 
 export function TicketDetailClientView({
@@ -41,8 +46,13 @@ export function TicketDetailClientView({
   taskTypes,
   currentUser,
   canDelete = false,
+  canAddNote = false,
+  canAcceptReject = false,
+  canContactAttempt = false,
+  canClose = false,
   canTransfer = false,
   canRequestEdit = false,
+  canViewAll = false,
 }: TicketDetailClientViewProps) {
   const { t, language, getStatusLabel } = useI18n();
   const currentAssignee = ticket.assignees.find((a: any) => a.isCurrent)?.user;
@@ -51,11 +61,17 @@ export function TicketDetailClientView({
   const isViewer = currentUser && currentUser.role !== 'SUPER_ADMIN' && currentUser.role !== 'ADMIN'
     ? userAssigneeRecord ? (!userAssigneeRecord.isCurrent || userAssigneeRecord.role === 'VIEWER') : true
     : false;
+  const isActiveAssignee = Boolean(
+    userAssigneeRecord?.isCurrent && userAssigneeRecord.role !== 'VIEWER',
+  );
+  const isTicketCreator = currentUser?.id === ticket.createdById;
+  const canRequestCorrectionForTicket =
+    canViewAll || isTicketCreator || isActiveAssignee;
   const pendingEditRequest = ticket.TicketApprovalRequest?.[0] || null;
   const mayRequestEdit = canRequestEdit
     && ticket.status !== 'CLOSED'
     && ticket.status !== 'REJECTED'
-    && !isViewer;
+    && canRequestCorrectionForTicket;
 
   return (
     <div className="space-y-6">
@@ -99,7 +115,7 @@ export function TicketDetailClientView({
               canRequestEdit={mayRequestEdit}
               pendingRequest={pendingEditRequest}
             />
-            <TicketActionButtons ticket={ticket} teamMembers={teamMembers} canDelete={canDelete} canTransfer={canTransfer} />
+            <TicketActionButtons ticket={ticket} teamMembers={teamMembers} canDelete={canDelete} canAcceptReject={canAcceptReject} canContactAttempt={canContactAttempt} canClose={canClose} canTransfer={canTransfer} />
           </div>
         </div>
 
@@ -198,7 +214,7 @@ export function TicketDetailClientView({
           <NoteStream
             ticketId={ticket.id}
             notes={ticket.notes}
-            canAddNote={ticket.status !== 'CLOSED' && ticket.status !== 'REJECTED' && !isViewer}
+            canAddNote={canAddNote && ticket.status !== 'CLOSED' && ticket.status !== 'REJECTED' && !isViewer}
             ticketStatus={ticket.status}
             isViewer={isViewer}
             departments={departmentsWithUsers}

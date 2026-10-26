@@ -67,6 +67,9 @@ export default async function CalendarPage({
       users={users}
       initialClientId={initialClient?.id || ""}
       openCreate={params.create === "1" && !!initialClient && hasPermission(user, PERMISSIONS.CALENDAR_CREATE)}
+      canCreate={hasPermission(user, PERMISSIONS.CALENDAR_CREATE)}
+      canUpdate={hasPermission(user, PERMISSIONS.CALENDAR_UPDATE)}
+      canDelete={hasPermission(user, PERMISSIONS.CALENDAR_DELETE)}
     />
   );
 }

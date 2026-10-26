@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { deleteLeadAction, updateLeadAction } from "@/server/actions/crm";
 import { useDialog } from "@/lib/dialog/context";
 import { useI18n } from "@/lib/i18n/context";
+import { CustomerEmailComposer } from "./CustomerEmailComposer";
 
 export function Lead360View({
   lead,
@@ -16,12 +17,14 @@ export function Lead360View({
   statuses,
   canUpdate,
   canDelete,
+  canSendCustomerEmail = false,
 }: {
   lead: any;
   timeline: any[];
   statuses: string[];
   canUpdate: boolean;
   canDelete: boolean;
+  canSendCustomerEmail?: boolean;
 }) {
   const router = useRouter();
   const { confirm } = useDialog();
@@ -169,6 +172,7 @@ export function Lead360View({
                 {text("Archive", "أرشفة")}
               </button>
             )}
+            <CustomerEmailComposer recordType="LEAD" recordId={lead.id} recipientEmail={lead.email} canSend={canSendCustomerEmail} />
           </div>
         </div>
       </header>

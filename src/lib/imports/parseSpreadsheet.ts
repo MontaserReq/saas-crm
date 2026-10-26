@@ -4,16 +4,40 @@ import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { containsOfficeMacros, inspectZipArchive } from '@/lib/security/zip';
 
-export const SMART_IMPORT_LIMITS = {
-  maxFileBytes: Number(process.env.CRM_IMPORT_MAX_FILE_BYTES) || 5 * 1024 * 1024,
-  maxRows: Number(process.env.CRM_IMPORT_MAX_ROWS) || 2_000,
-  maxColumns: Number(process.env.CRM_IMPORT_MAX_COLUMNS) || 80,
-  maxCells: Number(process.env.CRM_IMPORT_MAX_CELLS) || 100_000,
+export type SmartImportLimits = {
+  maxFileBytes: number;
+  maxRows: number;
+  maxColumns: number;
+  maxCells: number;
+  maxCellCharacters: number;
+  maxProcessingMs: number;
+  draftRetentionHours: number;
+  resultRetentionDays: number;
+};
+
+/** Safe fallback for callers without a subscription context. */
+export const SMART_IMPORT_LIMITS: SmartImportLimits = {
+  maxFileBytes: 25 * 1024 * 1024,
+  maxRows: 10_000,
+  maxColumns: 120,
+  maxCells: 1_000_000,
   maxCellCharacters: 10_000,
-  maxProcessingMs: 10_000,
+  maxProcessingMs: 15_000,
   draftRetentionHours: 24,
   resultRetentionDays: 30,
-} as const;
+};
+
+const PLAN_IMPORT_LIMITS: Record<string, Pick<SmartImportLimits, 'maxFileBytes' | 'maxRows' | 'maxColumns' | 'maxCells' | 'maxProcessingMs'>> = {
+  starter: { maxFileBytes: 25 * 1024 * 1024, maxRows: 10_000, maxColumns: 120, maxCells: 1_000_000, maxProcessingMs: 15_000 },
+  growth: { maxFileBytes: 50 * 1024 * 1024, maxRows: 25_000, maxColumns: 160, maxCells: 2_500_000, maxProcessingMs: 20_000 },
+  scale: { maxFileBytes: 100 * 1024 * 1024, maxRows: 100_000, maxColumns: 200, maxCells: 10_000_000, maxProcessingMs: 30_000 },
+  enterprise: { maxFileBytes: 150 * 1024 * 1024, maxRows: 150_000, maxColumns: 250, maxCells: 15_000_000, maxProcessingMs: 45_000 },
+};
+
+export function resolveSmartImportLimits(planSlug?: string | null): SmartImportLimits {
+  const planLimits = PLAN_IMPORT_LIMITS[(planSlug || 'starter').trim().toLowerCase()] || PLAN_IMPORT_LIMITS.starter;
+  return { ...SMART_IMPORT_LIMITS, ...planLimits };
+}
 
 const spreadsheetMimeTypes = {
   xlsx: new Set(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']),
@@ -71,13 +95,14 @@ function readXlsxInWorker(buffer: Buffer, timeoutMs: number): Promise<ParsedXlsx
   });
 }
 
-export async function parseSpreadsheet(input: { buffer: Buffer; filename: string; mimeType?: string | null; sheetName?: string | null; processingTimeoutMs?: number }): Promise<ParsedSpreadsheet> {
-  const processingTimeoutMs = Math.max(1, Math.min(input.processingTimeoutMs ?? SMART_IMPORT_LIMITS.maxProcessingMs, SMART_IMPORT_LIMITS.maxProcessingMs));
+export async function parseSpreadsheet(input: { buffer: Buffer; filename: string; mimeType?: string | null; sheetName?: string | null; processingTimeoutMs?: number; limits?: Partial<SmartImportLimits> }): Promise<ParsedSpreadsheet> {
+  const limits: SmartImportLimits = { ...SMART_IMPORT_LIMITS, ...input.limits };
+  const processingTimeoutMs = Math.max(1, Math.min(input.processingTimeoutMs ?? limits.maxProcessingMs, limits.maxProcessingMs));
   const deadline = Date.now() + processingTimeoutMs;
   const ensureWithinDeadline = () => { if (Date.now() > deadline) throw new Error('Spreadsheet processing exceeded the safe time limit'); };
   const { buffer, filename } = input;
   if (!buffer.length) throw new Error('The selected file is empty');
-  if (buffer.length > SMART_IMPORT_LIMITS.maxFileBytes) throw new Error(`The maximum file size is ${Math.floor(SMART_IMPORT_LIMITS.maxFileBytes / 1024 / 1024)} MB`);
+  if (buffer.length > limits.maxFileBytes) throw new Error(`The maximum file size is ${Math.floor(limits.maxFileBytes / 1024 / 1024)} MB`);
   const extension = filename.split('.').pop()?.toLowerCase();
   if (!extension || !['xlsx', 'csv'].includes(extension)) throw new Error('Unsupported file type. Use .xlsx or .csv. Legacy .xls files must be saved as .xlsx or .csv before import.');
   if (input.mimeType && input.mimeType !== 'application/octet-stream' && !spreadsheetMimeTypes[extension as 'xlsx' | 'csv'].has(input.mimeType)) throw new Error('The file content type does not match its extension');
@@ -120,8 +145,8 @@ export async function parseSpreadsheet(input: { buffer: Buffer; filename: string
   if (!matrix.length || !Array.isArray(matrix[0])) throw new Error('The worksheet has no header row');
   const rawHeaders = matrix[0];
   if (!rawHeaders.length || rawHeaders.every((header) => !String(header ?? '').trim())) throw new Error('The worksheet has no named columns');
-  if (rawHeaders.length > SMART_IMPORT_LIMITS.maxColumns) throw new Error(`The worksheet exceeds ${SMART_IMPORT_LIMITS.maxColumns} columns`);
-  if (matrix.length - 1 > SMART_IMPORT_LIMITS.maxRows || matrix.length * rawHeaders.length > SMART_IMPORT_LIMITS.maxCells) throw new Error(`The worksheet exceeds the supported limit of ${SMART_IMPORT_LIMITS.maxRows} data rows`);
+  if (rawHeaders.length > limits.maxColumns) throw new Error(`The worksheet exceeds ${limits.maxColumns} columns`);
+  if (matrix.length - 1 > limits.maxRows || matrix.length * rawHeaders.length > limits.maxCells) throw new Error(`The worksheet exceeds the supported limit of ${limits.maxRows} data rows`);
 
   const seen = new Map<string, number>();
   const headers = rawHeaders.map((header, index) => {

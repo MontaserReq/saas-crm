@@ -52,6 +52,8 @@ interface MessagesClientViewProps {
   sentMessages: MessageListItem[];
   unreadCount: number;
   initialTab?: 'inbox' | 'sent';
+  canSend: boolean;
+  canDelete: boolean;
 }
 
 export const MessagesClientView: React.FC<MessagesClientViewProps> = ({
@@ -59,6 +61,8 @@ export const MessagesClientView: React.FC<MessagesClientViewProps> = ({
   sentMessages,
   unreadCount,
   initialTab = 'inbox',
+  canSend,
+  canDelete,
 }) => {
   const { t, language, direction } = useI18n();
   const { confirm } = useDialog();
@@ -95,6 +99,7 @@ export const MessagesClientView: React.FC<MessagesClientViewProps> = ({
     });
 
     if (!ok) return;
+    if (!canDelete) return;
 
     setDeletingId(messageId);
     const res = await deleteMessageFromInboxAction(messageId);
@@ -141,13 +146,15 @@ export const MessagesClientView: React.FC<MessagesClientViewProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => setIsComposeOpen(true)}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-bold text-sm rounded-xl shadow-sm hover:shadow transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/30"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{t('messages.compose')}</span>
-        </button>
+        {canSend && (
+          <button
+            onClick={() => setIsComposeOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-bold text-sm rounded-xl shadow-sm hover:shadow transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{t('messages.compose')}</span>
+          </button>
+        )}
       </div>
 
       {/* Control Bar: Tabs, Search & Unread Filter */}
@@ -240,13 +247,15 @@ export const MessagesClientView: React.FC<MessagesClientViewProps> = ({
                 ? 'يمكنك مراسلة أي فرد أو مجموعة في الفريق والإدارة بسهولة وسرية تامة.'
                 : 'Send updates, agendas, or announcements directly to team members.'}
             </p>
-            <button
-              onClick={() => setIsComposeOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{t('messages.compose')}</span>
-            </button>
+            {canSend && (
+              <button
+                onClick={() => setIsComposeOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{t('messages.compose')}</span>
+              </button>
+            )}
           </div>
         ) : (
           filteredList.map((msg) => {
@@ -349,7 +358,7 @@ export const MessagesClientView: React.FC<MessagesClientViewProps> = ({
                     {formatDate(msg.createdAt)}
                   </span>
 
-                  {activeTab === 'inbox' && (
+                  {activeTab === 'inbox' && canDelete && (
                     <button
                       type="button"
                       onClick={(e) => handleDeleteFromInbox(e, msg.id)}

@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { deleteContactAction, updateContactAction } from "@/server/actions/crm";
 import { useDialog } from "@/lib/dialog/context";
 import { useI18n } from "@/lib/i18n/context";
+import { CustomerEmailComposer } from "./CustomerEmailComposer";
 
 type ClientOption = { id: string; name: string };
 
@@ -18,12 +19,14 @@ export function Contact360View({
   clients,
   canUpdate,
   canDelete,
+  canSendCustomerEmail = false,
 }: {
   contact: any;
   timeline: any[];
   clients: ClientOption[];
   canUpdate: boolean;
   canDelete: boolean;
+  canSendCustomerEmail?: boolean;
 }) {
   const router = useRouter();
   const { confirm } = useDialog();
@@ -169,6 +172,7 @@ export function Contact360View({
                 {text("Archive", "أرشفة")}
               </button>
             )}
+            <CustomerEmailComposer recordType="CONTACT" recordId={contact.id} recipientEmail={contact.email} canSend={canSendCustomerEmail} />
           </div>
         </div>
       </header>

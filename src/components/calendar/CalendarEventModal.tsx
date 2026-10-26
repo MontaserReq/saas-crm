@@ -31,6 +31,9 @@ interface CalendarEventModalProps {
   onSuccess: (message?: string) => void;
   /** Ref to the element that opened this modal; focus is restored there on close. */
   returnFocusRef?: React.RefObject<HTMLElement | null>;
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
 }
 
 export function CalendarEventModal({
@@ -44,10 +47,14 @@ export function CalendarEventModal({
   initialClientId = "",
   onSuccess,
   returnFocusRef,
+  canCreate,
+  canUpdate,
+  canDelete,
 }: CalendarEventModalProps) {
   const { t, language, errorMessage } = useI18n();
   const { confirm } = useDialog();
   const isEditing = !!event;
+  const canSave = isEditing ? canUpdate : canCreate;
 
   // Formats date in local timezone for datetime-local input without UTC conversion drift
   const formatDateForInput = (d?: Date | string | null) => {
@@ -145,6 +152,7 @@ export function CalendarEventModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSave) return;
     if (!formData.title.trim()) {
       setError(t("calendar.titleRequired"));
       return;
@@ -216,7 +224,7 @@ export function CalendarEventModal({
   };
 
   const handleDelete = async () => {
-    if (!event) return;
+    if (!event || !canDelete) return;
     const approved = await confirm({
       title: t("calendar.deleteEvent"),
       message: t("calendar.deleteEventConfirm"),
@@ -552,7 +560,7 @@ export function CalendarEventModal({
         </div>
 
         <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
-          {isEditing ? (
+          {isEditing && canDelete ? (
             <button
               type="button"
               onClick={handleDelete}
@@ -574,20 +582,22 @@ export function CalendarEventModal({
             >
               {t("common.cancel")}
             </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 transition-all shadow-md shadow-brand-500/10 flex items-center gap-1.5"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>
-                {loading
-                  ? t("common.loading")
-                  : isEditing
-                    ? t("common.update")
-                    : t("calendar.addEvent")}
-              </span>
-            </button>
+            {canSave && (
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 transition-all shadow-md shadow-brand-500/10 flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>
+                  {loading
+                    ? t("common.loading")
+                    : isEditing
+                      ? t("common.update")
+                      : t("calendar.addEvent")}
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </form>

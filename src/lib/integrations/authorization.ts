@@ -62,7 +62,7 @@ export async function requireCurrentIntegrationAuthorization(
 
   const granted = [...activeRole.rolePermissions, ...user.userPermissions].map((item) => item.permission.code);
   const effective = isPlatformAdmin ? granted : filterPermissionsForPlan([...new Set(granted)], features);
-  if (!isPlatformAdmin && !effective.includes(PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)) {
+  if (!isPlatformAdmin && !effective.includes(PERMISSIONS.EMAIL_INTEGRATIONS_MANAGE) && !effective.includes(PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)) {
     throw new Error(INTEGRATION_AUTHORIZATION_REVOKED);
   }
 }

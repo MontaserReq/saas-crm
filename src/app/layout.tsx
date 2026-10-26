@@ -4,17 +4,38 @@ import { I18nProvider } from '@/lib/i18n/context';
 import { DialogProvider } from '@/lib/dialog/context';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import { getCurrentUser } from '@/lib/auth/session';
+import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 
+const SITE_URL = 'https://satrcrm.com';
+
 export const metadata: Metadata = {
-  title: 'CodeLine JO - CRM & Business Operations Platform',
-  description: 'An all-in-one CRM and business operations workspace for growing teams.',
+  metadataBase: new URL(SITE_URL),
+  applicationName: 'SatrCRM',
+  title: {
+    default: 'SatrCRM | CRM عربي لإدارة العملاء والمبيعات والفرق',
+    template: '%s | SatrCRM',
+  },
+  description: 'SatrCRM منصة CRM عربية وإنجليزية لإدارة العملاء وجهات الاتصال والمبيعات والمهام والتذاكر وعمل الفريق في مساحة عمل واحدة.',
+  keywords: [
+    'SatrCRM', 'CRM', 'CRM عربي', 'نظام إدارة العملاء', 'إدارة العملاء',
+    'إدارة المبيعات', 'مسارات المبيعات', 'إدارة المهام', 'تذاكر الدعم',
+    'Arabic CRM', 'CRM software', 'sales pipeline', 'customer relationship management',
+  ],
+  authors: [{ name: 'SatrCRM' }],
+  creator: 'SatrCRM',
+  publisher: 'SatrCRM',
+  manifest: '/manifest.webmanifest',
+  // Public routes override this default with indexable metadata. The default
+  // keeps authenticated and app-only routes out of search results.
+  robots: { index: false, follow: false, googleBot: { index: false, follow: false, 'max-image-preview': 'large', 'max-snippet': -1, 'max-video-preview': -1 } },
   icons: {
     icon: [
-      { url: '/branding/icons/favicon.ico' },
+      { url: '/branding/icons/favicon.ico', type: 'image/x-icon' },
       { url: '/branding/icons/app-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/branding/icons/app-512.png', sizes: '512x512', type: 'image/png' },
     ],
+    shortcut: '/branding/icons/favicon.ico',
     apple: '/branding/icons/app-180.png',
   },
 };
@@ -31,9 +52,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   const themeStorageKey = `satrcrm:theme:${preferenceScope}`;
+  const localeHeaders = await headers();
+  const locale = localeHeaders.get('x-satrcrm-locale') === 'en' ? 'en' : 'ar';
 
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning>
+    <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -43,7 +66,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </head>
       <body className="min-h-screen bg-background text-foreground dark:bg-slate-950 antialiased">
-        <GoogleAnalytics measurementId={process.env.GA_MEASUREMENT_ID} />
         <ThemeProvider
           key={themeStorageKey}
           attribute="class"
@@ -52,6 +74,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           enableSystem
         >
           <I18nProvider key={preferenceScope} preferenceScope={preferenceScope}>
+            <GoogleAnalytics measurementId={process.env.GA_MEASUREMENT_ID} />
             <DialogProvider>{children}</DialogProvider>
           </I18nProvider>
         </ThemeProvider>

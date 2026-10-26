@@ -15,7 +15,8 @@ export async function GET(request: Request) {
   let decodedCookie: string | null = null;
   try { decodedCookie = cookieValue ? decodeURIComponent(cookieValue) : null; } catch { decodedCookie = null; }
   const stateData = decodeOAuthState(decodedCookie);
-  const clearAndRedirect = (path: string) => { const response = NextResponse.redirect(new URL(path, getAppUrl())); response.cookies.delete('codeline_oauth_state'); return response; };
+  const appUrl = getAppUrl(url.origin);
+  const clearAndRedirect = (path: string) => { const response = NextResponse.redirect(new URL(path, appUrl)); response.cookies.delete('codeline_oauth_state'); return response; };
   if (url.searchParams.get('error')) return clearAndRedirect('/settings?integration=cancelled');
   if (!code || !returnedState || !stateData || returnedState !== stateData.state) return clearAndRedirect('/settings?integration=failed&reason=invalid-state');
   const user = await getCurrentUser();
@@ -23,14 +24,14 @@ export async function GET(request: Request) {
   if (stateData.userId !== user.id) return clearAndRedirect('/settings?integration=failed&reason=state-user-mismatch');
   const organizationId = user.organizationId;
   if (!organizationId || stateData.organizationId !== organizationId) return clearAndRedirect('/settings?integration=failed&reason=organization-mismatch');
-  if (!hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE) || !hasPlanFeature(user, 'integrations')) return clearAndRedirect('/settings?integration=failed&reason=forbidden');
+  if ((!hasPermission(user, PERMISSIONS.EMAIL_INTEGRATIONS_MANAGE) && !hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)) || !hasPlanFeature(user, 'integrations')) return clearAndRedirect('/settings?integration=failed&reason=forbidden');
   const provider = stateData.provider;
   const credentials = getProviderCredentials(provider);
   if (!credentials.clientId || !credentials.clientSecret) return clearAndRedirect('/settings?integration=failed&reason=not-configured');
   const tokenUrl = provider === 'google' ? 'https://oauth2.googleapis.com/token' : 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
   let tokenResponse: Response;
   try {
-    tokenResponse = await fetch(tokenUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ code, client_id: credentials.clientId || '', client_secret: credentials.clientSecret || '', redirect_uri: getRedirectUri(), grant_type: 'authorization_code' }) });
+    tokenResponse = await fetch(tokenUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ code, client_id: credentials.clientId || '', client_secret: credentials.clientSecret || '', redirect_uri: getRedirectUri(appUrl), grant_type: 'authorization_code' }) });
   } catch {
     return clearAndRedirect('/settings?integration=failed&reason=token-exchange');
   }

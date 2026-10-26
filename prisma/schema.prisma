@@ -35,58 +35,60 @@ model User {
 
   // Relations
   ticketAssignees               TicketAssignee[]
-  createdTickets                Ticket[]                   @relation("TicketCreator")
-  createdAssignments            SchoolAssignment[]         @relation("AssignmentCreator")
-  notes                         Note[]                     @relation("NoteAuthor")
-  communicationAttempts         CommunicationAttempt[]     @relation("AttemptAuthor")
-  assignmentHistoryFrom         AssignmentHistory[]        @relation("AssignFrom")
-  assignmentHistoryTo           AssignmentHistory[]        @relation("AssignTo")
-  assignmentHistoryAction       AssignmentHistory[]        @relation("AssignPerformed")
+  createdTickets                Ticket[]                    @relation("TicketCreator")
+  createdAssignments            SchoolAssignment[]          @relation("AssignmentCreator")
+  notes                         Note[]                      @relation("NoteAuthor")
+  communicationAttempts         CommunicationAttempt[]      @relation("AttemptAuthor")
+  assignmentHistoryFrom         AssignmentHistory[]         @relation("AssignFrom")
+  assignmentHistoryTo           AssignmentHistory[]         @relation("AssignTo")
+  assignmentHistoryAction       AssignmentHistory[]         @relation("AssignPerformed")
   notifications                 Notification[]
-  auditLogs                     AuditLog[]                 @relation("AuditActor")
-  activityEvents                ActivityEvent[]            @relation("ActivityActor")
-  todos                         Todo[]                     @relation("UserTodos")
-  createdSchools                School[]                   @relation("SchoolCreator")
-  responsibleSchools            School[]                   @relation("SchoolResponsible")
-  createdClients                Client[]                   @relation("ClientCreator")
-  updatedClients                Client[]                   @relation("ClientUpdater")
-  assignedLeads                 Lead[]                     @relation("LeadAssignee")
-  assignedContacts              Contact[]                  @relation("ContactAssignee")
-  ownedDeals                    Deal[]                     @relation("DealOwner")
-  createdDeals                  Deal[]                     @relation("DealCreator")
+  notificationPreference        UserNotificationPreference?
+  customerEmailsSent            CustomerEmail[]             @relation("CustomerEmailSender")
+  auditLogs                     AuditLog[]                  @relation("AuditActor")
+  activityEvents                ActivityEvent[]             @relation("ActivityActor")
+  todos                         Todo[]                      @relation("UserTodos")
+  createdSchools                School[]                    @relation("SchoolCreator")
+  responsibleSchools            School[]                    @relation("SchoolResponsible")
+  createdClients                Client[]                    @relation("ClientCreator")
+  updatedClients                Client[]                    @relation("ClientUpdater")
+  assignedLeads                 Lead[]                      @relation("LeadAssignee")
+  assignedContacts              Contact[]                   @relation("ContactAssignee")
+  ownedDeals                    Deal[]                      @relation("DealOwner")
+  createdDeals                  Deal[]                      @relation("DealCreator")
   dealAssignments               DealAssignee[]
-  ownedCrmTasks                 CrmTask[]                  @relation("CrmTaskOwner")
-  assignedCrmTasks              CrmTask[]                  @relation("CrmTaskAssignee")
-  createdCrmTasks               CrmTask[]                  @relation("CrmTaskCreator")
+  ownedCrmTasks                 CrmTask[]                   @relation("CrmTaskOwner")
+  assignedCrmTasks              CrmTask[]                   @relation("CrmTaskAssignee")
+  createdCrmTasks               CrmTask[]                   @relation("CrmTaskCreator")
   managedDepartments            DepartmentManager[]
-  sentMessages                  Message[]                  @relation("SentMessages")
-  receivedMessages              MessageRecipient[]         @relation("ReceivedMessages")
-  createdMessageGroups          MessageGroup[]             @relation("MessageGroupCreator")
+  sentMessages                  Message[]                   @relation("SentMessages")
+  receivedMessages              MessageRecipient[]          @relation("ReceivedMessages")
+  createdMessageGroups          MessageGroup[]              @relation("MessageGroupCreator")
   messageGroupMemberships       MessageGroupMember[]
   chatMemberships               ChatParticipant[]
-  sentChatMessages              ChatMessage[]              @relation("ChatMessageSender")
+  sentChatMessages              ChatMessage[]               @relation("ChatMessageSender")
   loginSessions                 LoginSession[]
   passwordResetTokens           PasswordResetToken[]
-  schoolApprovalRequests        SchoolApprovalRequest[]    @relation("SchoolApprovalRequester")
-  schoolApprovalDecisions       SchoolApprovalRequest[]    @relation("SchoolApprovalDecider")
-  ticketApprovalRequests        TicketApprovalRequest[]    @relation("TicketApprovalRequester")
-  ticketApprovalDecisions       TicketApprovalRequest[]    @relation("TicketApprovalDecider")
-  operationApprovalRequests     OperationApprovalRequest[] @relation("OperationApprovalRequester")
-  operationApprovalDecisions    OperationApprovalRequest[] @relation("OperationApprovalDecider")
-  assignedCalendarEvents        CalendarEvent[]            @relation("CalendarAssignedUser")
-  createdCalendarEvents         CalendarEvent[]            @relation("CalendarCreator")
+  schoolApprovalRequests        SchoolApprovalRequest[]     @relation("SchoolApprovalRequester")
+  schoolApprovalDecisions       SchoolApprovalRequest[]     @relation("SchoolApprovalDecider")
+  ticketApprovalRequests        TicketApprovalRequest[]     @relation("TicketApprovalRequester")
+  ticketApprovalDecisions       TicketApprovalRequest[]     @relation("TicketApprovalDecider")
+  operationApprovalRequests     OperationApprovalRequest[]  @relation("OperationApprovalRequester")
+  operationApprovalDecisions    OperationApprovalRequest[]  @relation("OperationApprovalDecider")
+  assignedCalendarEvents        CalendarEvent[]             @relation("CalendarAssignedUser")
+  createdCalendarEvents         CalendarEvent[]             @relation("CalendarCreator")
   calendarEventAssignees        CalendarEventAssignee[]
   taskTypeMemberships           TaskTypeMember[]
-  schoolResearchJobs            SchoolResearchJob[]        @relation("SchoolResearchJobCreator")
-  schoolResearchDecisions       SchoolResearchCandidate[]  @relation("SchoolResearchCandidateDecider")
+  schoolResearchJobs            SchoolResearchJob[]         @relation("SchoolResearchJobCreator")
+  schoolResearchDecisions       SchoolResearchCandidate[]   @relation("SchoolResearchCandidateDecider")
   createdMeetingDetails         MeetingDetails[]
   presence                      UserPresence?
-  createdProposals              Proposal[]                 @relation("ProposalCreator")
-  createdProposalTemplates      ProposalTemplate[]         @relation("ProposalTemplateCreator")
-  createdCustomFieldDefinitions CustomFieldDefinition[]    @relation("CustomFieldDefinitionCreatedBy")
-  updatedCustomFieldDefinitions CustomFieldDefinition[]    @relation("CustomFieldDefinitionUpdatedBy")
-  createdWorkflows              Workflow[]                 @relation("WorkflowCreatedBy")
-  updatedWorkflows              Workflow[]                 @relation("WorkflowUpdatedBy")
+  createdProposals              Proposal[]                  @relation("ProposalCreator")
+  createdProposalTemplates      ProposalTemplate[]          @relation("ProposalTemplateCreator")
+  createdCustomFieldDefinitions CustomFieldDefinition[]     @relation("CustomFieldDefinitionCreatedBy")
+  updatedCustomFieldDefinitions CustomFieldDefinition[]     @relation("CustomFieldDefinitionUpdatedBy")
+  createdWorkflows              Workflow[]                  @relation("WorkflowCreatedBy")
+  updatedWorkflows              Workflow[]                  @relation("WorkflowUpdatedBy")
 
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
@@ -143,12 +145,13 @@ model Organization {
   attachments               Attachment[]
   messageAttachments        MessageAttachment[]
   notifications             Notification[]
+  notificationPreferences   UserNotificationPreference[]
   auditLogs                 AuditLog[]
   activityEvents            ActivityEvent[]
   todos                     Todo[]
   messages                  Message[]
   messageGroups             MessageGroup[]
-  clients                   Client[]                   @relation("ClientOrganization")
+  clients                   Client[]                     @relation("ClientOrganization")
   leads                     Lead[]
   contacts                  Contact[]
   pipelines                 Pipeline[]
@@ -161,6 +164,7 @@ model Organization {
   workflowExecutions        WorkflowExecution[]
   operationExecutions       OperationExecution[]
   externalIntegrations      ExternalIntegration[]
+  customerEmails            CustomerEmail[]
   platformSubscription      PlatformSubscription?
   planUpgradeRequests       PlanUpgradeRequest[]
   platformSupportCases      PlatformSupportCase[]
@@ -243,18 +247,19 @@ model OrganizationSettings {
 }
 
 model ExternalIntegration {
-  id                    String       @id @default(cuid())
+  id                    String          @id @default(cuid())
   organizationId        String
-  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization          Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   provider              String
   accountEmail          String?
   accessTokenEncrypted  String
   refreshTokenEncrypted String?
   tokenExpiresAt        DateTime?
-  scopes                String       @default("[]")
+  scopes                String          @default("[]")
   metadata              String?
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
+  customerEmails        CustomerEmail[]
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
   @@unique([organizationId, provider])
   @@index([organizationId, provider])
@@ -531,11 +536,11 @@ model OrganizationInvite {
 }
 
 model Role {
-  id          String  @id @default(cuid())
-  name        String  @unique // Internal key. System roles keep their names; custom roles use a tenant-scoped key.
-  displayName String
-  description String?
-  isSystem    Boolean @default(false)
+  id             String        @id @default(cuid())
+  name           String        @unique // Internal key. System roles keep their names; custom roles use a tenant-scoped key.
+  displayName    String
+  description    String?
+  isSystem       Boolean       @default(false)
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
@@ -1431,23 +1436,85 @@ model CommunicationAttempt {
 }
 
 model Notification {
-  id             String        @id @default(cuid())
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  userId         String
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type           String // "TICKET_ASSIGNED", "TICKET_TRANSFERRED", "TICKET_ACCEPTED", "TICKET_REJECTED", "NEW_NOTE", "STATUS_CHANGED", "MENTION"
-  title          String
-  message        String
-  entityType     String? // "ticket", "school", "assignment", "todo"
-  entityId       String?
-  isRead         Boolean       @default(false)
-  readAt         DateTime?
+  id              String                 @id @default(cuid())
+  organizationId  String?
+  organization    Organization?          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  userId          String
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            String // "TICKET_ASSIGNED", "TICKET_TRANSFERRED", "TICKET_ACCEPTED", "TICKET_REJECTED", "NEW_NOTE", "STATUS_CHANGED", "MENTION"
+  title           String
+  message         String
+  entityType      String? // "ticket", "school", "assignment", "todo"
+  entityId        String?
+  isRead          Boolean                @default(false)
+  readAt          DateTime?
+  inAppVisible    Boolean                @default(true)
+  emailDeliveries NotificationDelivery[]
 
   createdAt DateTime @default(now())
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
+}
+
+model UserNotificationPreference {
+  id             String       @id @default(cuid())
+  userId         String       @unique
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inAppEnabled   Boolean      @default(true)
+  emailEnabled   Boolean      @default(true)
+  categories     String       @default("{}")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+model NotificationDelivery {
+  id                String       @id @default(cuid())
+  notificationId    String
+  notification      Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel           String       @default("EMAIL")
+  status            String       @default("PENDING")
+  attempts          Int          @default(0)
+  providerMessageId String?
+  lastError         String?
+  nextAttemptAt     DateTime?
+  sentAt            DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([notificationId, channel])
+  @@index([status, nextAttemptAt])
+}
+
+model CustomerEmail {
+  id                String              @id @default(cuid())
+  organizationId    String
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  senderId          String
+  sender            User                @relation("CustomerEmailSender", fields: [senderId], references: [id], onDelete: Restrict)
+  integrationId     String
+  integration       ExternalIntegration @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  provider          String
+  recipientEmail    String
+  subject           String
+  bodyText          String
+  relatedEntityType String
+  relatedEntityId   String
+  idempotencyKey    String              @unique
+  status            String              @default("PENDING")
+  providerMessageId String?
+  errorCode         String?
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, relatedEntityType, relatedEntityId])
 }
 
 model AuditLog {
@@ -1529,18 +1596,18 @@ model Message {
 }
 
 model MessageGroup {
-  id             String               @id @default(cuid())
-  organizationId String
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  description    String?
-  canMembersSend Boolean              @default(true)
-  createdById    String
-  createdBy      User                 @relation("MessageGroupCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  id               String               @id @default(cuid())
+  organizationId   String
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  canMembersSend   Boolean              @default(true)
+  createdById      String
+  createdBy        User                 @relation("MessageGroupCreator", fields: [createdById], references: [id], onDelete: Cascade)
   chatConversation ChatConversation?
-  members        MessageGroupMember[]
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  members          MessageGroupMember[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   @@unique([organizationId, name])
   @@index([organizationId, createdAt])

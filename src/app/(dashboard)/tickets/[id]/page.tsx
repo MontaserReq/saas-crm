@@ -61,9 +61,14 @@ export default async function TicketDetailsPage({ params }: { params: Promise<{ 
       schools={schools}
       taskTypes={taskTypes}
       currentUser={user}
+      canAddNote={hasPermission(user, PERMISSIONS.TICKETS_ADD_NOTE)}
+      canAcceptReject={hasPermission(user, PERMISSIONS.TICKETS_ACCEPT) && hasPermission(user, PERMISSIONS.TICKETS_REJECT)}
+      canContactAttempt={hasPermission(user, PERMISSIONS.TICKETS_CONTACT_ATTEMPT)}
+      canClose={hasPermission(user, PERMISSIONS.TICKETS_CLOSE)}
       canTransfer={hasPermission(user, PERMISSIONS.TICKETS_TRANSFER)}
       canDelete={(isPlatformSuperAdmin(user) || user.role === 'SUPER_ADMIN') && hasPermission(user, PERMISSIONS.TICKETS_DELETE)}
       canRequestEdit={hasPermission(user, PERMISSIONS.TICKETS_CORRECTION_REQUEST)}
+      canViewAll={hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)}
     />
   );
 }

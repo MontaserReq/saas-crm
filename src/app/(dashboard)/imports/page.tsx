@@ -3,6 +3,7 @@ import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import { DataImportService } from "@/server/services/DataImportService";
 import { SmartImportWizard } from "@/components/imports/SmartImportWizard";
 import { LocalizedText } from "@/components/ui/LocalizedText";
+import { resolveSmartImportLimits } from "@/lib/imports/parseSpreadsheet";
 
 export default async function ImportsPage() {
   const user = await requireAuth();
@@ -17,6 +18,7 @@ export default async function ImportsPage() {
     );
   }
   const history = await DataImportService.listHistory(user);
+  const importLimits = resolveSmartImportLimits(user.planSlug);
   return (
     <SmartImportWizard
       history={history.map((item) => ({
@@ -24,6 +26,7 @@ export default async function ImportsPage() {
         createdAt: item.createdAt.toISOString(),
         completedAt: item.completedAt?.toISOString() || null,
       }))}
+      limits={{ maxRows: importLimits.maxRows, maxFileBytes: importLimits.maxFileBytes }}
     />
   );
 }

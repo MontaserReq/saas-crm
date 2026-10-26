@@ -4,6 +4,7 @@ import Script from 'next/script';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { trackAnalyticsPageView } from '@/lib/analytics';
+import { useI18n } from '@/lib/i18n/context';
 
 const CONSENT_KEY = 'satrcrm_analytics_consent';
 type ConsentState = 'unknown' | 'granted' | 'denied';
@@ -14,6 +15,7 @@ function isValidMeasurementId(value: string) {
 
 export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
   const pathname = usePathname();
+  const { language } = useI18n();
   const [consent, setConsent] = useState<ConsentState>('unknown');
   const [mounted, setMounted] = useState(false);
 
@@ -68,6 +70,8 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
   // and avoids a hydration/flash cycle on navigation.
   if (!mounted) return null;
 
+  const isEnglish = language === 'en';
+
   return (
     <>
       {consent === 'granted' ? (
@@ -95,14 +99,18 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
 
       {consent === 'unknown' ? (
         <aside
-          dir="rtl"
+          dir={isEnglish ? 'ltr' : 'rtl'}
           className="fixed inset-x-4 bottom-4 z-[100] mx-auto flex max-w-2xl flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between"
-          aria-label="إعدادات التحليلات"
+          aria-label={isEnglish ? 'Analytics settings' : 'إعدادات التحليلات'}
         >
           <div>
-            <p className="font-bold text-slate-900 dark:text-white">تحسين تجربة SatrCRM</p>
+            <p className="font-bold text-slate-900 dark:text-white">
+              {isEnglish ? 'Improve your SatrCRM experience' : 'تحسين تجربة SatrCRM'}
+            </p>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              نستخدم Google Analytics لفهم استخدام الصفحات وتحسين النظام. لن يبدأ التتبع قبل موافقتك.
+              {isEnglish
+                ? 'We use Google Analytics to understand page usage and improve the system. Tracking will not start until you consent.'
+                : 'نستخدم Google Analytics لفهم استخدام الصفحات وتحسين النظام. لن يبدأ التتبع قبل موافقتك.'}
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -111,14 +119,14 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
               onClick={() => chooseConsent('denied')}
               className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
-              رفض
+              {isEnglish ? 'Decline' : 'رفض'}
             </button>
             <button
               type="button"
               onClick={() => chooseConsent('granted')}
               className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700"
             >
-              السماح بالتحليلات
+              {isEnglish ? 'Allow analytics' : 'السماح بالتحليلات'}
             </button>
           </div>
         </aside>

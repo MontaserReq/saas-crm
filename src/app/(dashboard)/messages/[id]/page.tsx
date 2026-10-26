@@ -21,7 +21,7 @@ export default async function MessageDetailPage({
 
   try {
     const message = await MessageService.getMessageById(user, routeParams.id);
-    return <MessageDetailView message={message} currentUserId={user.id} />;
+    return <MessageDetailView message={message} currentUserId={user.id} canSend={hasPermission(user, PERMISSIONS.MESSAGES_SEND)} />;
   } catch (err: any) {
     if (err.message === 'Message not found' || err.message.includes('Unauthorized')) {
       redirect('/messages');

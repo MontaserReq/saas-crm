@@ -40,3 +40,17 @@ export async function deletePlatformRecordAction(resource: string, id: string) {
     refresh(); return { success: true as const };
   } catch (error) { return { success: false as const, error: errorMessage(error) }; }
 }
+
+export async function activateOrganizationTrialAction(input: unknown) {
+  try {
+    const user = await requireAuth();
+    const result = await PlatformAdminService.activateTrial(user, input);
+    refresh();
+    if (typeof input === 'object' && input !== null && 'organizationId' in input && typeof input.organizationId === 'string') {
+      revalidatePath(`/admin/platform/organizations/${input.organizationId}`);
+    }
+    return { success: true as const, ...result };
+  } catch (error) {
+    return { success: false as const, error: errorMessage(error) };
+  }
+}

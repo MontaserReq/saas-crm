@@ -234,7 +234,7 @@ export function TaskTypesClientView({
             onClick={() => setFeedback(null)}
             className="text-slate-400 hover:text-slate-600 font-bold"
           >
-            Ã—
+            ×
           </button>
         </div>
       )}
@@ -292,9 +292,11 @@ export function TaskTypesClientView({
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                 {type.name}
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 min-h-[32px]">
-                {type.description || "â€”"}
-              </p>
+              {type.description?.trim() && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                  {type.description}
+                </p>
+              )}
             </div>
 
             {/* Linked Tickets Count */}

@@ -1,0 +1,21 @@
+satrcrm.com {
+  reverse_proxy app:3000
+}
+
+app.satrcrm.com {
+  reverse_proxy app:3000
+}
+
+www.satrcrm.com {
+  redir https://satrcrm.com{uri} permanent
+}
+
+# Retired legacy hostname: deliberately return 404 without redirecting or
+# proxying requests to the application.
+http://satrcrm.codelinejo.com {
+  respond "Not Found" 404
+}
+
+https://satrcrm.codelinejo.com {
+  respond "Not Found" 404
+}

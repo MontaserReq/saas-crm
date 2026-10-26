@@ -14,6 +14,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { NotificationPreferencesCard } from "./NotificationPreferencesCard";
 
 interface ProfileClientViewProps {
   user: {
@@ -28,7 +29,7 @@ interface ProfileClientViewProps {
   };
 }
 
-export function ProfileClientView({ user }: ProfileClientViewProps) {
+export function ProfileClientView({ user, notificationPreferences }: ProfileClientViewProps & { notificationPreferences: { inAppEnabled: boolean; emailEnabled: boolean; categories: Record<string, boolean> } }) {
   const { t, getRoleLabel, errorMessage } = useI18n();
   const router = useRouter();
 
@@ -200,6 +201,7 @@ export function ProfileClientView({ user }: ProfileClientViewProps) {
           </div>
         </form>
       </div>
+      <NotificationPreferencesCard initial={notificationPreferences} />
     </div>
   );
 }

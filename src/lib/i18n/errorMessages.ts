@@ -1,6 +1,13 @@
 import type { Language } from "./translations";
 
 const ARABIC_ERRORS: Array<[RegExp, string]> = [
+  [/USER_PASSWORD_PERMISSION_REQUIRED/i, "ليس لديك صلاحية تغيير كلمة مرور هذا المستخدم."],
+  [/USER_DEPARTMENT_PERMISSION_REQUIRED/i, "ليس لديك صلاحية تغيير قسم هذا المستخدم."],
+  [
+    /USER_LINKED_DATA_TRANSFER_REQUIRED/i,
+    "لا يمكن حذف المستخدم لأن لديه بيانات أو سجلات مرتبطة. انقل أعماله إلى موظف آخر أولًا، ثم أعد المحاولة. إذا بقيت سجلات تاريخية، أبقِ الحساب معطّلًا للحفاظ على السجل.",
+  ],
+  [/GOOGLE_REVIEW_PENDING|Google email sending is temporarily unavailable/i, "إرسال البريد عبر Google متوقف مؤقتًا حتى تنتهي Google من مراجعة التطبيق."],
   [
     /untrusted request origin/i,
     "عنوان الصفحة غير متطابق مع عنوان الخادم. أعد تحميل الصفحة ثم حاول رفع الشعار مرة أخرى.",
@@ -34,6 +41,11 @@ const ARABIC_ERRORS: Array<[RegExp, string]> = [
 ];
 
 const ENGLISH_ERRORS: Array<[RegExp, string]> = [
+  [
+    /USER_LINKED_DATA_TRANSFER_REQUIRED/i,
+    "This user still has linked data. Transfer the work to another employee first, then try again. If historical records remain, keep the account disabled to preserve the audit history.",
+  ],
+  [/GOOGLE_REVIEW_PENDING|Google email sending is temporarily unavailable/i, "Google email sending is temporarily paused until Google completes the app review."],
   [
     /ليس لديك صلاحية|غير مصرح/,
     "You do not have permission to perform this action.",

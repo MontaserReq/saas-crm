@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import prisma from '@/lib/db/prisma';
 import { RolesClientView } from '@/components/admin/RolesClientView';
 import { isPlatformSuperAdmin } from '@/lib/security/platform';
-import { filterPermissionsForPlan, isCompanyAssignablePermissionCode } from '@/lib/platform/entitlements';
+import { filterPermissionsForPlan, isCompanyAssignablePermissionCode, isComingSoonPermissionCode } from '@/lib/platform/entitlements';
 
 export default async function AdminRolesPage() {
   const user = (await getCurrentUser())!;
@@ -30,23 +30,30 @@ export default async function AdminRolesPage() {
   const tenantVisiblePermissions = permissions.filter(
     (permission) => isCompanyAssignablePermissionCode(permission.code),
   );
-  const rolesForView = roles.map((role) => role.name === 'SUPER_ADMIN' || (role.isSystem && role.displayName === 'Company Super Admin')
-    ? {
-        ...role,
-        // The system role is immutable, but the matrix must accurately show
-        // its effective full tenant authority even if an older database has a
-        // partial RolePermission snapshot.
-        rolePermissions: tenantVisiblePermissions.map((permission) => ({ permissionId: permission.id })),
-      }
-    : role);
+  const releasedTenantPermissions = tenantVisiblePermissions.filter(
+    (permission) => !isComingSoonPermissionCode(permission.code),
+  );
+  const lockedPermissionIds = new Set(
+    tenantVisiblePermissions
+      .filter((permission) => isComingSoonPermissionCode(permission.code))
+      .map((permission) => permission.id),
+  );
+  const rolesForView = roles.map((role) => ({
+    ...role,
+    // The system role is immutable, but the matrix must accurately show its
+    // effective tenant authority while keeping unreleased permissions locked.
+    rolePermissions: role.name === 'SUPER_ADMIN' || (role.isSystem && role.displayName === 'Company Super Admin')
+      ? releasedTenantPermissions.map((permission) => ({ permissionId: permission.id }))
+      : role.rolePermissions.filter((rolePermission: { permissionId: string }) => !lockedPermissionIds.has(rolePermission.permissionId)),
+  }));
 
   const canCreate = hasPermission(user, PERMISSIONS.ROLES_CREATE);
   const canEdit = hasPermission(user, PERMISSIONS.ROLES_UPDATE);
   const canDelete = hasPermission(user, PERMISSIONS.ROLES_DELETE);
   const availablePermissionCodes = isPlatformSuperAdmin(user)
-    ? tenantVisiblePermissions.map((permission) => permission.code)
+    ? tenantVisiblePermissions.filter((permission) => !isComingSoonPermissionCode(permission.code)).map((permission) => permission.code)
     : filterPermissionsForPlan(
-      tenantVisiblePermissions.map((permission) => permission.code),
+      tenantVisiblePermissions.filter((permission) => !isComingSoonPermissionCode(permission.code)).map((permission) => permission.code),
       user.planFeatures ?? null,
     );
 

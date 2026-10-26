@@ -4,8 +4,23 @@ export const planFeatureIds = [
   'dashboard', 'clients', 'contacts', 'leads', 'deals', 'pipelines', 'tasks', 'calendar', 'tickets',
   'proposals', 'activities', 'reports', 'team', 'audit_logs', 'messages', 'chat', 'todos', 'ai_assistant',
   'ai_research', 'workflows', 'integrations', 'custom_fields', 'import_export', 'search',
+  'email_customer_send',
 ] as const;
 export type PlanFeatureId = typeof planFeatureIds[number];
+
+// Product capabilities that are intentionally visible in the product but are
+// not released yet. Keep this centralized so the navigation, RBAC matrix and
+// server-side guards cannot drift apart.
+export const comingSoonFeatureIds = ['ai_research'] as const;
+export type ComingSoonFeatureId = typeof comingSoonFeatureIds[number];
+
+export function isFeatureComingSoon(feature: string): feature is ComingSoonFeatureId {
+  return (comingSoonFeatureIds as readonly string[]).includes(feature);
+}
+
+export function isComingSoonPermissionCode(permissionCode: string): boolean {
+  return permissionCode.startsWith('ai_research.');
+}
 
 export const planFeatureLabels: Record<PlanFeatureId, { en: string; ar: string }> = {
   dashboard: { en: 'Dashboard', ar: 'لوحة التحكم' }, clients: { en: 'Customers & companies', ar: 'العملاء والشركات' },
@@ -20,6 +35,7 @@ export const planFeatureLabels: Record<PlanFeatureId, { en: string; ar: string }
   ai_research: { en: 'AI research', ar: 'البحث الذكي' }, workflows: { en: 'Workflow automation', ar: 'أتمتة سير العمل' },
   integrations: { en: 'External integrations', ar: 'التكاملات الخارجية' }, custom_fields: { en: 'Custom fields', ar: 'الحقول المخصصة' },
   import_export: { en: 'Import, export & assignments', ar: 'الاستيراد والتصدير والتعيينات' }, search: { en: 'Global search', ar: 'البحث الشامل' },
+  email_customer_send: { en: 'Send customer emails', ar: 'إرسال رسائل البريد للعملاء' },
 };
 
 const bundles: Record<string, PlanFeatureId[]> = {
@@ -109,6 +125,9 @@ export type SubscriptionAccess = {
   startsAt: Date | null;
   endsAt: Date | null;
 };
+// Public signup keeps the existing seven-day default. Platform administrators
+// can grant a different duration to an individual company through the trial
+// activation workflow; access resolution always uses the persisted end date.
 export const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 export const TRIAL_WARNING_MS = 24 * 60 * 60 * 1000;
 export const READ_ONLY_GRACE_MS = 72 * 60 * 60 * 1000;
@@ -162,9 +181,11 @@ const permissionFeature: Array<[string, PlanFeatureId]> = [
   ['proposals.', 'proposals'], ['analytics.', 'reports'], ['reports.', 'reports'], ['audit_logs.', 'audit_logs'], ['activity.', 'activities'],
   ['messages.', 'messages'], ['chat.', 'chat'], ['todo.', 'todos'], ['ai_research.', 'ai_research'], ['ai_assistant.', 'ai_assistant'],
   ['workflows.', 'workflows'], ['custom_fields.', 'custom_fields'], ['search.', 'search'],
+  ['customer_email.', 'email_customer_send'],
+  ['email_integrations.', 'integrations'],
   ['attachments.', 'tickets'], ['communications.', 'tickets'],
 ];
-const baselinePermissionPrefixes = ['organization_settings.', 'notifications.'];
+const baselinePermissionPrefixes = ['organization_settings.', 'notifications.', 'notification_preferences.'];
 
 /**
  * Permission records are shared by a few legacy storage names. The tenant

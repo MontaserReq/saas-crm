@@ -37,6 +37,7 @@ type Analysis = {
     explanation: string;
     scores: Record<ImportDestination, number>;
   };
+  limits?: { maxRows: number; maxFileBytes: number; maxColumns?: number; maxCells?: number };
   destination: ImportDestination | null;
   fields: Record<
     ImportDestination,
@@ -132,7 +133,12 @@ const customTypes = [
   "MULTI_SELECT",
 ];
 
-export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
+function formatMegabytes(bytes: number) {
+  const megabytes = bytes / (1024 * 1024);
+  return Number.isInteger(megabytes) ? String(megabytes) : megabytes.toFixed(1);
+}
+
+export function SmartImportWizard({ history, limits }: { history: HistoryItem[]; limits: { maxRows: number; maxFileBytes: number } }) {
   const { language, direction, errorMessage } = useI18n();
   const ar = language === "ar";
   const copy = ar
@@ -140,7 +146,7 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
         title: "الاستيراد الذكي للبيانات",
         subtitle: "ارفع Excel أو CSV، راجع المطابقة، ثم أكّد قبل حفظ أي سجل.",
         upload: "اختر ملفاً",
-        drop: "XLSX أو CSV — حتى 5 ميجابايت و2,000 صف",
+        drop: "",
         destination: "الوحدة المستهدفة",
         recommend: "اقتراح النظام",
         sheet: "ورقة العمل",
@@ -201,7 +207,7 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
         subtitle:
           "Upload Excel or CSV, review every mapping, then confirm before any records are written.",
         upload: "Choose a file",
-        drop: "XLSX or CSV — up to 5 MB and 2,000 rows",
+        drop: "",
         destination: "Destination module",
         recommend: "System recommendation",
         sheet: "Worksheet",
@@ -257,6 +263,9 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
         fieldName: "Field name",
         options: "Options (comma separated)",
       };
+  const importDropCopy = ar
+    ? `XLSX أو CSV — حتى ${formatMegabytes(limits.maxFileBytes)} ميجابايت و${limits.maxRows.toLocaleString("en-US")} صف حسب باقتك`
+    : `XLSX or CSV — up to ${formatMegabytes(limits.maxFileBytes)} MB and ${limits.maxRows.toLocaleString("en-US")} rows on your plan`;
   const labels: Record<ImportDestination, string> = ar
     ? {
         CLIENT: "العملاء",
@@ -607,7 +616,7 @@ export function SmartImportWizard({ history }: { history: HistoryItem[] }) {
           <h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
             {copy.upload}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">{copy.drop}</p>
+          <p className="mt-1 text-sm text-slate-500">{importDropCopy}</p>
           <input
             ref={fileInput}
             className="sr-only"

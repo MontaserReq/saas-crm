@@ -10,4 +10,7 @@ export const WORKSPACE_OWNER_PERMISSIONS = [
   'tasks.view', 'tasks.create', 'tasks.update', 'tasks.delete',
   'proposals.view', 'proposals.create', 'proposals.update', 'proposals.delete', 'proposals.generate',
   'proposals.template.view', 'proposals.template.create', 'proposals.template.update', 'proposals.template.delete',
+  'notification_preferences.view', 'notification_preferences.manage',
+  'email_integrations.view', 'email_integrations.manage',
+  'customer_email.view', 'customer_email.send',
 ] as const;

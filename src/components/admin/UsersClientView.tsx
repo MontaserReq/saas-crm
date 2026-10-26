@@ -39,6 +39,10 @@ interface UsersClientViewProps {
   activeUserCount: number;
   userLimit: number | null;
   canCreateUser: boolean;
+  canDeleteUser: boolean;
+  canUpdateUser: boolean;
+  canUpdateDepartment: boolean;
+  canChangePassword: boolean;
 }
 
 export function UsersClientView({
@@ -49,6 +53,10 @@ export function UsersClientView({
   activeUserCount,
   userLimit,
   canCreateUser,
+  canDeleteUser,
+  canUpdateUser,
+  canUpdateDepartment,
+  canChangePassword,
 }: UsersClientViewProps) {
   const { t, language, errorMessage } = useI18n();
   const router = useRouter();
@@ -75,6 +83,7 @@ export function UsersClientView({
     if (!res.success) {
       throw new Error(errorMessage(res.error, t("admin.users.deleteFailed")));
     }
+    router.refresh();
   };
 
   const handleDisableConfirm = async () => {
@@ -244,28 +253,32 @@ export function UsersClientView({
                     </button>
 
                     {/* Edit */}
-                    <button
-                      onClick={() => {
-                        setEditingUser(u);
-                        setIsOpen(true);
-                      }}
-                      title={t("common.edit")}
-                      className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 transition-colors"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
+                    {canUpdateUser && (
+                      <button
+                        onClick={() => {
+                          setEditingUser(u);
+                          setIsOpen(true);
+                        }}
+                        title={t("common.edit")}
+                        className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
 
-                    {/* Delete / Archive */}
-                    <button
-                      onClick={() => {
-                        setDeletingUser(u);
-                        setIsDeleteOpen(true);
-                      }}
-                      title={t("common.delete")}
-                      className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Delete — only render when the actor has the explicit permission. */}
+                    {canDeleteUser && (
+                      <button
+                        onClick={() => {
+                          setDeletingUser(u);
+                          setIsDeleteOpen(true);
+                        }}
+                        title={t("common.delete")}
+                        className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </>
                 );
                 return (
@@ -398,6 +411,8 @@ export function UsersClientView({
         departments={departments}
         users={users}
         permissions={permissions}
+        canUpdateDepartment={canUpdateDepartment}
+        canChangePassword={canChangePassword}
       />
 
       <OffboardingModal

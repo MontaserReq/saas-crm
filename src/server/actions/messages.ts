@@ -240,6 +240,30 @@ export async function createMessageGroupAction(input: { name: string; descriptio
   }
 }
 
+export async function updateMessageGroupAction(groupId: string, input: { name: string; description?: string; memberIds: string[]; canMembersSend?: boolean }) {
+  try {
+    const user = await requireAuth();
+    const group = await MessageService.updateGroup(user, groupId, input);
+    revalidatePath('/messages');
+    revalidatePath('/chat');
+    return { success: true as const, group };
+  } catch (err: any) {
+    return { success: false as const, error: err.message || 'Failed to update message group' };
+  }
+}
+
+export async function deleteMessageGroupAction(groupId: string) {
+  try {
+    const user = await requireAuth();
+    await MessageService.deleteGroup(user, groupId);
+    revalidatePath('/messages');
+    revalidatePath('/chat');
+    return { success: true as const };
+  } catch (err: any) {
+    return { success: false as const, error: err.message || 'Failed to delete message group' };
+  }
+}
+
 export async function getMessageTemplatesAction() {
   try {
     const user = await requireAuth();

@@ -60,6 +60,10 @@ export default async function AdminUsersPage() {
   const userLimit = subscription?.plan.isActive ? subscription.plan.userLimit : 0;
   const canCreateUser = hasPermission(user, PERMISSIONS.USERS_CREATE)
     && (userLimit === null || activeUserCount < userLimit);
+  const canDeleteUser = hasPermission(user, PERMISSIONS.USERS_DELETE);
+  const canUpdateUser = hasPermission(user, PERMISSIONS.USERS_UPDATE);
+  const canUpdateDepartment = hasPermission(user, PERMISSIONS.USERS_UPDATE_DEPARTMENT);
+  const canChangePassword = hasPermission(user, PERMISSIONS.USERS_CHANGE_PASSWORD);
 
   return (
     <UsersClientView
@@ -70,6 +74,10 @@ export default async function AdminUsersPage() {
       activeUserCount={activeUserCount}
       userLimit={userLimit}
       canCreateUser={canCreateUser}
+      canDeleteUser={canDeleteUser}
+      canUpdateUser={canUpdateUser}
+      canUpdateDepartment={canUpdateDepartment}
+      canChangePassword={canChangePassword}
     />
   );
 }

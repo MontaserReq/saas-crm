@@ -23,6 +23,8 @@ interface UserModalProps {
   departments: any[];
   users: any[];
   permissions: any[];
+  canUpdateDepartment: boolean;
+  canChangePassword: boolean;
 }
 
 function createBlankFormData(
@@ -53,6 +55,8 @@ export function UserModal({
   departments,
   users,
   permissions,
+  canUpdateDepartment,
+  canChangePassword,
 }: UserModalProps) {
   const { t, language, errorMessage } = useI18n();
   const isEditing = !!user;
@@ -271,23 +275,25 @@ export function UserModal({
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {isEditing
-                ? t("admin.users.passwordOptional")
-                : `${t("admin.users.password")} *`}
-            </label>
-            <input
-              type="password"
-              required={!isEditing}
-              value={formData.password}
-              onChange={(e) =>
-                setFormData({ ...formData, password: e.target.value })
-              }
-              placeholder="••••••••"
-              className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:border-brand-500 focus:outline-none"
-            />
-          </div>
+          {(!isEditing || canChangePassword) && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isEditing
+                  ? t("admin.users.passwordOptional")
+                  : `${t("admin.users.password")} *`}
+              </label>
+              <input
+                type="password"
+                required={!isEditing}
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
+                placeholder="••••••••"
+                className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -319,6 +325,7 @@ export function UserModal({
                 onChange={(e) =>
                   setFormData({ ...formData, departmentId: e.target.value })
                 }
+                disabled={isEditing && !canUpdateDepartment}
                 className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:border-brand-500 focus:outline-none"
               >
                 {departments.map((d) => (

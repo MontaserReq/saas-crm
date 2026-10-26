@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Plus, UsersRound, X } from "lucide-react";
+import { Check, Edit3, Loader2, Plus, Trash2, UsersRound, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n/context";
 import {
   createMessageGroupAction,
+  deleteMessageGroupAction,
   getTeamMembersForMessaging,
+  updateMessageGroupAction,
 } from "@/server/actions/messages";
 
 type Group = {
@@ -27,12 +29,18 @@ type UserOption = {
 
 export function MessageGroupsPanel({
   groups,
+  currentUserId,
   canCreate,
+  canUpdate,
+  canDelete,
   title,
   subtitle,
 }: {
   groups: Group[];
+  currentUserId: string;
   canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
   title?: string;
   subtitle?: string;
 }) {
@@ -40,6 +48,7 @@ export function MessageGroupsPanel({
   const ar = language === "ar";
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -51,15 +60,42 @@ export function MessageGroupsPanel({
 
   const text = (en: string, arabic: string) => (ar ? arabic : en);
 
-  async function openCreate() {
-    setOpen(true);
+  async function loadUsers() {
     setError("");
-    if (users.length > 0) return;
+    if (users.length > 0) return true;
     setLoadingUsers(true);
     const result = await getTeamMembersForMessaging();
     if (result.success) setUsers(result.users || []);
     else setError(errorMessage(result.error));
     setLoadingUsers(false);
+    return result.success;
+  }
+
+  async function openCreate() {
+    setEditingGroup(null);
+    setName("");
+    setDescription("");
+    setCanMembersSend(true);
+    setSelectedIds([]);
+    setOpen(true);
+    await loadUsers();
+  }
+
+  async function openEdit(group: Group) {
+    setEditingGroup(group);
+    setName(group.name);
+    setDescription(group.description || "");
+    setCanMembersSend(group.canMembersSend);
+    setSelectedIds(group.members.map(({ user }) => user.id));
+    setOpen(true);
+    await loadUsers();
+  }
+
+  function closeModal() {
+    if (saving) return;
+    setOpen(false);
+    setEditingGroup(null);
+    setError("");
   }
 
   function toggleMember(id: string) {
@@ -70,7 +106,7 @@ export function MessageGroupsPanel({
     );
   }
 
-  async function create(event: React.FormEvent) {
+  async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (saving || name.trim().length < 2 || selectedIds.length === 0) {
       setError(
@@ -83,12 +119,10 @@ export function MessageGroupsPanel({
     }
     setSaving(true);
     setError("");
-    const result = await createMessageGroupAction({
-      name: name.trim(),
-      description: description.trim() || undefined,
-      memberIds: selectedIds,
-      canMembersSend,
-    });
+    const payload = { name: name.trim(), description: description.trim() || undefined, memberIds: selectedIds, canMembersSend };
+    const result = editingGroup
+      ? await updateMessageGroupAction(editingGroup.id, payload)
+      : await createMessageGroupAction(payload);
     if (!result.success) {
       setError(errorMessage(result.error));
       setSaving(false);
@@ -99,7 +133,25 @@ export function MessageGroupsPanel({
     setCanMembersSend(true);
     setSelectedIds([]);
     setOpen(false);
+    setEditingGroup(null);
     setSaving(false);
+    router.refresh();
+  }
+
+  async function removeGroup(group: Group) {
+    const confirmed = window.confirm(text(
+      `Delete “${group.name}”? This also removes its group conversation.`,
+      `هل تريد حذف مجموعة «${group.name}»؟ سيتم حذف محادثة المجموعة أيضًا.`,
+    ));
+    if (!confirmed || saving) return;
+    setSaving(true);
+    setError("");
+    const result = await deleteMessageGroupAction(group.id);
+    setSaving(false);
+    if (!result.success) {
+      setError(errorMessage(result.error));
+      return;
+    }
     router.refresh();
   }
 
@@ -170,6 +222,31 @@ export function MessageGroupsPanel({
                 ))}
                 {group.members.length > 5 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-slate-50 bg-white text-[10px] font-bold text-slate-500 dark:border-slate-950 dark:bg-slate-800 dark:text-slate-300">+{group.members.length - 5}</span>}
               </div>
+              {(canUpdate || canDelete || group.createdById === currentUserId) && (
+                <div className="mt-4 flex items-center justify-end gap-2 border-t border-slate-200/70 pt-3 dark:border-slate-800">
+                  {(canUpdate || group.createdById === currentUserId) && (
+                    <button
+                      type="button"
+                      onClick={() => void openEdit(group)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-white hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      {text("Edit", "تعديل")}
+                    </button>
+                  )}
+                  {(canDelete || group.createdById === currentUserId) && (
+                    <button
+                      type="button"
+                      onClick={() => void removeGroup(group)}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {text("Delete", "حذف")}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -180,12 +257,12 @@ export function MessageGroupsPanel({
           <div className="w-full max-w-xl rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-2xl" role="dialog" aria-modal="true" aria-labelledby="message-group-title">
             <div className="flex items-center justify-between border-b border-slate-100 p-5 dark:border-slate-800">
               <div>
-                <h2 id="message-group-title" className="text-lg font-extrabold text-slate-900 dark:text-white">{text("Create team group", "إنشاء مجموعة فريق")}</h2>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{text("Add the people who should join this team conversation.", "أضف الأشخاص الذين سينضمون إلى محادثة الفريق هذه.")}</p>
+                <h2 id="message-group-title" className="text-lg font-extrabold text-slate-900 dark:text-white">{editingGroup ? text("Edit team group", "تعديل مجموعة الفريق") : text("Create team group", "إنشاء مجموعة فريق")}</h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{editingGroup ? text("Update the group details, members, and sending access.", "حدّث بيانات المجموعة وأعضاءها وصلاحية الإرسال.") : text("Add the people who should join this team conversation.", "أضف الأشخاص الذين سينضمون إلى محادثة الفريق هذه.")}</p>
               </div>
-              <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800" aria-label={text("Close", "إغلاق")}><X className="h-5 w-5" /></button>
+              <button type="button" onClick={closeModal} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800" aria-label={text("Close", "إغلاق")}><X className="h-5 w-5" /></button>
             </div>
-            <form onSubmit={create} className="space-y-4 p-5">
+            <form onSubmit={submit} className="space-y-4 p-5">
               {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">{error}</p>}
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300">{text("Group name", "اسم المجموعة")}</span>
@@ -224,8 +301,8 @@ export function MessageGroupsPanel({
                 </span>
               </label>
               <div className="flex flex-wrap justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setOpen(false)} className="min-h-11 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{text("Cancel", "إلغاء")}</button>
-                <button type="submit" disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60"><Plus className="h-4 w-4" />{saving ? text("Creating...", "جارٍ الإنشاء...") : text("Create group", "إنشاء المجموعة")}</button>
+                <button type="button" onClick={closeModal} className="min-h-11 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{text("Cancel", "إلغاء")}</button>
+                <button type="submit" disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60">{editingGroup ? <Edit3 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{saving ? text(editingGroup ? "Saving..." : "Creating...", editingGroup ? "جارٍ الحفظ..." : "جارٍ الإنشاء...") : text(editingGroup ? "Save changes" : "Create group", editingGroup ? "حفظ التعديلات" : "إنشاء المجموعة")}</button>
               </div>
             </form>
           </div>

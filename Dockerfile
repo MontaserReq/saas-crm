@@ -35,13 +35,14 @@ FROM base AS builder
 
 ENV NODE_ENV=production
 # Production security configuration is validated while Next compiles the
-# instrumentation hook. These public/build-only placeholders keep the image
-# build reproducible; the runner stage does not inherit them and still requires
-# real runtime values from the deployment environment.
+# instrumentation hook. These build defaults also keep public CTA URLs pointed
+# at the real production application if a deployment does not inject build-time
+# public environment variables. Runtime secrets and configuration are still
+# injected by Compose in the runner stage.
 ENV AUTH_SECRET=build-only-placeholder-not-valid-for-runtime-use
-ENV APP_ORIGIN=https://build.invalid
-ENV APP_URL=https://build.invalid
-ENV NEXT_PUBLIC_APP_URL=https://build.invalid
+ENV APP_ORIGIN=https://app.satrcrm.com
+ENV APP_URL=https://app.satrcrm.com
+ENV NEXT_PUBLIC_APP_URL=https://app.satrcrm.com
 ENV TRUST_PROXY=single-hop
 
 COPY --from=deps /app/node_modules ./node_modules

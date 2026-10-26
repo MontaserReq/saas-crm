@@ -34,6 +34,14 @@ describe('plan feature entitlements', () => {
     expect(hasPlanFeature({ planFeatures: null }, 'workflows')).toBe(false);
     expect(isRouteIncluded('/settings/workflows', null)).toBe(false);
   });
+  it('restricts customer email sending to the explicit paid entitlement', () => {
+    const starter = expandPlanFeatures(['crm', 'tasks']);
+    const scale = expandPlanFeatures(['crm', 'tasks', 'integrations', 'email_customer_send']);
+    expect(starter).not.toContain('email_customer_send');
+    expect(scale).toContain('email_customer_send');
+    expect(filterPermissionsForPlan(['customer_email.send', 'email_integrations.manage', 'deals.view'], starter)).toEqual(['deals.view']);
+    expect(filterPermissionsForPlan(['customer_email.send', 'email_integrations.manage', 'deals.view'], scale)).toEqual(['customer_email.send', 'email_integrations.manage', 'deals.view']);
+  });
   it('grants configured features only for a valid active plan or explicit unexpired trial', () => {
     const plan = { features: JSON.stringify(['crm', 'workflows']), isActive: true };
     const now = new Date('2026-10-14T12:00:00Z');
@@ -76,6 +84,15 @@ describe('plan feature entitlements', () => {
     expect(resolveSubscriptionAccess(paid, new Date(end.getTime() + READ_ONLY_GRACE_MS - 1))).toMatchObject({ state: 'PAID_READ_ONLY_GRACE', readOnly: true });
     expect(resolveSubscriptionAccess(paid, new Date(end.getTime() + READ_ONLY_GRACE_MS))).toMatchObject({ state: 'PAID_EXPIRED', readOnly: true });
     expect(resolveSubscriptionAccess(paid, new Date(end.getTime() + READ_ONLY_GRACE_MS + 1))).toMatchObject({ state: 'PAID_EXPIRED', readOnly: true });
+  });
+
+  it('uses a company-defined trial end date while preserving the same expiry flow', () => {
+    const start = new Date('2026-10-01T00:00:00.000Z');
+    const end = new Date('2026-10-15T00:00:00.000Z');
+    const trial = { status: 'TRIAL', startsAt: start, endsAt: end, trialStartedAt: start, trialEndsAt: end, plan: { features: JSON.stringify(['crm']), isActive: true } };
+    expect(resolveSubscriptionAccess(trial, new Date('2026-10-13T23:59:59.999Z')).state).toBe('ACTIVE_TRIAL');
+    expect(resolveSubscriptionAccess(trial, end).state).toBe('TRIAL_READ_ONLY_GRACE');
+    expect(resolveSubscriptionAccess(trial, new Date(end.getTime() + READ_ONLY_GRACE_MS)).state).toBe('TRIAL_EXPIRED');
   });
 
   it('retains paid access for a cancelled subscription through its paid end date', () => {

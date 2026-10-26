@@ -1371,6 +1371,7 @@ export class TicketService {
       select: {
         id: true,
         ticketNumber: true,
+        createdById: true,
         status: true,
         schoolId: true,
         taskTypeId: true,
@@ -1388,8 +1389,13 @@ export class TicketService {
     if (ticket.status === 'CLOSED' || ticket.status === 'REJECTED') {
       throw new Error('Closed or rejected tickets cannot be edited through this workflow.');
     }
-    if (!isPlatformSuperAdmin(user) && !hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL) && ticket.assignees.length === 0) {
-      throw new Error('Forbidden: Only an active assignee can request changes to this ticket.');
+    if (
+      !isPlatformSuperAdmin(user)
+      && !hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL)
+      && ticket.createdById !== user.id
+      && ticket.assignees.length === 0
+    ) {
+      throw new Error('Forbidden: Only the ticket creator or an active assignee can request changes to this ticket.');
     }
 
     const [school, taskType] = await Promise.all([

@@ -10,9 +10,26 @@ export const EMAIL_SCOPES: Record<EmailProvider, Record<EmailScope, string>> = {
 };
 
 export function isEmailProvider(value: string | null | undefined): value is EmailProvider { return value === 'google' || value === 'microsoft'; }
-export function getAppUrl() { return (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, ''); }
-export function getRedirectUri() { return `${getAppUrl()}/api/integrations/oauth/callback`; }
+function normalizeAppUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.hostname === '0.0.0.0' || url.hostname === '::' || url.hostname === '[::]') {
+      url.protocol = 'http:';
+      url.hostname = 'localhost';
+      if (!url.port) url.port = '3000';
+    }
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+export function getAppUrl(fallback?: string) {
+  const configured = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+  return normalizeAppUrl(configured || '') || normalizeAppUrl(fallback || '') || 'http://localhost:3000';
+}
+export function getRedirectUri(baseUrl?: string) { return `${getAppUrl(baseUrl)}/api/integrations/oauth/callback`; }
 export function getProviderCredentials(provider: EmailProvider) { return provider === 'google' ? { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET } : { clientId: process.env.MICROSOFT_CLIENT_ID, clientSecret: process.env.MICROSOFT_CLIENT_SECRET }; }
+export function isGoogleIntegrationPendingReview() { return process.env.GOOGLE_EMAIL_INTEGRATION_PENDING_REVIEW === 'true'; }
 
 export function requestedScopes(provider: EmailProvider, requested: string[]) {
   const map = EMAIL_SCOPES[provider];

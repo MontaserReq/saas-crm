@@ -7,7 +7,7 @@ import { readSetupState } from '@/lib/onboarding/templates';
 import { DEFAULT_MODULES, DEFAULT_CLIENT_TYPES, DEFAULT_LEAD_STATUSES, DEFAULT_TICKET_PRIORITIES } from './OrganizationConfigService';
 import type { UserSession } from '@/types';
 import type { PlatformResource, PlatformRecord, PlatformSectionData, PlatformStats } from '@/lib/platform/types';
-import { organizationInput, userInput, planInput, subscriptionInput, integrationInput, supportInput, settingInput } from '@/lib/platform/validation';
+import { organizationInput, userInput, planInput, subscriptionInput, trialActivationInput, integrationInput, supportInput, settingInput } from '@/lib/platform/validation';
 import { areKnownPlanFeatureTokens, expandPlanFeatures, parseFeatureOverrides } from '@/lib/platform/entitlements';
 import { getPlatformDefaults } from './PlatformCatalogService';
 import { assertOrganizationUserCapacity } from '@/lib/platform/userCapacity';
@@ -29,6 +29,59 @@ async function audit(tx: Prisma.TransactionClient, user: UserSession, resource: 
 }
 
 export class PlatformAdminService {
+  static async activateTrial(user: UserSession, raw: unknown) {
+    requirePlatformAdmin(user);
+    const input = trialActivationInput.parse(raw);
+    const now = new Date();
+    const trialEndsAt = new Date(now.getTime() + input.durationDays * 24 * 60 * 60 * 1000);
+
+    return prisma.$transaction(async tx => {
+      const organization = await tx.organization.findUnique({ where: { id: input.organizationId }, select: { id: true, name: true, isActive: true } });
+      if (!organization) throw new Error('Organization not found');
+      if (!organization.isActive) throw new Error('Activate the organization before starting a trial');
+      await tx.$queryRaw`SELECT "id" FROM "Organization" WHERE "id" = ${input.organizationId} FOR UPDATE`;
+
+      const plan = await tx.platformPlan.findFirst({ where: { id: input.planId, isActive: true }, select: { id: true, name: true } });
+      if (!plan) throw new Error('Select an active plan for the trial');
+
+      const existing = await tx.platformSubscription.findUnique({ where: { organizationId: input.organizationId }, select: { id: true, status: true, endsAt: true } });
+      if (existing && ['ACTIVE', 'CANCELLED'].includes(existing.status) && (!existing.endsAt || existing.endsAt > now)) {
+        throw new Error('A paid subscription is still active for this organization');
+      }
+      await tx.planUpgradeRequest.updateMany({
+        where: { organizationId: input.organizationId, status: { in: ['PENDING_PAYMENT', 'PAYMENT_CONFIRMED'] } },
+        data: { status: 'CANCELLED', reviewedById: user.id, reviewedAt: now, reviewNote: 'Superseded by a platform-granted free trial.' },
+      });
+
+      const subscription = await tx.platformSubscription.upsert({
+        where: { organizationId: input.organizationId },
+        create: {
+          organizationId: input.organizationId,
+          planId: plan.id,
+          status: 'TRIAL',
+          billingInterval: 'monthly',
+          startsAt: now,
+          endsAt: trialEndsAt,
+          trialStartedAt: now,
+          trialEndsAt,
+          notes: `Manual trial activated for ${input.durationDays} day(s) by platform administrator`,
+        },
+        update: {
+          planId: plan.id,
+          status: 'TRIAL',
+          billingInterval: 'monthly',
+          startsAt: now,
+          endsAt: trialEndsAt,
+          trialStartedAt: now,
+          trialEndsAt,
+          notes: `Manual trial activated for ${input.durationDays} day(s) by platform administrator`,
+        },
+      });
+      await tx.auditLog.create({ data: { organizationId: organization.id, actorId: user.id, action: 'PLATFORM_TRIAL_ACTIVATED', entityType: 'PlatformSubscription', entityId: subscription.id, metadata: JSON.stringify({ organizationId: organization.id, planId: plan.id, planName: plan.name, durationDays: input.durationDays, startsAt: now.toISOString(), endsAt: trialEndsAt.toISOString(), previousStatus: existing?.status ?? null }) } });
+      return { id: subscription.id, endsAt: trialEndsAt.toISOString() };
+    }, { maxWait: 10000, timeout: 20000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
   static async stats(user: UserSession): Promise<PlatformStats> {
     requirePlatformAdmin(user);
     const [organizations, activeOrganizations, users, activeUsers, integrations, auditEvents, openTickets, supportCases, activeSubscriptions, newOrganizations] = await Promise.all([

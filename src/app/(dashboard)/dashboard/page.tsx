@@ -36,5 +36,5 @@ export default async function DashboardPage() {
     hasPermission(user, PERMISSIONS.DEALS_VIEW) || hasPermission(user, PERMISSIONS.TASKS_VIEW) || hasPermission(user, PERMISSIONS.SCHOOLS_VIEW) ? CrmWorkspaceService.dashboard(user, user.planFeatures == null ? undefined : navigationModulesForFeatures(user.planFeatures)) : Promise.resolve({ counts: { clients: 0, leads: 0, deals: 0, pipelineValue: '0', openTasks: 0, overdueTasks: 0 }, recentActivity: [], upcomingTasks: [], pipelineSummary: [] }),
   ]);
 
-  return <><CrmDashboardSummary data={crm} /><DashboardClientView user={user} data={data} schools={schools} taskTypes={taskTypes} users={users} directManager={manager ?? null} /></>;
+  return <><CrmDashboardSummary data={crm} /><DashboardClientView user={user} data={data} schools={schools} taskTypes={taskTypes} users={users} directManager={manager ?? null} canCreateTicket={hasPermission(user, PERMISSIONS.TICKETS_CREATE)} /></>;
 }

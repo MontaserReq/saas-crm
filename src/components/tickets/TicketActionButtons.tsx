@@ -27,6 +27,8 @@ interface TicketActionButtonsProps {
   };
   teamMembers: Array<{ id: string; name: string; email: string; department?: { name: string } }>;
   canAcceptReject?: boolean;
+  canContactAttempt?: boolean;
+  canClose?: boolean;
   canTransfer?: boolean;
   canDelete?: boolean;
 }
@@ -34,7 +36,9 @@ interface TicketActionButtonsProps {
 export function TicketActionButtons({
   ticket,
   teamMembers,
-  canAcceptReject = true,
+  canAcceptReject = false,
+  canContactAttempt = false,
+  canClose = false,
   canTransfer = false,
   canDelete = false,
 }: TicketActionButtonsProps) {
@@ -74,14 +78,16 @@ export function TicketActionButtons({
 
       {!isTerminal && <>
       {/* Log Contact Attempt button (available while active) */}
-      <button
-        type="button"
-        onClick={() => setIsAttemptOpen(true)}
-        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-brand-500 shadow-sm transition-colors"
-      >
-        <PhoneCall className="w-3.5 h-3.5 text-brand-600" />
-        <span>{t('tickets.logAttempt')}</span>
-      </button>
+      {canContactAttempt && (
+        <button
+          type="button"
+          onClick={() => setIsAttemptOpen(true)}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-brand-500 shadow-sm transition-colors"
+        >
+          <PhoneCall className="w-3.5 h-3.5 text-brand-600" />
+          <span>{t('tickets.logAttempt')}</span>
+        </button>
+      )}
 
       {/* Before Accept: Accept & Reject */}
       {isPendingState && canAcceptReject && (
@@ -109,7 +115,7 @@ export function TicketActionButtons({
       )}
 
       {/* After Accept: Close Ticket */}
-      {isAcceptedOrActive && (
+      {isAcceptedOrActive && canClose && (
         <button
           type="button"
           onClick={() => setIsCloseOpen(true)}

@@ -40,6 +40,7 @@ export default async function ContactPage({
       }))}
       canUpdate={hasPermission(user, PERMISSIONS.SCHOOLS_UPDATE)}
       canDelete={hasPermission(user, PERMISSIONS.SCHOOLS_DELETE)}
+      canSendCustomerEmail={Boolean(user.planFeatures?.includes('email_customer_send') && hasPermission(user, PERMISSIONS.CUSTOMER_EMAIL_SEND))}
     />
   );
 }

@@ -44,6 +44,9 @@ interface TodoItem {
 
 interface StickyNoteBoardProps {
   initialTodos: TodoItem[];
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
 }
 
 // Realistic Sticky Note Color Themes (Light & Dark mode calibrated)
@@ -160,7 +163,7 @@ const rotations = [
   "rotate-[0.9deg] sm:rotate-[1.2deg]",
 ];
 
-export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
+export function StickyNoteBoard({ initialTodos, canCreate, canUpdate, canDelete }: StickyNoteBoardProps) {
   const [todos, setTodos] = useState<TodoItem[]>(initialTodos);
   const [activeTab, setActiveTab] = useState<
     "all" | "active" | "notes" | "completed"
@@ -184,6 +187,7 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
   const { confirm } = useDialog();
 
   const handleOpenCreate = () => {
+    if (!canCreate) return;
     setEditingTodo(null);
     setTitle("");
     setDescription("");
@@ -195,6 +199,7 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
   };
 
   const handleOpenEdit = (todo: TodoItem) => {
+    if (!canUpdate) return;
     setEditingTodo(todo);
     setTitle(todo.title);
     setDescription(todo.description || "");
@@ -246,6 +251,7 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
   };
 
   const handleToggle = async (id: string) => {
+    if (!canUpdate) return;
     setTodos((prev) =>
       prev.map((tItem) =>
         tItem.id === id
@@ -261,6 +267,7 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
   };
 
   const handleChangeColor = async (id: string, newColor: TodoColor) => {
+    if (!canUpdate) return;
     setTodos((prev) =>
       prev.map((tItem) =>
         tItem.id === id ? { ...tItem, color: newColor } : tItem,
@@ -270,6 +277,7 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return;
     const ok = await confirm({
       title: t("todos.deleteTodo"),
       message: t("todos.deleteConfirm"),
@@ -331,13 +339,15 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
           </div>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-brand-900 bg-amber-300 hover:bg-amber-200 transition-all shadow-md shrink-0 relative z-10"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{t("todos.addTodo")}</span>
-        </button>
+        {canCreate && (
+          <button
+            onClick={handleOpenCreate}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-brand-900 bg-amber-300 hover:bg-amber-200 transition-all shadow-md shrink-0 relative z-10"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{t("todos.addTodo")}</span>
+          </button>
+        )}
 
         <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none" />
       </div>
@@ -481,13 +491,15 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
           <p className="text-xs text-slate-400 max-w-md mx-auto">
             {t("todos.subtitle")}
           </p>
-          <button
-            onClick={handleOpenCreate}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 transition-colors inline-flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>{t("todos.addFirst")}</span>
-          </button>
+          {canCreate && (
+            <button
+              onClick={handleOpenCreate}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 transition-colors inline-flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{t("todos.addFirst")}</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pt-2 pb-8">
@@ -515,24 +527,30 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
                       {getPriorityLabel(todo.priority)}
                     </span>
 
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit(todo)}
-                        className="p-1 rounded-md hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-slate-700 dark:text-slate-200"
-                        title={t("common.edit")}
-                      >
-                        <Edit2 className="w-3 h-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(todo.id)}
-                        className="p-1 rounded-md hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 transition-colors"
-                        title={t("common.delete")}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
+                    {(canUpdate || canDelete) && (
+                      <div className="flex items-center gap-1">
+                        {canUpdate && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(todo)}
+                            className="p-1 rounded-md hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-slate-700 dark:text-slate-200"
+                            title={t("common.edit")}
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(todo.id)}
+                            className="p-1 rounded-md hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 transition-colors"
+                            title={t("common.delete")}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Title with strike-through when completed */}
@@ -560,7 +578,7 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
                 <div className="pt-3 mt-4 border-t border-black/10 dark:border-white/10 flex flex-col gap-2">
                   {/* Quick Color Palette Dots on Hover/Focus */}
                   <div className="flex items-center justify-between opacity-70 group-hover:opacity-100 transition-opacity">
-                    <div className="flex items-center gap-1">
+                    <div className={`flex items-center gap-1 ${canUpdate ? "" : "invisible"}`}>
                       {(
                         [
                           "yellow",
@@ -613,22 +631,24 @@ export function StickyNoteBoard({ initialTodos }: StickyNoteBoardProps) {
                   </div>
 
                   {/* Complete/Reopen Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleToggle(todo.id)}
-                    className={`w-full py-1.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                      todo.isCompleted
-                        ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
-                        : "bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-inherit"
-                    }`}
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>
-                      {todo.isCompleted
-                        ? t("todos.markUndone")
-                        : t("todos.markDone")}
-                    </span>
-                  </button>
+                  {canUpdate && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggle(todo.id)}
+                      className={`w-full py-1.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                        todo.isCompleted
+                          ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                          : "bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-inherit"
+                      }`}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>
+                        {todo.isCompleted
+                          ? t("todos.markUndone")
+                          : t("todos.markDone")}
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
             );

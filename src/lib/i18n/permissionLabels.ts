@@ -29,6 +29,9 @@ const ARABIC_MODULES: Record<string, string> = {
   custom_fields: "الحقول المخصصة",
   organization_settings: "إعدادات الشركة",
   workflows: "سير العمل",
+  notification_preferences: "تفضيلات الإشعارات",
+  email_integrations: "تكاملات البريد الإلكتروني",
+  customer_email: "بريد العملاء",
 };
 
 const ARABIC_ACTIONS: Record<string, string> = {
@@ -45,6 +48,8 @@ const ARABIC_ACTIONS: Record<string, string> = {
   view_sessions: "عرض الجلسات",
   create: "إنشاء",
   update: "تعديل",
+  update_department: "تعديل القسم",
+  change_password: "تغيير كلمة المرور",
   delete: "حذف",
   disable: "تعطيل",
   enable: "تفعيل",

@@ -58,6 +58,7 @@ export default async function LeadPage({
         statuses={config.settings.leadStatuses}
         canUpdate={canUpdate}
         canDelete={hasPermission(user, PERMISSIONS.SCHOOLS_DELETE)}
+        canSendCustomerEmail={Boolean(user.planFeatures?.includes('email_customer_send') && hasPermission(user, PERMISSIONS.CUSTOMER_EMAIL_SEND))}
       />
       {canUpdate && (
         <LeadSetupFields leadId={id} fields={textFields} values={textValues} />

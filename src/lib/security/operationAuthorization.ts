@@ -80,8 +80,9 @@ export async function evaluateCurrentOperationAuthorization(
   if (!access.features.includes(input.feature)) return { allowed: false, reasonCode: 'FEATURE_NOT_INCLUDED', access };
 
   const granted = [...activeRole.rolePermissions, ...user.userPermissions].map((item) => item.permission.code);
-  const effective = isPlatformAdmin ? [...new Set(granted)] : filterPermissionsForPlan([...new Set(granted)], access.features);
-  if (!isPlatformAdmin && input.requiredPermissions.some((permission) => !effective.includes(permission))) {
+  const isCompanySuperAdmin = activeRole.name === 'SUPER_ADMIN';
+  const effective = isPlatformAdmin || isCompanySuperAdmin ? [...new Set(granted)] : filterPermissionsForPlan([...new Set(granted)], access.features);
+  if (!isPlatformAdmin && !isCompanySuperAdmin && input.requiredPermissions.some((permission) => !effective.includes(permission))) {
     return { allowed: false, reasonCode: 'PERMISSION_REVOKED', access };
   }
 

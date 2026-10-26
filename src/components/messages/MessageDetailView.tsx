@@ -55,9 +55,10 @@ interface MessageDetailProps {
     attachments: MessageAttachmentItem[];
   };
   currentUserId: string;
+  canSend: boolean;
 }
 
-export const MessageDetailView: React.FC<MessageDetailProps> = ({ message, currentUserId }) => {
+export const MessageDetailView: React.FC<MessageDetailProps> = ({ message, currentUserId, canSend }) => {
   const { t, language, direction } = useI18n();
   const isRTL = direction === 'rtl';
   const router = useRouter();
@@ -110,7 +111,7 @@ export const MessageDetailView: React.FC<MessageDetailProps> = ({ message, curre
           <span>{t('messages.backToMessages')}</span>
         </Link>
 
-        {!isCurrentSender && (
+        {!isCurrentSender && canSend && (
           <button
             onClick={() => setIsReplyOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/30"

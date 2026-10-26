@@ -1,6 +1,7 @@
 import prisma from '@/lib/db/prisma';
 import { UserSession } from '@/types';
 import { requireOrganizationId } from '@/lib/auth/organization';
+import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 
 export class ChatService {
   static async list(user: UserSession) {
@@ -28,9 +29,12 @@ export class ChatService {
   }
 
   static async group(user: UserSession, groupId: string) {
+    if (!hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_VIEW)) throw new Error('Forbidden: message group view permission required');
     const organizationId = requireOrganizationId(user);
+    const canManageAllGroups = hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_UPDATE)
+      || hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_DELETE);
     const group = await prisma.messageGroup.findFirst({
-      where: { id: groupId, organizationId, members: { some: { userId: user.id } } },
+      where: { id: groupId, organizationId, ...(canManageAllGroups ? {} : { members: { some: { userId: user.id } } }) },
       include: { members: { select: { userId: true } } },
     });
     if (!group) throw new Error('Unauthorized team group access');
@@ -40,14 +44,27 @@ export class ChatService {
       participants: { include: { user: { select: { id: true, name: true, email: true, avatar: true, isActive: true } } } },
     } as const;
     const existing = await prisma.chatConversation.findUnique({ where: { messageGroupId: groupId }, include });
-    if (existing) return existing;
+    if (existing) {
+      if (canManageAllGroups && !existing.participants.some((participant) => participant.userId === user.id)) {
+        await prisma.chatParticipant.create({ data: { conversationId: existing.id, userId: user.id } });
+        return prisma.chatConversation.findUniqueOrThrow({ where: { id: existing.id }, include });
+      }
+      return existing;
+    }
+
+    const participantIds = [
+      ...new Set([
+        ...group.members.map((member) => member.userId),
+        ...(canManageAllGroups ? [user.id] : []),
+      ]),
+    ];
 
     try {
       return await prisma.chatConversation.create({
         data: {
           organizationId,
           messageGroupId: groupId,
-          participants: { create: group.members.map((member) => ({ userId: member.userId })) },
+          participants: { create: participantIds.map((userId) => ({ userId })) },
         },
         include,
       });

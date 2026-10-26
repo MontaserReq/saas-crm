@@ -8,6 +8,9 @@ export const PERMISSIONS = {
   USERS_VIEW: 'users.view',
   USERS_CREATE: 'users.create',
   USERS_UPDATE: 'users.update',
+  USERS_UPDATE_DEPARTMENT: 'users.update_department',
+  USERS_CHANGE_PASSWORD: 'users.change_password',
+  USERS_DELETE: 'users.delete',
   USERS_DISABLE: 'users.disable',
   USERS_ENABLE: 'users.enable',
   USERS_MANAGE_PERMISSIONS: 'users.manage_permissions',
@@ -91,6 +94,14 @@ export const PERMISSIONS = {
   NOTIFICATIONS_VIEW: 'notifications.view',
   NOTIFICATIONS_MARK_READ: 'notifications.mark_read',
   NOTIFICATIONS_MARK_ALL_READ: 'notifications.mark_all_read',
+  NOTIFICATION_PREFERENCES_VIEW: 'notification_preferences.view',
+  NOTIFICATION_PREFERENCES_MANAGE: 'notification_preferences.manage',
+
+  // Organization email and customer correspondence
+  EMAIL_INTEGRATIONS_VIEW: 'email_integrations.view',
+  EMAIL_INTEGRATIONS_MANAGE: 'email_integrations.manage',
+  CUSTOMER_EMAIL_VIEW: 'customer_email.view',
+  CUSTOMER_EMAIL_SEND: 'customer_email.send',
 
   MESSAGES_VIEW: 'messages.view',
   MESSAGES_SEND: 'messages.send',

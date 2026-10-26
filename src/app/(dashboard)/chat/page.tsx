@@ -8,14 +8,20 @@ import { hasPlanFeature } from '@/lib/platform/entitlements';
 export default async function ChatPage() {
   const user = await getCurrentUser();
   if (!user || !hasPlanFeature(user, 'chat') || !hasPermission(user, PERMISSIONS.CHAT_VIEW)) return null;
-  const groups = await MessageService.listGroups(user);
+  const canViewGroups = hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_VIEW);
+  const groups = canViewGroups ? await MessageService.listGroups(user) : [];
 
   return (
     <div className="space-y-6">
-      <MessageGroupsPanel
-        groups={groups as any}
-        canCreate={hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_CREATE)}
-      />
+      {canViewGroups && (
+        <MessageGroupsPanel
+          groups={groups as any}
+          currentUserId={user.id}
+          canCreate={hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_CREATE)}
+          canUpdate={hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_UPDATE)}
+          canDelete={hasPermission(user, PERMISSIONS.MESSAGES_GROUPS_DELETE)}
+        />
+      )}
       <ChatClient currentUserId={user.id} />
     </div>
   );
