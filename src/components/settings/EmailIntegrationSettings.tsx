@@ -12,6 +12,7 @@ export function EmailIntegrationSettings({ integrations, canManage, googleApprov
   const searchParams = useSearchParams();
   const ar = language === "ar";
   const text = (en: string, arabic: string) => (ar ? arabic : en);
+  const featureUnavailable = true;
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -49,7 +50,8 @@ export function EmailIntegrationSettings({ integrations, canManage, googleApprov
   }
 
   return (
-    <section className="space-y-5 rounded-3xl border bg-white p-5 shadow-sm dark:bg-slate-900 sm:p-6">
+    <section className="relative space-y-5 overflow-hidden rounded-3xl border bg-white p-5 shadow-sm dark:bg-slate-900 sm:p-6">
+      <div className={featureUnavailable ? "pointer-events-none select-none opacity-55" : undefined}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-bold"><Mail className="h-5 w-5 text-brand-600" />{text("Organization email sending", "إرسال البريد باسم المؤسسة")}</h2>
@@ -82,6 +84,13 @@ export function EmailIntegrationSettings({ integrations, canManage, googleApprov
           </div>;
         })}
       </div>
+      </div>
+      {featureUnavailable && <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/55 p-4 backdrop-blur-[1px] dark:bg-slate-950/60">
+        <div role="status" className="flex items-center gap-3 rounded-2xl border border-violet-200 bg-white px-5 py-4 text-center shadow-lg dark:border-violet-900/70 dark:bg-slate-900">
+          <LockKeyhole className="h-5 w-5 shrink-0 text-violet-700 dark:text-violet-300" />
+          <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{text("This feature is not available yet.", "هذه الميزة غير مفعلة حاليًا.")}</span>
+        </div>
+      </div>}
     </section>
   );
 }
