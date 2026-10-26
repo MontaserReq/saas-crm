@@ -1496,8 +1496,8 @@ model CustomerEmail {
   organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   senderId          String
   sender            User                @relation("CustomerEmailSender", fields: [senderId], references: [id], onDelete: Restrict)
-  integrationId     String
-  integration       ExternalIntegration @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  integrationId     String?
+  integration       ExternalIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
   provider          String
   recipientEmail    String
   subject           String

@@ -64,6 +64,7 @@ export function EmailIntegrationSettings({ integrations, canManage, googleApprov
         {(["google", "microsoft"] as const).map((provider) => {
           const item = connected(provider);
           const approvalPending = provider === "google" && googleApprovalPending;
+          const providerUnavailable = provider === "microsoft";
           return <div key={provider} className="rounded-2xl border p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -73,8 +74,9 @@ export function EmailIntegrationSettings({ integrations, canManage, googleApprov
               {item && <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">{text("Connected", "متصل")}</span>}
             </div>
             {approvalPending && <p className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />{text("Google email sending is temporarily locked while Google reviews the app. You can still disconnect the current account.", "تم قفل إرسال البريد عبر Google مؤقتًا أثناء مراجعة التطبيق من Google. يمكنك فصل الحساب الحالي.")}</p>}
+            {providerUnavailable && <p className="mt-3 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />{text("Microsoft 365 email sending is not available yet.", "إرسال البريد عبر Microsoft 365 غير متاح حاليًا.")}</p>}
             {canManage && <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" disabled={Boolean(busy) || approvalPending} onClick={() => connect(provider)} title={approvalPending ? text("Waiting for Google verification", "بانتظار موافقة Google") : undefined} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{approvalPending ? <LockKeyhole className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}{approvalPending ? text("Waiting for approval", "بانتظار الموافقة") : item ? text("Reauthorize", "إعادة التفويض") : text("Connect", "ربط")}</button>
+              <button type="button" disabled={Boolean(busy) || approvalPending || providerUnavailable} onClick={() => connect(provider)} title={approvalPending ? text("Waiting for Google verification", "بانتظار موافقة Google") : providerUnavailable ? text("Microsoft 365 is not available yet", "Microsoft 365 غير متاح حاليًا") : undefined} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{approvalPending || providerUnavailable ? <LockKeyhole className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}{approvalPending ? text("Waiting for approval", "بانتظار الموافقة") : providerUnavailable ? text("Unavailable", "غير متاح حاليًا") : item ? text("Reauthorize", "إعادة التفويض") : text("Connect", "ربط")}</button>
               {item && <button type="button" disabled={Boolean(busy)} onClick={() => disconnect(provider)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold disabled:opacity-50"><Unplug className="h-3.5 w-3.5" />{text("Disconnect", "فصل")}</button>}
             </div>}
           </div>;

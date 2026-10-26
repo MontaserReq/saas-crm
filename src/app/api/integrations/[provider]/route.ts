@@ -51,11 +51,15 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ p
     if (existing?.provider === 'GOOGLE') {
       try {
         const token = decryptSecret(existing.accessTokenEncrypted);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3_000);
         await fetch('https://oauth2.googleapis.com/revoke', {
           method: 'POST',
           headers: { 'content-type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({ token }),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
       } catch {
         // Local deletion below remains authoritative even when provider revocation
         // is unavailable or the token has already expired.
