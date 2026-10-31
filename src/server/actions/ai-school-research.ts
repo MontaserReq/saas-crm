@@ -8,18 +8,21 @@ import { schoolResearchCandidateRejectSchema, schoolResearchCandidateBulkApprove
 import { revalidatePath } from 'next/cache';
 import { requireOrganizationId } from '@/lib/auth/organization';
 import { checkRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
-import { isFeatureComingSoon } from '@/lib/platform/entitlements';
+import { getAiResearchFeatureStatus } from '@/lib/ai/researchSettings';
 
-const AI_RESEARCH_COMING_SOON = 'البحث الذكي عن العملاء قيد التطوير وسيتوفر قريبًا.';
+const AI_RESEARCH_DISABLED = 'البحث الذكي متوقف حاليًا من إعدادات المنصة.';
 
-function comingSoonResult() {
-  return { success: false as const, error: AI_RESEARCH_COMING_SOON };
+async function unavailableResult() {
+  return (await getAiResearchFeatureStatus()) === 'OFF'
+    ? { success: false as const, error: AI_RESEARCH_DISABLED }
+    : null;
 }
 
 export async function createResearchJobAction(input: CreateResearchJobInput) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_CREATE) || !hasPermission(user, PERMISSIONS.AI_RESEARCH_RUN)) {
       return { success: false, error: 'Forbidden: Insufficient permissions to run AI School Research' };
     }
@@ -42,7 +45,8 @@ export async function createResearchJobAction(input: CreateResearchJobInput) {
 export async function getResearchJobAction(jobId: string) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW)) return { success: false, error: 'Forbidden' };
     const job = await SchoolResearchService.getJobForUser(user, jobId);
     if (!job) return { success: false, error: 'Research job not found' };
@@ -55,7 +59,8 @@ export async function getResearchJobAction(jobId: string) {
 export async function listResearchJobsAction(page = 1) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW)) return { success: false, error: 'Forbidden' };
     const result = await SchoolResearchService.listJobs(user, page);
     return { success: true, ...result };
@@ -67,7 +72,8 @@ export async function listResearchJobsAction(page = 1) {
 export async function listResearchCandidatesAction(jobId: string, filters: { status?: string; page?: number } = {}) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW)) return { success: false, error: 'Forbidden' };
     const result = await SchoolResearchService.listCandidates(user, jobId, filters);
     return { success: true, ...result };
@@ -79,7 +85,8 @@ export async function listResearchCandidatesAction(jobId: string, filters: { sta
 export async function getCandidateDetailAction(candidateId: string) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW)) return { success: false, error: 'Forbidden' };
     const candidate = await SchoolResearchService.getCandidateDetail(user, candidateId);
     if (!candidate) return { success: false, error: 'Candidate not found' };
@@ -92,7 +99,8 @@ export async function getCandidateDetailAction(candidateId: string) {
 export async function approveCandidateAction(candidateId: string) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_APPROVE)) {
       return { success: false, error: 'Forbidden: Insufficient permissions to approve candidates' };
     }
@@ -116,7 +124,8 @@ export async function approveCandidateAction(candidateId: string) {
 export async function bulkApproveCandidatesAction(candidateIds: string[]) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_APPROVE) || !hasPermission(user, PERMISSIONS.SCHOOLS_CREATE)) {
       return { success: false, error: 'Forbidden: Insufficient permissions to approve candidates' };
     }
@@ -140,7 +149,8 @@ export async function bulkApproveCandidatesAction(candidateIds: string[]) {
 export async function rejectCandidateAction(candidateId: string, reason?: string | null) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_REJECT)) {
       return { success: false, error: 'Forbidden: Insufficient permissions to reject candidates' };
     }
@@ -159,7 +169,8 @@ export async function rejectCandidateAction(candidateId: string, reason?: string
 export async function keepCandidateSeparateAction(candidateId: string) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_REJECT)) {
       return { success: false, error: 'Forbidden: Insufficient permissions' };
     }
@@ -177,7 +188,8 @@ export async function keepCandidateSeparateAction(candidateId: string) {
 export async function getJobUsageAction(jobId: string) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW)) return { success: false, error: 'Forbidden' };
     const job = await SchoolResearchService.getJobForUser(user, jobId);
     if (!job) return { success: false, error: 'Research job not found' };
@@ -192,7 +204,8 @@ export async function getJobUsageAction(jobId: string) {
 export async function getJobAttemptsAction(jobId: string) {
   try {
     const user = await requireAuth();
-    if (isFeatureComingSoon('ai_research')) return comingSoonResult();
+    const unavailable = await unavailableResult();
+    if (unavailable) return unavailable;
     if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW)) return { success: false, error: 'Forbidden' };
     const job = await SchoolResearchService.getJobForUser(user, jobId);
     if (!job) return { success: false, error: 'Research job not found' };

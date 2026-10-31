@@ -143,6 +143,12 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       show: hasPermission(user, PERMISSIONS.ANALYTICS_VIEW),
     },
     {
+      label: language === 'ar' ? 'تقرير نشاط الفريق' : 'Team activity report',
+      href: "/admin/team-activity",
+      icon: Activity,
+      show: hasPermission(user, PERMISSIONS.REPORTS_VIEW),
+    },
+    {
       label: t("nav.auditLogs"),
       href: "/admin/audit-logs",
       icon: FileSpreadsheet,
@@ -197,6 +203,7 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
     { label: t("nav.users"), href: "/admin/platform/users", icon: Users },
     { label: t("nav.roles"), href: "/admin/roles", icon: KeyRound },
     { label: labels.integrations, href: "/admin/platform/integrations", icon: Share2 },
+    { label: labels.aiResearch, href: "/admin/platform/ai-research", icon: Sparkles },
     { label: t("nav.auditLogs"), href: "/admin/audit-logs", icon: ScrollText },
     { label: labels.health, href: "/admin/platform/health", icon: Activity },
     { label: labels.support, href: "/admin/platform/support", icon: BellRing },

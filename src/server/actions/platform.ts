@@ -41,6 +41,17 @@ export async function deletePlatformRecordAction(resource: string, id: string) {
   } catch (error) { return { success: false as const, error: errorMessage(error) }; }
 }
 
+export async function saveAiResearchSettingsAction(input: unknown) {
+  try {
+    const user = await requireAuth();
+    const result = await PlatformAdminService.saveAiResearchSettings(user, input);
+    refresh();
+    return { success: true as const, settings: result };
+  } catch (error) {
+    return { success: false as const, error: errorMessage(error) };
+  }
+}
+
 export async function activateOrganizationTrialAction(input: unknown) {
   try {
     const user = await requireAuth();

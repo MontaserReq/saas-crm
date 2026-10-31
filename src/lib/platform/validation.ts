@@ -32,3 +32,14 @@ export const settingInput = z.object({ key: z.enum(settingKeys), value: text.max
   if (key === 'paid_subscription_monthly_months' || key === 'paid_subscription_annual_months') valid = /^\d+$/.test(value) && Number(value) > 0 && Number(value) <= 120;
   if (!valid) context.addIssue({ code: 'custom', path: ['value'], message: 'Invalid value for this setting' });
 });
+
+export const aiResearchSettingsInput = z.object({
+  status: z.enum(['OFF', 'BETA', 'ON']),
+  provider: z.enum(['gemini', 'groq']),
+  geminiApiKey: z.string().trim().max(500).default(''),
+  groqApiKey: z.string().trim().max(500).default(''),
+  geminiModel: text.min(1).max(120),
+  groqModel: text.min(1).max(120),
+  clearGeminiApiKey: z.boolean().default(false),
+  clearGroqApiKey: z.boolean().default(false),
+}).strict();

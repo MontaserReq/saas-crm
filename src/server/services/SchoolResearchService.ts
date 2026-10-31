@@ -5,7 +5,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { schoolResearchJobSchema } from '@/lib/validation';
 import { AuditService } from './AuditService';
 import { NotificationService } from './NotificationService';
-import { getAiProvider, getAiResearchConfig, AiNotConfiguredError, AiExtractionError, SchoolExtractionItem } from '@/lib/ai';
+import { getAiProviderFromPlatform, getAiResearchConfigFromPlatform, AiNotConfiguredError, AiExtractionError, SchoolExtractionItem } from '@/lib/ai';
 import { ResearchUsage, JobUsageSummary } from '@/lib/ai/usage';
 import { normalizeSchoolName, normalizeResearchPhone, normalizeResearchEmail, extractWebsiteDomain } from '@/lib/ai-school-research/normalize';
 import { computeConfidence, determineInitialCandidateStatus } from '@/lib/ai-school-research/confidence';
@@ -14,7 +14,7 @@ import { isValidJobTransition, ResearchJobStatus } from '@/lib/ai-school-researc
 import { requireOrganizationId, requireOrganizationIdForUserId, requireOrganizationIdValue } from '@/lib/auth/organization';
 import { acquireOperation, assertResearchJobOwner, consumeResearchBudget, finishOperation, RESOURCE_LIMITS, ResearchBudgetExceededError, StaleOperationError, withResearchJobOwner } from '@/lib/security/resourceGuard';
 import { evaluateCurrentOperationAuthorization } from '@/lib/security/operationAuthorization';
-import { isFeatureComingSoon } from '@/lib/platform/entitlements';
+import { getAiResearchFeatureStatus } from '@/lib/ai/researchSettings';
 
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_EXTRACTION_ROUNDS = 3;
@@ -59,8 +59,14 @@ export class SchoolResearchService {
 
   static async createJob(input: CreateResearchJobInput, actorId: string) {
     await this.recoverStaleExecutions();
+    if ((await getAiResearchFeatureStatus()) === 'OFF') {
+      throw new Error('AI Research is currently disabled by the platform administrator.');
+    }
     const validated = schoolResearchJobSchema.parse({ mode: 'FIND_NEW', ...input });
-    const config = getAiResearchConfig();
+    const config = await getAiResearchConfigFromPlatform();
+    if (!config.geminiApiKey && !config.groqApiKey) {
+      throw new AiNotConfiguredError('AI Research is not configured yet. Please configure a provider API key.');
+    }
 
     const requestedCount = Math.min(validated.requestedCount, config.maxSchoolsPerJob);
     const organizationId = await this.organizationForActor(actorId);
@@ -97,12 +103,12 @@ export class SchoolResearchService {
   }
 
   static async runJob(jobId: string) {
-    if (isFeatureComingSoon('ai_research')) return;
+    if ((await getAiResearchFeatureStatus()) === 'OFF') return;
     const job = await prisma.schoolResearchJob.findUnique({ where: { id: jobId } });
     if (!job || !isValidJobTransition(job.status as ResearchJobStatus, 'RUNNING')) return;
 
     const organizationId = requireOrganizationIdValue(job.organizationId);
-    const config = getAiResearchConfig();
+    const config = await getAiResearchConfigFromPlatform();
     const execution = await acquireOperation({
       organizationId,
       userId: job.createdById,
@@ -179,7 +185,7 @@ export class SchoolResearchService {
       });
     };
 
-    const provider = getAiProvider(onAttempt);
+    const provider = await getAiProviderFromPlatform(onAttempt);
     let aiCallCount = 0;
     let sourceCount = 0;
     const collected: SchoolExtractionItem[] = [];

@@ -7,10 +7,11 @@ import { readSetupState } from '@/lib/onboarding/templates';
 import { DEFAULT_MODULES, DEFAULT_CLIENT_TYPES, DEFAULT_LEAD_STATUSES, DEFAULT_TICKET_PRIORITIES } from './OrganizationConfigService';
 import type { UserSession } from '@/types';
 import type { PlatformResource, PlatformRecord, PlatformSectionData, PlatformStats } from '@/lib/platform/types';
-import { organizationInput, userInput, planInput, subscriptionInput, trialActivationInput, integrationInput, supportInput, settingInput } from '@/lib/platform/validation';
+import { organizationInput, userInput, planInput, subscriptionInput, trialActivationInput, integrationInput, supportInput, settingInput, aiResearchSettingsInput } from '@/lib/platform/validation';
 import { areKnownPlanFeatureTokens, expandPlanFeatures, parseFeatureOverrides } from '@/lib/platform/entitlements';
 import { getPlatformDefaults } from './PlatformCatalogService';
 import { assertOrganizationUserCapacity } from '@/lib/platform/userCapacity';
+import { AI_RESEARCH_CLEARED_SECRET, AI_RESEARCH_SETTING_KEYS, getAiResearchPlatformSettings } from '@/lib/ai/researchSettings';
 
 export function requirePlatformAdmin(user: UserSession) {
   if (!isPlatformSuperAdmin(user)) throw new Error('Forbidden');
@@ -29,6 +30,52 @@ async function audit(tx: Prisma.TransactionClient, user: UserSession, resource: 
 }
 
 export class PlatformAdminService {
+  static async getAiResearchSettings(user: UserSession) {
+    requirePlatformAdmin(user);
+    const settings = await getAiResearchPlatformSettings();
+    return {
+      status: settings.status,
+      provider: settings.provider,
+      geminiModel: settings.geminiModel,
+      groqModel: settings.groqModel,
+      geminiConfigured: Boolean(settings.geminiApiKey),
+      groqConfigured: Boolean(settings.groqApiKey),
+    };
+  }
+
+  static async saveAiResearchSettings(user: UserSession, raw: unknown) {
+    requirePlatformAdmin(user);
+    const input = aiResearchSettingsInput.parse(raw);
+
+    await prisma.$transaction(async (tx) => {
+      const upsert = (key: string, value: string) => tx.platformSetting.upsert({
+        where: { key },
+        create: { key, value },
+        update: { value },
+      });
+
+      await upsert('ai_research_status', input.status);
+      await upsert('ai_research_provider', input.provider);
+      await upsert('ai_research_gemini_model', input.geminiModel);
+      await upsert('ai_research_groq_model', input.groqModel);
+
+      if (input.clearGeminiApiKey) await upsert('ai_research_gemini_api_key', AI_RESEARCH_CLEARED_SECRET);
+      else if (input.geminiApiKey) await upsert('ai_research_gemini_api_key', encryptSecret(input.geminiApiKey));
+
+      if (input.clearGroqApiKey) await upsert('ai_research_groq_api_key', AI_RESEARCH_CLEARED_SECRET);
+      else if (input.groqApiKey) await upsert('ai_research_groq_api_key', encryptSecret(input.groqApiKey));
+
+      await audit(tx, user, 'ai_research', 'global', 'updated', {
+        status: input.status,
+        provider: input.provider,
+        geminiKeyUpdated: Boolean(input.geminiApiKey) || input.clearGeminiApiKey,
+        groqKeyUpdated: Boolean(input.groqApiKey) || input.clearGroqApiKey,
+      });
+    }, { maxWait: 10000, timeout: 20000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    return this.getAiResearchSettings(user);
+  }
+
   static async activateTrial(user: UserSession, raw: unknown) {
     requirePlatformAdmin(user);
     const input = trialActivationInput.parse(raw);
@@ -141,7 +188,7 @@ export class PlatformAdminService {
           total = count; records = rows.map(row => ({ id: row.id, organizationId: row.organizationId, organizationName: row.organization?.name ?? '', subject: row.subject, description: row.description, contactEmail: row.contactEmail, status: row.status, priority: row.priority, resolution: row.resolution, createdAt: iso(row.createdAt) })); break;
         }
         case 'settings': {
-          const where = q ? { key: contains(q) } : {};
+          const where = { AND: [{ key: { notIn: [...AI_RESEARCH_SETTING_KEYS] } }, ...(q ? [{ key: contains(q) }] : [])] };
           const [count, rows] = await Promise.all([prisma.platformSetting.count({ where }), prisma.platformSetting.findMany({ where, ...pagination, orderBy: { key: 'asc' } })]);
           total = count; records = rows.map(row => ({ id: row.id, key: row.key, value: row.value, updatedAt: iso(row.updatedAt) })); break;
         }

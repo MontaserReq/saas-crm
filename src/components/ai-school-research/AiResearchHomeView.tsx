@@ -8,6 +8,7 @@ import { Sparkles, Plus, MapPin, ChevronRight, AlertTriangle, ChevronLeft } from
 import { ResearchForm } from './ResearchForm';
 import { JobStatusBadge } from './StatusBadge';
 import { formatNumber } from '@/lib/formatters';
+import type { AiResearchStatus } from '@/lib/ai/researchSettings';
 
 interface JobRow {
   id: string;
@@ -28,9 +29,10 @@ interface AiResearchHomeViewProps {
   canCreate: boolean;
   isConfigured: boolean;
   maxSchoolsPerJob: number;
+  status?: AiResearchStatus;
 }
 
-export function AiResearchHomeView({ jobs, total, page, totalPages, canCreate, isConfigured, maxSchoolsPerJob }: AiResearchHomeViewProps) {
+export function AiResearchHomeView({ jobs, total, page, totalPages, canCreate, isConfigured, maxSchoolsPerJob, status = 'ON' }: AiResearchHomeViewProps) {
   const { t, language } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -54,7 +56,10 @@ export function AiResearchHomeView({ jobs, total, page, totalPages, canCreate, i
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('aiResearch.title')}</h1>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">{t('aiResearch.subtitle')}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">{t('aiResearch.subtitle')}</p>
+              {status === 'BETA' && <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{language === 'ar' ? 'نسخة تجريبية' : 'Beta'}</span>}
+            </div>
           </div>
         </div>
         {canCreate && (

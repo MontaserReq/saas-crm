@@ -13,6 +13,7 @@ import {
   LifeBuoy,
   PlugZap,
   ShieldCheck,
+  Sparkles,
   Users,
 } from "lucide-react";
 import {
@@ -164,6 +165,12 @@ export function PlatformSuperAdminDashboard({
         ? "حالة ربط Google وMicrosoft وSMTP"
         : "Google, Microsoft, and SMTP status",
       PlugZap,
+    ],
+    [
+      "/admin/platform/ai-research",
+      ar ? "إعدادات البحث الذكي" : "Smart research",
+      ar ? "مفاتيح المزود وحالة الميزة" : "Provider keys and feature state",
+      Sparkles,
     ],
     [
       "/admin/platform/health",

@@ -52,3 +52,18 @@ export function getAiResearchConfig(): AiResearchConfig {
     maxDurationMs: parsePositiveInt(process.env.AI_RESEARCH_MAX_DURATION_MS, 15 * 60 * 1000),
   };
 }
+
+/** Resolve environment defaults plus the Platform Admin's persisted settings. */
+export async function getAiResearchConfigFromPlatform(): Promise<AiResearchConfig> {
+  const environmentConfig = getAiResearchConfig();
+  const { getAiResearchPlatformSettings } = await import('./researchSettings');
+  const platform = await getAiResearchPlatformSettings();
+  return {
+    ...environmentConfig,
+    aiProvider: platform.provider,
+    geminiApiKey: platform.geminiApiKey,
+    geminiModel: platform.geminiModel,
+    groqApiKey: platform.groqApiKey,
+    groqModel: platform.groqModel,
+  };
+}

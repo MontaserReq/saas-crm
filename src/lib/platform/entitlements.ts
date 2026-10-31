@@ -9,9 +9,9 @@ export const planFeatureIds = [
 export type PlanFeatureId = typeof planFeatureIds[number];
 
 // Product capabilities that are intentionally visible in the product but are
-// not released yet. Keep this centralized so the navigation, RBAC matrix and
-// server-side guards cannot drift apart.
-export const comingSoonFeatureIds = ['ai_research'] as const;
+// not released yet. AI Research is no longer static here; Platform Admin
+// controls its OFF/BETA/ON state through persisted platform settings.
+export const comingSoonFeatureIds = [] as const;
 export type ComingSoonFeatureId = typeof comingSoonFeatureIds[number];
 
 export function isFeatureComingSoon(feature: string): feature is ComingSoonFeatureId {
@@ -212,7 +212,7 @@ export function filterPermissionsForPlan(permissions: readonly string[], feature
 
 const routeFeatures: Array<[string, PlanFeatureId]> = [
   ['/settings/workflows', 'workflows'], ['/settings/message-templates', 'messages'], ['/settings/ticket-priorities', 'tickets'],
-  ['/admin/approval-requests', 'team'], ['/admin/analytics', 'reports'], ['/admin/audit-logs', 'audit_logs'], ['/admin/users', 'team'], ['/admin/roles', 'team'], ['/admin/departments', 'team'], ['/admin/task-types', 'team'],
+  ['/admin/approval-requests', 'team'], ['/admin/analytics', 'reports'], ['/admin/team-activity', 'reports'], ['/admin/audit-logs', 'audit_logs'], ['/admin/users', 'team'], ['/admin/roles', 'team'], ['/admin/departments', 'team'], ['/admin/task-types', 'team'],
   ['/ai-school-research', 'ai_research'], ['/assignments', 'import_export'], ['/schools', 'import_export'], ['/imports', 'import_export'], ['/clients', 'clients'], ['/contacts', 'contacts'], ['/leads', 'leads'], ['/deals', 'deals'], ['/pipelines', 'pipelines'], ['/tasks', 'tasks'], ['/calendar', 'calendar'], ['/tickets', 'tickets'], ['/proposals', 'proposals'], ['/activity', 'activities'], ['/messages', 'messages'], ['/chat', 'chat'], ['/todos', 'todos'],
 ];
 export function featureForRoute(pathname: string): PlanFeatureId | null {

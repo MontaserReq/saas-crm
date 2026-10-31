@@ -2,11 +2,13 @@ import { AiProvider } from './types';
 import { GeminiProvider } from './GeminiProvider';
 import { GroqProvider } from './GroqProvider';
 import { createFallbackProvider } from './FallbackAiProvider';
-import { getAiResearchConfig } from './config';
+import { getAiResearchConfig, getAiResearchConfigFromPlatform } from './config';
+import type { AiResearchConfig } from './config';
 import { OnAttemptCallback } from './usage';
 
 export * from './types';
 export { getAiResearchConfig } from './config';
+export { getAiResearchConfigFromPlatform } from './config';
 export type { AiProviderName, AiResearchConfig } from './config';
 export { GeminiProvider } from './GeminiProvider';
 export { GroqProvider } from './GroqProvider';
@@ -26,8 +28,8 @@ export { sanitizeErrorMessage } from './usage';
  *   The callback must never throw — any errors it raises are silently swallowed
  *   by the provider to protect research results.
  */
-export function getAiProvider(onAttempt?: OnAttemptCallback): AiProvider {
-  const config = getAiResearchConfig();
+export function getAiProvider(onAttempt?: OnAttemptCallback, overrideConfig?: AiResearchConfig): AiProvider {
+  const config = overrideConfig || getAiResearchConfig();
 
   if (config.aiProvider === 'groq') {
     const groq = new GroqProvider(config, undefined, onAttempt);
@@ -36,4 +38,8 @@ export function getAiProvider(onAttempt?: OnAttemptCallback): AiProvider {
   }
 
   return new GeminiProvider(config, onAttempt, false);
+}
+
+export async function getAiProviderFromPlatform(onAttempt?: OnAttemptCallback): Promise<AiProvider> {
+  return getAiProvider(onAttempt, await getAiResearchConfigFromPlatform());
 }
