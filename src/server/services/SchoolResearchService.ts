@@ -64,10 +64,6 @@ export class SchoolResearchService {
     }
     const validated = schoolResearchJobSchema.parse({ mode: 'FIND_NEW', ...input });
     const config = await getAiResearchConfigFromPlatform();
-    if (!config.geminiApiKey && !config.groqApiKey) {
-      throw new AiNotConfiguredError('AI Research is not configured yet. Please configure a provider API key.');
-    }
-
     const requestedCount = Math.min(validated.requestedCount, config.maxSchoolsPerJob);
     const organizationId = await this.organizationForActor(actorId);
 
