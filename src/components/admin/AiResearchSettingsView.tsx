@@ -45,6 +45,13 @@ export function AiResearchSettingsView({ settings }: { settings: Settings }) {
   const inputClass = "mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white";
 
   const update = (id: string, patch: Partial<DraftProvider>) => setProviders((current) => current.map((provider) => provider.id === id ? { ...provider, ...patch } : provider));
+  const setEnabled = (id: string, enabled: boolean) => {
+    update(id, { enabled });
+    if (!enabled && activeProviderId === id) {
+      const next = providers.find((provider) => provider.id !== id && provider.enabled);
+      if (next) setActiveProviderId(next.id);
+    }
+  };
 
   function addProvider() {
     const id = `provider-${Date.now()}`;
@@ -123,8 +130,8 @@ export function AiResearchSettingsView({ settings }: { settings: Settings }) {
           {providers.map((provider) => (
             <article key={provider.id} className={`rounded-2xl border p-5 ${provider.enabled ? "border-slate-200 dark:border-slate-700" : "border-dashed border-slate-300 opacity-70 dark:border-slate-700"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <label className="flex items-center gap-3 text-sm font-bold"><input type="radio" name="activeProvider" checked={activeProviderId === provider.id} onChange={() => setActiveProviderId(provider.id)} />{ar ? "المزود الأساسي" : "Primary provider"}</label>
-                <div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={provider.enabled} onChange={(event) => update(provider.id, { enabled: event.target.checked })} /><Power className="h-4 w-4" />{provider.enabled ? (ar ? "مفعّل" : "Enabled") : (ar ? "متوقف" : "Disabled")}</label><button type="button" onClick={() => removeProvider(provider.id)} disabled={providers.length <= 1} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-30" aria-label={ar ? "حذف المزود" : "Delete provider"}><Trash2 className="h-4 w-4" /></button></div>
+                <label className="flex items-center gap-3 text-sm font-bold"><input type="radio" name="activeProvider" disabled={!provider.enabled} checked={activeProviderId === provider.id} onChange={() => setActiveProviderId(provider.id)} />{ar ? "المزود الأساسي" : "Primary provider"}</label>
+                <div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={provider.enabled} onChange={(event) => setEnabled(provider.id, event.target.checked)} /><Power className="h-4 w-4" />{provider.enabled ? (ar ? "مفعّل" : "Enabled") : (ar ? "متوقف" : "Disabled")}</label><button type="button" onClick={() => removeProvider(provider.id)} disabled={providers.length <= 1} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-30" aria-label={ar ? "حذف المزود" : "Delete provider"}><Trash2 className="h-4 w-4" /></button></div>
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <label className="text-sm font-semibold">{ar ? "الاسم" : "Name"}<input className={inputClass} value={provider.name} onChange={(event) => update(provider.id, { name: event.target.value })} /></label>
