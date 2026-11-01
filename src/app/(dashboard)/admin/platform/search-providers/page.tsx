@@ -8,5 +8,5 @@ export default async function PlatformSearchProvidersPage() {
   const user = await getCurrentUser();
   if (!user || !isPlatformSuperAdmin(user)) redirect('/dashboard');
   const [settings, usage] = await Promise.all([PlatformAdminService.getSearchProviderSettings(user), PlatformAdminService.getSearchProviderUsage(user)]);
-  return <SearchProviderSettingsView language="en" settings={settings} usage={usage} />;
+  return <SearchProviderSettingsView settings={settings} usage={usage} />;
 }
