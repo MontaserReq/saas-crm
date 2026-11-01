@@ -176,6 +176,7 @@ model Organization {
   leadDiscoveryJobs         LeadDiscoveryJob[]
   leadDiscoveryImports      LeadDiscoveryImport[]
   aiGatewayUsageLogs        AiGatewayUsageLog[]          @relation("AiGatewayUsageOrganization")
+  aiProviders               OrganizationAiProvider[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -402,6 +403,32 @@ model AiGatewayUsageLog {
   @@index([organizationId, createdAt])
   @@index([organizationId, providerId, status])
   @@index([userId])
+}
+
+model OrganizationAiProvider {
+  id                     String       @id @default(cuid())
+  organizationId         String
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                   String
+  kind                   String
+  baseUrl                String       @default("")
+  model                  String
+  apiKeyEncrypted        String
+  customHeadersEncrypted String?
+  organizationRef        String?
+  timeoutMs              Int          @default(45000)
+  maxOutputTokens        Int          @default(4096)
+  temperature            Float        @default(0.2)
+  capabilities           String       @default("[]")
+  featureKeys            String       @default("[]")
+  enabled                Boolean      @default(true)
+  isDefault              Boolean      @default(false)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, enabled])
+  @@index([organizationId, isDefault])
 }
 
 model CustomFieldDefinition {

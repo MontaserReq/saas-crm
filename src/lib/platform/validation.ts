@@ -88,3 +88,25 @@ export const searchProviderSettingsInput = z.object({
   if (value.activeProviderId && !ids.includes(value.activeProviderId)) context.addIssue({ code: 'custom', path: ['activeProviderId'], message: 'Select an existing provider' });
   for (const providerId of value.fallbackProviderIds) if (!ids.includes(providerId)) context.addIssue({ code: 'custom', path: ['fallbackProviderIds'], message: 'Select existing fallback providers' });
 });
+
+export const organizationAiProviderInput = z.object({
+  id: text.max(100).default('').transform(value => value || null),
+  name: text.min(2).max(120),
+  kind: z.enum(['gemini', 'groq', 'openai-compatible', 'openai-responses', 'anthropic', 'custom-http']),
+  baseUrl: text.max(500).default(''),
+  model: text.min(1).max(160),
+  organizationRef: text.max(200).default(''),
+  timeoutMs: z.number().int().min(5000).max(120000).default(45000),
+  maxOutputTokens: z.number().int().min(1).max(32768).default(4096),
+  temperature: z.number().min(0).max(2).default(0.2),
+  capabilities: z.array(z.enum(aiProviderCapabilities)).max(20).default([]),
+  featureKeys: z.array(z.string().trim().min(1).max(80)).max(10).default([]),
+  apiKey: z.string().trim().max(2000).default(''),
+  clearApiKey: z.boolean().default(false),
+  customHeadersJson: z.string().trim().max(12000).default(''),
+  clearCustomHeaders: z.boolean().default(false),
+  enabled: z.boolean().default(true),
+  isDefault: z.boolean().default(false),
+}).strict().superRefine((value, context) => {
+  if (['openai-compatible', 'openai-responses', 'anthropic', 'custom-http'].includes(value.kind) && !value.baseUrl) context.addIssue({ code: 'custom', path: ['baseUrl'], message: 'Base URL is required for this provider adapter' });
+});

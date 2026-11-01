@@ -386,7 +386,7 @@ export class UniversalAiGateway {
 
   static async generate(request: AiGatewayRequest): Promise<AiGatewayResponse> {
     const startedAt = performance.now();
-    const settings = await getAiResearchPlatformSettings();
+    const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const requiredCapabilities = [...new Set([...(request.requiredCapabilities || []), ...(request.tools?.length ? ['tools'] : [])])];
     const primary = selectProvider(settings, requestedProviderId, requiredCapabilities);
@@ -425,7 +425,7 @@ export class UniversalAiGateway {
 
   static async *stream(request: AiGatewayRequest): AsyncGenerator<AiGatewayStreamChunk> {
     const startedAt = performance.now();
-    const settings = await getAiResearchPlatformSettings();
+    const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const requiredCapabilities = [...new Set([...(request.requiredCapabilities || []), 'streaming'])];
     const primary = selectProvider(settings, requestedProviderId, requiredCapabilities);
@@ -453,7 +453,7 @@ export class UniversalAiGateway {
 
   static async getEmbeddings(request: AiEmbeddingRequest): Promise<AiEmbeddingResponse> {
     const startedAt = performance.now();
-    const settings = await getAiResearchPlatformSettings();
+    const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const requiredCapabilities = ['embeddings'];
     const primary = selectProvider(settings, requestedProviderId, requiredCapabilities);

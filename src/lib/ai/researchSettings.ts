@@ -25,6 +25,8 @@ export type AiResearchProviderConfig = {
   inputCostPerMillionUsd?: number;
   outputCostPerMillionUsd?: number;
   capabilities?: AiProviderCapability[];
+  featureKeys?: string[];
+  scope?: 'platform' | 'organization';
   metadata?: Record<string, unknown>;
   apiKey: string | null;
   enabled: boolean;
@@ -161,7 +163,7 @@ function parseStoredProviders(raw: string | undefined): AiResearchProviderConfig
  * compatibility fallback for existing deployments; Platform Admin settings
  * override them once saved.
  */
-export async function getAiResearchPlatformSettings(): Promise<AiResearchPlatformSettings> {
+export async function getAiResearchPlatformSettings(organizationId?: string): Promise<AiResearchPlatformSettings> {
   const fallbackStatus = process.env.NODE_ENV === 'test' ? 'ON' : 'OFF';
   let rows: Array<{ key: string; value: string }> = [];
   try {
@@ -177,9 +179,26 @@ export async function getAiResearchPlatformSettings(): Promise<AiResearchPlatfor
   const values = new Map(rows.map((row) => [row.key, row.value]));
   const configuredStatus = values.get('ai_research_status') || process.env.AI_RESEARCH_STATUS;
   const configuredProvider = values.get('ai_research_provider') || process.env.AI_PROVIDER;
-  const providers = parseStoredProviders(values.get(AI_RESEARCH_PROVIDERS_SETTING_KEY)) || legacyProviders(values);
-  const requestedActiveId = values.get(AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY)
+  const platformProviders = parseStoredProviders(values.get(AI_RESEARCH_PROVIDERS_SETTING_KEY)) || legacyProviders(values);
+  let organizationRows: Array<{ id: string; name: string; kind: string; baseUrl: string; model: string; apiKeyEncrypted: string; customHeadersEncrypted: string | null; organizationRef: string | null; timeoutMs: number; maxOutputTokens: number; temperature: number; capabilities: string; featureKeys: string; enabled: boolean; isDefault: boolean }> = [];
+  if (organizationId) {
+    try {
+      organizationRows = await prisma.organizationAiProvider.findMany({ where: { organizationId }, orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }], select: { id: true, name: true, kind: true, baseUrl: true, model: true, apiKeyEncrypted: true, customHeadersEncrypted: true, organizationRef: true, timeoutMs: true, maxOutputTokens: true, temperature: true, capabilities: true, featureKeys: true, enabled: true, isDefault: true } });
+    } catch { /* Older installations use platform-only resolution until migrated. */ }
+  }
+  const organizationProviders = organizationRows.flatMap((row) => {
+    if (!validKind(row.kind)) return [];
+    let capabilities: AiProviderCapability[] = [];
+    let featureKeys: string[] = [];
+    try { const parsed = JSON.parse(row.capabilities); if (Array.isArray(parsed)) capabilities = parsed.filter((value): value is AiProviderCapability => AI_PROVIDER_CAPABILITIES.includes(value as AiProviderCapability)); } catch { /* empty */ }
+    try { const parsed = JSON.parse(row.featureKeys); if (Array.isArray(parsed)) featureKeys = parsed.filter((value): value is string => typeof value === 'string'); } catch { /* empty */ }
+    return [{ id: row.id, name: row.name, kind: row.kind, baseUrl: row.baseUrl, model: row.model, organizationId: row.organizationRef || undefined, customHeaders: readJsonSecret(row.customHeadersEncrypted || undefined), timeoutMs: row.timeoutMs, maxOutputTokens: row.maxOutputTokens, temperature: row.temperature, capabilities, featureKeys, scope: 'organization' as const, apiKey: readSecret(row.apiKeyEncrypted, undefined), enabled: row.enabled } satisfies AiResearchProviderConfig];
+  });
+  const providers = [...organizationProviders, ...platformProviders];
+  const platformRequestedActiveId = values.get(AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY)
     || (configuredProvider === 'groq' ? 'groq' : configuredProvider === 'gemini' ? 'gemini' : providers[0]?.id || null);
+  const organizationDefault = organizationProviders.find((provider) => provider.enabled && provider.apiKey && organizationRows.find((row) => row.id === provider.id)?.isDefault);
+  const requestedActiveId = organizationDefault?.id || platformRequestedActiveId;
   const activeProvider = providers.find((provider) => provider.id === requestedActiveId) || null;
   let featureProviderIds: Record<string, string> = {};
   try {
@@ -196,6 +215,7 @@ export async function getAiResearchPlatformSettings(): Promise<AiResearchPlatfor
     const parsed = JSON.parse(values.get('ai_fallback_providers') || '[]');
     if (Array.isArray(parsed)) fallbackProviderIds = parsed.filter((value): value is string => typeof value === 'string');
   } catch { /* use no explicit fallbacks */ }
+  for (const provider of organizationProviders) for (const feature of provider.featureKeys || []) if (provider.enabled && provider.apiKey) featureProviderIds[feature] = provider.id;
 
   return {
     status: validStatus(configuredStatus) ? configuredStatus : fallbackStatus,
