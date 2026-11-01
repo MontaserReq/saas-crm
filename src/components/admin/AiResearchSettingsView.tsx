@@ -20,6 +20,7 @@ type Settings = {
   status: "OFF" | "BETA" | "ON";
   activeProviderId: string | null;
   featureProviderIds: Record<string, string>;
+  fallbackProviderIds: string[];
   providers: ProviderView[];
 };
 
@@ -35,6 +36,7 @@ export function AiResearchSettingsView({ settings }: { settings: Settings }) {
   const [status, setStatus] = useState(settings.status);
   const [activeProviderId, setActiveProviderId] = useState(settings.activeProviderId || settings.providers[0]?.id || "");
   const [featureProviderIds, setFeatureProviderIds] = useState(settings.featureProviderIds || {});
+  const [fallbackProviderIds, setFallbackProviderIds] = useState(settings.fallbackProviderIds || []);
   const [providers, setProviders] = useState<DraftProvider[]>(() => draftFromSettings(settings));
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
@@ -83,6 +85,7 @@ export function AiResearchSettingsView({ settings }: { settings: Settings }) {
       status,
       activeProviderId,
       featureProviderIds,
+      fallbackProviderIds,
       providers: providers.map(({ id, name, kind, baseUrl, model, apiKey, clearApiKey, enabled }) => ({ id, name, kind, baseUrl, model, apiKey, clearApiKey, enabled })),
     });
     if (result.success) {
@@ -90,6 +93,7 @@ export function AiResearchSettingsView({ settings }: { settings: Settings }) {
       setStatus(next.status);
       setActiveProviderId(next.activeProviderId || next.providers[0]?.id || "");
       setFeatureProviderIds(next.featureProviderIds || {});
+      setFallbackProviderIds(next.fallbackProviderIds || []);
       setProviders(draftFromSettings(next));
       setFeedback({ ok: true, message: ar ? "تم حفظ مزودي الذكاء الاصطناعي." : "AI providers saved." });
     } else {
@@ -153,7 +157,7 @@ export function AiResearchSettingsView({ settings }: { settings: Settings }) {
           ))}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6"><h2 className="font-bold">{ar ? "توجيه حسب الميزة" : "Feature-level routing"}</h2><p className="mt-1 text-sm text-slate-500">{ar ? "حدد مزوداً مختلفاً لكل استخدام، أو اتركه على المزود الأساسي." : "Use a different provider for a feature, or leave it on the global default."}</p><div className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">{ar ? "اكتشاف العملاء" : "Smart Lead Discovery"}<select className={inputClass} value={featureProviderIds["smart-lead-discovery"] || ""} onChange={(event) => setFeatureProviderIds((current) => ({ ...current, "smart-lead-discovery": event.target.value }))}><option value="">{ar ? "المزود الأساسي" : "Global default"}</option>{providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.enabled}>{provider.name}</option>)}</select></label><label className="text-sm font-semibold">{ar ? "المساعد الذكي" : "AI Assistant"}<select className={inputClass} value={featureProviderIds.assistant || ""} onChange={(event) => setFeatureProviderIds((current) => ({ ...current, assistant: event.target.value }))}><option value="">{ar ? "المزود الأساسي" : "Global default"}</option>{providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.enabled}>{provider.name}</option>)}</select></label></div></section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6"><h2 className="font-bold">{ar ? "التوجيه وFallback" : "Routing and fallback"}</h2><p className="mt-1 text-sm text-slate-500">{ar ? "حدد مزوداً مختلفاً لكل استخدام، ورتب المزودين الاحتياطيين عند فشل المزود الأساسي." : "Choose feature-level providers and the ordered fallback providers used after retryable failures."}</p><div className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">{ar ? "اكتشاف العملاء" : "Smart Lead Discovery"}<select className={inputClass} value={featureProviderIds["smart-lead-discovery"] || ""} onChange={(event) => setFeatureProviderIds((current) => ({ ...current, "smart-lead-discovery": event.target.value }))}><option value="">{ar ? "المزود الأساسي" : "Global default"}</option>{providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.enabled}>{provider.name}</option>)}</select></label><label className="text-sm font-semibold">{ar ? "المساعد الذكي" : "AI Assistant"}<select className={inputClass} value={featureProviderIds.assistant || ""} onChange={(event) => setFeatureProviderIds((current) => ({ ...current, assistant: event.target.value }))}><option value="">{ar ? "المزود الأساسي" : "Global default"}</option>{providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.enabled}>{provider.name}</option>)}</select></label></div><div className="mt-4"><p className="text-sm font-semibold">{ar ? "المزودون الاحتياطيون بالترتيب" : "Ordered fallback providers"}</p><div className="mt-2 flex flex-wrap gap-3">{providers.map((provider) => <label key={provider.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700"><input type="checkbox" checked={fallbackProviderIds.includes(provider.id)} disabled={!provider.enabled} onChange={(event) => setFallbackProviderIds((current) => event.target.checked ? [...current, provider.id] : current.filter((id) => id !== provider.id))} />{provider.name}</label>)}</div></div></section>
 
         <div className="flex justify-end"><button disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 disabled:opacity-50"><Save className="h-4 w-4" />{busy ? (ar ? "جارٍ الحفظ…" : "Saving…") : (ar ? "حفظ التغييرات" : "Save changes")}</button></div>
       </form>

@@ -37,6 +37,7 @@ export const aiResearchSettingsInput = z.object({
   status: z.enum(['OFF', 'BETA', 'ON']),
   activeProviderId: text.max(80).default('').transform(value => value || null),
   featureProviderIds: z.record(z.string().max(80)).default({}),
+  fallbackProviderIds: z.array(z.string().max(80)).max(5).default([]),
   providers: z.array(z.object({
     id: text.min(2).max(80).regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/, 'Use letters, numbers, hyphens or underscores for provider id'),
     name: text.min(2).max(120),
@@ -52,6 +53,7 @@ export const aiResearchSettingsInput = z.object({
   if (new Set(ids).size !== ids.length) context.addIssue({ code: 'custom', path: ['providers'], message: 'Provider ids must be unique' });
   if (value.activeProviderId && !ids.includes(value.activeProviderId)) context.addIssue({ code: 'custom', path: ['activeProviderId'], message: 'Select an existing provider' });
   for (const [feature, providerId] of Object.entries(value.featureProviderIds)) if (providerId && !ids.includes(providerId)) context.addIssue({ code: 'custom', path: ['featureProviderIds', feature], message: 'Select an existing provider' });
+  for (const providerId of value.fallbackProviderIds) if (!ids.includes(providerId)) context.addIssue({ code: 'custom', path: ['fallbackProviderIds'], message: 'Select existing fallback providers' });
   for (const [index, provider] of value.providers.entries()) {
     if (['openai-compatible', 'openai-responses', 'anthropic', 'custom-http'].includes(provider.kind) && !provider.baseUrl) context.addIssue({ code: 'custom', path: ['providers', index, 'baseUrl'], message: 'Base URL is required for this provider adapter' });
   }

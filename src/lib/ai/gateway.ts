@@ -148,9 +148,10 @@ export class UniversalAiGateway {
     const settings = await getAiResearchPlatformSettings();
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const primary = selectProvider(settings, requestedProviderId);
-    const candidates = requestedProviderId
-      ? [primary]
-      : [primary, ...settings.providers.filter((candidate) => candidate.id !== primary.id && candidate.enabled && candidate.apiKey)];
+    const explicitFallbacks = settings.fallbackProviderIds
+      .map((id) => settings.providers.find((candidate) => candidate.id === id))
+      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate && candidate.enabled && candidate.apiKey && candidate.id !== primary.id));
+    const candidates = [primary, ...explicitFallbacks, ...settings.providers.filter((candidate) => candidate.id !== primary.id && !explicitFallbacks.some((fallback) => fallback.id === candidate.id) && candidate.enabled && candidate.apiKey)];
     let provider = primary;
     let generated: { content: string; usage: any } | null = null;
     let lastError: unknown;

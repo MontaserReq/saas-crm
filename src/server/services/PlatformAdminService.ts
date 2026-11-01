@@ -38,6 +38,7 @@ export class PlatformAdminService {
       status: settings.status,
       activeProviderId: settings.activeProviderId,
       featureProviderIds: settings.featureProviderIds,
+      fallbackProviderIds: settings.fallbackProviderIds,
       providers: settings.providers.map(({ apiKey, ...provider }) => ({ ...provider, configured: Boolean(apiKey) })),
     };
   }
@@ -71,12 +72,14 @@ export class PlatformAdminService {
       await upsert('ai_research_status', input.status);
       await upsert(AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY, input.activeProviderId || '');
       await upsert('ai_feature_providers', JSON.stringify(input.featureProviderIds));
+      await upsert('ai_fallback_providers', JSON.stringify(input.fallbackProviderIds));
       await upsert(AI_RESEARCH_PROVIDERS_SETTING_KEY, JSON.stringify(providers));
 
       await audit(tx, user, 'ai_research', 'global', 'updated', {
         status: input.status,
         activeProviderId: input.activeProviderId,
         featureProviderIds: input.featureProviderIds,
+        fallbackProviderIds: input.fallbackProviderIds,
         providerCount: providers.length,
         providerIds: providers.map(provider => provider.id),
       });

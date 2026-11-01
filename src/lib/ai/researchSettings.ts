@@ -37,6 +37,7 @@ export const AI_RESEARCH_SETTING_KEYS = [
   AI_RESEARCH_PROVIDERS_SETTING_KEY,
   AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY,
   'ai_feature_providers',
+  'ai_fallback_providers',
 ] as const;
 
 export const AI_RESEARCH_CLEARED_SECRET = '__AI_RESEARCH_SECRET_CLEARED__';
@@ -53,6 +54,7 @@ export type AiResearchPlatformSettings = {
   activeProviderId: string | null;
   activeProvider: AiResearchProviderConfig | null;
   featureProviderIds: Record<string, string>;
+  fallbackProviderIds: string[];
 };
 
 function validStatus(value: string | undefined): value is AiResearchStatus {
@@ -164,6 +166,11 @@ export async function getAiResearchPlatformSettings(): Promise<AiResearchPlatfor
       }, {});
     }
   } catch { /* use the global default */ }
+  let fallbackProviderIds: string[] = [];
+  try {
+    const parsed = JSON.parse(values.get('ai_fallback_providers') || '[]');
+    if (Array.isArray(parsed)) fallbackProviderIds = parsed.filter((value): value is string => typeof value === 'string');
+  } catch { /* use no explicit fallbacks */ }
 
   return {
     status: validStatus(configuredStatus) ? configuredStatus : fallbackStatus,
@@ -176,6 +183,7 @@ export async function getAiResearchPlatformSettings(): Promise<AiResearchPlatfor
     activeProviderId: activeProvider?.id || null,
     activeProvider,
     featureProviderIds,
+    fallbackProviderIds,
   };
 }
 
