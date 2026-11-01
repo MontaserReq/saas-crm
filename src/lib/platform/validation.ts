@@ -50,6 +50,8 @@ export const aiResearchSettingsInput = z.object({
     temperature: z.number().min(0).max(2).default(0.2),
     responsePath: text.max(200).default(''),
     capabilities: z.array(z.enum(aiProviderCapabilities)).max(20).default([]),
+    customHeadersJson: z.string().trim().max(12000).default(''),
+    clearCustomHeaders: z.boolean().default(false),
     inputCostPerMillionUsd: z.number().min(0).max(10000).nullable().default(null),
     outputCostPerMillionUsd: z.number().min(0).max(10000).nullable().default(null),
     apiKey: z.string().trim().max(2000).default(''),

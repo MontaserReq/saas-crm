@@ -70,6 +70,16 @@ export class PlatformAdminService {
     const providers = input.providers.map(provider => {
       const existing = existingById.get(provider.id);
       const apiKey = provider.clearApiKey ? null : provider.apiKey || existing?.apiKey || null;
+      let customHeaders = existing?.customHeaders || null;
+      if (provider.clearCustomHeaders) customHeaders = null;
+      if (provider.customHeadersJson) {
+        let parsed: unknown;
+        try { parsed = JSON.parse(provider.customHeadersJson); } catch { throw new Error(`Custom headers for "${provider.name}" must be valid JSON`); }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`Custom headers for "${provider.name}" must be a JSON object`);
+        const entries = Object.entries(parsed as Record<string, unknown>);
+        if (entries.length > 30 || entries.some(([key, value]) => !/^[A-Za-z0-9-]+$/.test(key) || typeof value !== 'string' || value.length > 1000)) throw new Error(`Custom headers for "${provider.name}" are invalid`);
+        customHeaders = Object.fromEntries(entries) as Record<string, string>;
+      }
       return {
         id: provider.id,
         name: provider.name,
@@ -83,6 +93,7 @@ export class PlatformAdminService {
         capabilities: provider.capabilities,
         inputCostPerMillionUsd: provider.inputCostPerMillionUsd,
         outputCostPerMillionUsd: provider.outputCostPerMillionUsd,
+        customHeadersEncrypted: customHeaders ? encryptSecret(JSON.stringify(customHeaders)) : AI_RESEARCH_CLEARED_SECRET,
         enabled: provider.enabled,
         apiKeyEncrypted: apiKey ? encryptSecret(apiKey) : AI_RESEARCH_CLEARED_SECRET,
       };

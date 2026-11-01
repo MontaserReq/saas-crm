@@ -81,6 +81,23 @@ function readSecret(stored: string | undefined, fallback: string | undefined): s
   }
 }
 
+function readJsonSecret(stored: string | undefined): Record<string, string> | undefined {
+  const value = readSecret(stored, undefined);
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const entries = Object.entries(parsed).filter(([key, item]) => key.length <= 120 && typeof item === 'string' && item.length <= 1000);
+    return Object.fromEntries(entries) as Record<string, string>;
+  } catch { return undefined; }
+}
+
+function safeHeaders(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value).filter(([key, item]) => key.length <= 120 && typeof item === 'string' && item.length <= 1000);
+  return entries.length ? Object.fromEntries(entries) as Record<string, string> : undefined;
+}
+
 function legacyProviders(values: Map<string, string>): AiResearchProviderConfig[] {
   const geminiModel = values.get('ai_research_gemini_model') || process.env.GEMINI_MODEL || 'gemini-2.0-flash';
   const groqModel = values.get('ai_research_groq_model') || process.env.GROQ_MODEL || 'groq/compound-mini';
@@ -120,7 +137,7 @@ function parseStoredProviders(raw: string | undefined): AiResearchProviderConfig
         baseUrl: typeof item.baseUrl === 'string' ? item.baseUrl : '',
         model: typeof item.model === 'string' ? item.model : '',
         organizationId: typeof item.organizationId === 'string' ? item.organizationId : undefined,
-        customHeaders: item.customHeaders && typeof item.customHeaders === 'object' ? item.customHeaders : undefined,
+        customHeaders: readJsonSecret(typeof item.customHeadersEncrypted === 'string' ? item.customHeadersEncrypted : undefined) || safeHeaders(item.customHeaders),
         timeoutMs: typeof item.timeoutMs === 'number' ? item.timeoutMs : undefined,
         maxOutputTokens: typeof item.maxOutputTokens === 'number' ? item.maxOutputTokens : undefined,
         temperature: typeof item.temperature === 'number' ? item.temperature : undefined,

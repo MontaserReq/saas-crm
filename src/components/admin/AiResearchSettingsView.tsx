@@ -17,6 +17,7 @@ type ProviderView = {
   temperature?: number;
   responsePath?: string;
   capabilities?: string[];
+  customHeaderNames?: string[];
   inputCostPerMillionUsd?: number | null;
   outputCostPerMillionUsd?: number | null;
   configured: boolean;
@@ -41,12 +42,21 @@ type Usage = {
   providers: Array<{ providerId: string; requests: number; totalTokens: number; estimatedCostUsd: number | null }>;
 };
 
-type DraftProvider = ProviderView & { apiKey: string; clearApiKey: boolean };
+type DraftProvider = ProviderView & { apiKey: string; clearApiKey: boolean; customHeadersJson: string; clearCustomHeaders: boolean };
+
+const providerPresets = {
+  openrouter: { name: "OpenRouter", kind: "openai-compatible" as const, baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
+  openai: { name: "OpenAI", kind: "openai-responses" as const, baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+  anthropic: { name: "Anthropic Claude", kind: "anthropic" as const, baseUrl: "https://api.anthropic.com", model: "claude-3-5-haiku-latest" },
+  gemini: { name: "Google Gemini", kind: "gemini" as const, baseUrl: "", model: "gemini-2.0-flash" },
+  groq: { name: "Groq", kind: "groq" as const, baseUrl: "", model: "llama-3.3-70b-versatile" },
+  deepseek: { name: "DeepSeek", kind: "openai-compatible" as const, baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+  mistral: { name: "Mistral", kind: "openai-compatible" as const, baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" },
+} as const;
 
 function draftFromSettings(settings: Settings): DraftProvider[] {
-  return settings.providers.map((provider) => ({ ...provider, apiKey: "", clearApiKey: false }));
+  return settings.providers.map((provider) => ({ ...provider, apiKey: "", clearApiKey: false, customHeadersJson: "", clearCustomHeaders: false }));
 }
-
 export function AiResearchSettingsView({ settings, usage }: { settings: Settings; usage: Usage }) {
   const { language, errorMessage } = useI18n();
   const ar = language === "ar";
@@ -63,6 +73,7 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
   const inputClass = "mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white";
 
   const update = (id: string, patch: Partial<DraftProvider>) => setProviders((current) => current.map((provider) => provider.id === id ? { ...provider, ...patch } : provider));
+  const applyPreset = (id: string, presetId: string) => { const preset = providerPresets[presetId as keyof typeof providerPresets]; if (preset) update(id, preset); };
   const setEnabled = (id: string, enabled: boolean) => {
     update(id, { enabled });
     if (!enabled && activeProviderId === id) {
@@ -83,6 +94,8 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
       enabled: true,
       apiKey: "",
       clearApiKey: false,
+      customHeadersJson: "",
+      clearCustomHeaders: false,
     }]);
     setActiveProviderId(id);
   }
@@ -105,7 +118,7 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
       activeProviderId,
       featureProviderIds,
       fallbackProviderIds,
-      providers: providers.map(({ id, name, kind, baseUrl, model, timeoutMs, maxOutputTokens, temperature, responsePath, capabilities, inputCostPerMillionUsd, outputCostPerMillionUsd, apiKey, clearApiKey, enabled }) => ({ id, name, kind, baseUrl, model, timeoutMs, maxOutputTokens, temperature, responsePath, capabilities, inputCostPerMillionUsd: inputCostPerMillionUsd ?? null, outputCostPerMillionUsd: outputCostPerMillionUsd ?? null, apiKey, clearApiKey, enabled })),
+      providers: providers.map(({ id, name, kind, baseUrl, model, timeoutMs, maxOutputTokens, temperature, responsePath, capabilities, customHeadersJson, clearCustomHeaders, inputCostPerMillionUsd, outputCostPerMillionUsd, apiKey, clearApiKey, enabled }) => ({ id, name, kind, baseUrl, model, timeoutMs, maxOutputTokens, temperature, responsePath, capabilities, customHeadersJson, clearCustomHeaders, inputCostPerMillionUsd: inputCostPerMillionUsd ?? null, outputCostPerMillionUsd: outputCostPerMillionUsd ?? null, apiKey, clearApiKey, enabled })),
     });
     if (result.success) {
       const next = result.settings as Settings;
@@ -178,6 +191,7 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <label className="text-sm font-semibold">{ar ? "الاسم" : "Name"}<input className={inputClass} value={provider.name} onChange={(event) => update(provider.id, { name: event.target.value })} /></label>
+                <label className="text-sm font-semibold">{ar ? "إعداد سريع" : "Preset"}<select className={inputClass} defaultValue="" onChange={(event) => applyPreset(provider.id, event.target.value)}><option value="">{ar ? "إعداد يدوي" : "Manual configuration"}</option>{Object.entries(providerPresets).map(([id, preset]) => <option key={id} value={id}>{preset.name}</option>)}</select></label>
                 <label className="text-sm font-semibold">{ar ? "نوع الاتصال" : "Adapter"}<select className={inputClass} value={provider.kind} onChange={(event) => update(provider.id, { kind: event.target.value as AiResearchProvider })}><option value="gemini">Google Gemini</option><option value="groq">Groq</option><option value="openai-compatible">OpenAI-compatible / custom</option><option value="openai-responses">OpenAI Responses API</option><option value="anthropic">Anthropic Messages API</option><option value="custom-http">Custom HTTP adapter</option></select></label>
                 <label className="text-sm font-semibold">{ar ? "معرّف المزود" : "Provider ID"}<input className={inputClass} value={provider.id} disabled /></label>
                 <label className="text-sm font-semibold">{ar ? "النموذج" : "Model"}<input className={inputClass} value={provider.model} onChange={(event) => update(provider.id, { model: event.target.value })} placeholder="gpt-4o-mini" /><div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={() => void discoverModels(provider.id)} disabled={discoveringId === provider.id || !provider.enabled || !provider.configured || provider.kind === "custom-http"} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-violet-700 disabled:opacity-40">{discoveringId === provider.id ? (ar ? "جلب…" : "Loading…") : (ar ? "جلب النماذج" : "Discover models")}</button>{(modelOptions[provider.id] || []).map((model) => <button type="button" key={model} onClick={() => update(provider.id, { model })} className={`rounded-full px-2 py-1 text-[11px] ${model === provider.model ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>{model}</button>)}</div></label>
@@ -190,6 +204,7 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
                 {provider.kind === "custom-http" && <label className="text-sm font-semibold">{ar ? "مسار النص في الاستجابة" : "Response text path"}<input className={inputClass} value={provider.responsePath || ""} onChange={(event) => update(provider.id, { responsePath: event.target.value })} placeholder="choices.0.message.content" /><span className="mt-1 block text-xs font-normal text-slate-500">{ar ? "اتركه فارغًا للاستجابات الشائعة مثل output_text أو choices.0.message.content." : "Optional dot path for the returned JSON text, e.g. choices.0.message.content."}</span></label>}
                 <div className="md:col-span-2"><p className="text-sm font-semibold">{ar ? "قدرات المزود (اختياري — اتركها فارغة إذا غير معروفة)" : "Provider capabilities (optional — leave empty if unknown)"}</p><div className="mt-2 flex flex-wrap gap-2">{["text", "streaming", "structured-json", "tools", "vision", "embeddings", "reasoning"].map((capability) => <label key={capability} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700"><input type="checkbox" checked={(provider.capabilities || []).includes(capability)} onChange={(event) => update(provider.id, { capabilities: event.target.checked ? [...new Set([...(provider.capabilities || []), capability])] : (provider.capabilities || []).filter((item) => item !== capability) })} />{capability}</label>)}</div></div>
                 <div className="md:col-span-2"><label className="flex items-center gap-2 text-sm font-semibold"><KeyRound className="h-4 w-4 text-violet-600" />API key</label><input className={inputClass} type="password" autoComplete="new-password" value={provider.apiKey} onChange={(event) => update(provider.id, { apiKey: event.target.value, clearApiKey: false })} placeholder={provider.configured ? "••••••••  configured" : "Paste API key"} /><div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-slate-500"><span className="inline-flex items-center gap-1">{provider.configured ? <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />{ar ? "مهيأ" : "Configured"}</> : (ar ? "غير مهيأ" : "Not configured")}</span>{provider.configured && <label className="text-rose-600"><input type="checkbox" checked={provider.clearApiKey} onChange={(event) => update(provider.id, { clearApiKey: event.target.checked, apiKey: "" })} /> {ar ? "حذف المفتاح الحالي" : "Clear current key"}</label>}</div></div>
+                <div className="md:col-span-2"><label className="text-sm font-semibold">{ar ? "Custom headers (JSON اختياري)" : "Custom headers (optional JSON)"}</label><textarea className={inputClass} rows={2} value={provider.customHeadersJson} onChange={(event) => update(provider.id, { customHeadersJson: event.target.value, clearCustomHeaders: false })} placeholder={provider.customHeaderNames?.length ? `Configured: ${provider.customHeaderNames.join(", ")} — paste JSON to replace` : '{"X-Project":"value"}'} /><div className="mt-2 flex items-center gap-3 text-xs text-slate-500">{provider.customHeaderNames?.length ? <span>{ar ? `${provider.customHeaderNames.length} headers محفوظة ومشفرة` : `${provider.customHeaderNames.length} encrypted headers configured`}</span> : null}{provider.customHeaderNames?.length ? <label className="text-rose-600"><input type="checkbox" checked={provider.clearCustomHeaders} onChange={(event) => update(provider.id, { clearCustomHeaders: event.target.checked, customHeadersJson: "" })} /> {ar ? "حذف headers" : "Clear headers"}</label> : null}</div></div>
               </div>
               {provider.kind === "openai-compatible" && <p className="mt-3 text-xs text-slate-500">{ar ? "يجب أن يدعم المزود POST /chat/completions بصيغة OpenAI." : "The provider must support the OpenAI chat-completions request format."}</p>}
               {provider.kind === "anthropic" && <p className="mt-3 text-xs text-slate-500">{ar ? "يستخدم /v1/messages مع x-api-key." : "Uses the native /v1/messages protocol with x-api-key."}</p>}

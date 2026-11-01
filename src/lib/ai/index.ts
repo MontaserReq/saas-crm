@@ -20,7 +20,7 @@ export { FallbackAiProvider, createFallbackProvider } from './FallbackAiProvider
 export type { ResearchUsage, ResearchAttemptStatus, ResearchProvider, OnAttemptCallback, JobUsageSummary } from './usage';
 export { sanitizeErrorMessage } from './usage';
 export { UniversalAiGateway } from './gateway';
-export type { AiGatewayMessage, AiGatewayRequest, AiGatewayResponse, AiGatewayStructuredResponse } from './gateway';
+export type { AiGatewayMessage, AiGatewayRequest, AiGatewayResponse, AiGatewayStructuredResponse, AiGatewayStreamChunk, AiGatewayTool, AiGatewayToolCall, AiEmbeddingRequest, AiEmbeddingResponse } from './gateway';
 
 /**
  * Provider factory, environment-driven via AI_PROVIDER.

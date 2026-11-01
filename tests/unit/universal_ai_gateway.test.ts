@@ -63,4 +63,30 @@ describe('Universal AI Gateway', () => {
 
     await expect(UniversalAiGateway.listModels('openai')).resolves.toEqual(['model-a', 'model-b']);
   });
+
+  it('normalizes OpenAI-compatible tool calls', async () => {
+    vi.mocked(getAiResearchPlatformSettings).mockResolvedValue(settings([provider({ id: 'tools', kind: 'openai-compatible', baseUrl: 'https://api.example.test/v1' })]));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: '', tool_calls: [{ id: 'call-1', function: { name: 'lookup', arguments: '{"q":"acme"}' } }] } }] }), { status: 200 })));
+
+    const result = await UniversalAiGateway.executeWithTools({ messages: [{ role: 'user', content: 'lookup acme' }], tools: [{ name: 'lookup', parameters: { type: 'object' } }] });
+
+    expect(result.toolCalls).toEqual([{ id: 'call-1', name: 'lookup', arguments: '{"q":"acme"}' }]);
+  });
+
+  it('streams normalized text chunks from an SSE provider', async () => {
+    vi.mocked(getAiResearchPlatformSettings).mockResolvedValue(settings([provider({ id: 'stream', kind: 'openai-compatible', baseUrl: 'https://api.example.test/v1', capabilities: ['text', 'streaming'] })]));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: {"choices":[{"delta":{"content":" world"}}]}\n\ndata: [DONE]\n\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } })));
+
+    const chunks: string[] = [];
+    for await (const chunk of UniversalAiGateway.stream({ messages: [{ role: 'user', content: 'hello' }] })) if (!chunk.done) chunks.push(chunk.content);
+
+    expect(chunks.join('')).toBe('hello world');
+  });
+
+  it('normalizes embeddings from an OpenAI-compatible provider', async () => {
+    vi.mocked(getAiResearchPlatformSettings).mockResolvedValue(settings([provider({ id: 'embed', kind: 'openai-compatible', baseUrl: 'https://api.example.test/v1', capabilities: ['embeddings'] })]));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1, 0.2] }], usage: { prompt_tokens: 4 } }), { status: 200 })));
+
+    await expect(UniversalAiGateway.getEmbeddings({ input: 'acme' })).resolves.toMatchObject({ providerId: 'embed', embeddings: [[0.1, 0.2]], inputTokens: 4 });
+  });
 });
