@@ -3,7 +3,6 @@ import type { AiResearchProviderConfig } from './researchSettings';
 import { AiExtractionError, AiNotConfiguredError } from './types';
 import prisma from '@/lib/db/prisma';
 import { sanitizeErrorMessage } from './usage';
-import { assertOrganizationAiRequestAllowed } from './organizationPolicy';
 import { safeProviderEndpoint } from '@/lib/security/url';
 import { readLimitedJson, readLimitedResponseText } from '@/lib/security/external';
 
@@ -437,7 +436,6 @@ export class UniversalAiGateway {
 
   static async generate(request: AiGatewayRequest): Promise<AiGatewayResponse> {
     const startedAt = performance.now();
-    if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
     const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const requiredCapabilities = [...new Set([...(request.requiredCapabilities || []), ...(request.tools?.length ? ['tools'] : [])])];
@@ -451,7 +449,6 @@ export class UniversalAiGateway {
     let lastError: unknown;
     for (const candidate of candidates) {
       try {
-        if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
         provider = candidate;
         generated = await retryableGenerate(candidate, request);
         break;
@@ -478,7 +475,6 @@ export class UniversalAiGateway {
 
   static async *stream(request: AiGatewayRequest): AsyncGenerator<AiGatewayStreamChunk> {
     const startedAt = performance.now();
-    if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
     const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const requiredCapabilities = [...new Set([...(request.requiredCapabilities || []), 'streaming'])];
@@ -489,7 +485,6 @@ export class UniversalAiGateway {
     for (const provider of candidates) {
       let emitted = false;
       try {
-        if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
         for await (const content of retryableStream(provider, request)) {
           emitted = true;
           yield { content, providerId: provider.id, model: request.model || provider.model, done: false };
@@ -508,7 +503,6 @@ export class UniversalAiGateway {
 
   static async getEmbeddings(request: AiEmbeddingRequest): Promise<AiEmbeddingResponse> {
     const startedAt = performance.now();
-    if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
     const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const requiredCapabilities = ['embeddings'];
@@ -517,7 +511,6 @@ export class UniversalAiGateway {
     let lastError: unknown;
     for (const provider of candidates) {
       try {
-        if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
         const result = await retryableEmbedding(provider, request);
         const durationMs = Math.round(performance.now() - startedAt);
         const usageRequest: AiGatewayRequest = { messages: [], purpose: request.purpose, organizationId: request.organizationId, userId: request.userId };

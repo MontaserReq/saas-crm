@@ -8,7 +8,6 @@ import { getAiResearchFeatureStatus } from '@/lib/ai/researchSettings';
 import { completeness, normalizeDomain, normalizeEmail, normalizeName, normalizePhone, safeUrl, scoreLead } from '@/lib/lead-discovery/normalize';
 import { leadDiscoveryExtractionBatchSchema, leadDiscoveryExtractionSchema, type LeadDiscoveryExtraction, type LeadDiscoveryIntent } from '@/lib/lead-discovery/types';
 import { z } from 'zod';
-import { assertOrganizationDiscoveryCapacity } from '@/lib/ai/organizationPolicy';
 import { acquireOperation, assertOperationOwner, finishOperation, recoverExpiredOperations, RESOURCE_LIMITS, StaleOperationError, withLeadDiscoveryJobOwner } from '@/lib/security/resourceGuard';
 import { evaluateCurrentOperationAuthorization } from '@/lib/security/operationAuthorization';
 import { PERMISSIONS } from '@/lib/permissions';
@@ -147,7 +146,6 @@ export class LeadDiscoveryService {
   static async createJob(user: UserSession, input: LeadDiscoveryInput) {
     const organizationId = (await requireOrganizationContext(user)).id;
     if ((await getAiResearchFeatureStatus()) === 'OFF') throw new Error('Smart Lead Discovery is disabled by the platform administrator.');
-    await assertOrganizationDiscoveryCapacity(organizationId);
     if (!input.prompt?.trim()) throw new Error('Describe the businesses you want to discover.');
     const intent = parseIntent(input);
     const job = await prisma.leadDiscoveryJob.create({ data: { organizationId, createdById: user.id, prompt: input.prompt.trim().slice(0, 4000), requestedCount: intent.requestedCount, filters: JSON.stringify(intent) } });

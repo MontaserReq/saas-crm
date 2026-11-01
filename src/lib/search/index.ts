@@ -6,7 +6,6 @@ import type { SearchProviderConfig } from './settings';
 import { createSearchProvider } from './providers';
 import type { SearchRequest, SearchResult } from './types';
 import { safeProviderEndpoint } from '@/lib/security/url';
-import { assertOrganizationSearchRequestAllowed } from '@/lib/ai/organizationPolicy';
 import { safeExternalUrl } from '@/lib/security/url';
 
 export * from './types';
@@ -103,7 +102,6 @@ async function searchWithRetry(provider: SearchProviderConfig, request: SearchRe
 
 export class SearchGateway {
   static async search(request: SearchRequest): Promise<{ providerId: string; results: SearchResult[] }> {
-    if (request.organizationId) await assertOrganizationSearchRequestAllowed(request.organizationId);
     const settings = await getSearchProviderSettings();
     const candidates = settings.providers.filter((provider) => provider.enabled && provider.apiKey && safeProviderEndpoint(provider.baseUrl));
     const preferred = candidates.find((provider) => provider.id === settings.activeProviderId);
@@ -119,7 +117,6 @@ export class SearchGateway {
         return { providerId: config.id, results: cached };
       }
       try {
-        if (request.organizationId) await assertOrganizationSearchRequestAllowed(request.organizationId);
         const results = await searchWithRetry(config, request);
         await writeCachedResults(config.id, request, results);
         await recordSearchUsage(request, config.id, { status: 'SUCCESS', resultCount: results.length, estimatedCostUsd: config.estimatedCostPerRequestUsd, durationMs: Math.round(performance.now() - startedAt) });
