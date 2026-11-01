@@ -10,7 +10,8 @@ export class SearchGateway {
     const settings = await getSearchProviderSettings();
     const candidates = settings.providers.filter((provider) => provider.enabled && provider.apiKey);
     const preferred = candidates.find((provider) => provider.id === settings.activeProviderId);
-    const ordered = [preferred, ...candidates.filter((provider) => provider.id !== preferred?.id)].filter((provider): provider is NonNullable<typeof provider> => Boolean(provider));
+    const explicitFallbacks = settings.fallbackProviderIds.map((id) => candidates.find((provider) => provider.id === id)).filter((provider): provider is NonNullable<typeof provider> => Boolean(provider && provider.id !== preferred?.id));
+    const ordered = [preferred, ...explicitFallbacks, ...candidates.filter((provider) => provider.id !== preferred?.id && !explicitFallbacks.some((fallback) => fallback.id === provider.id))].filter((provider): provider is NonNullable<typeof provider> => Boolean(provider));
     if (!ordered.length) throw new Error('No enabled search provider with an API key is configured.');
     let lastError: unknown;
     for (const config of ordered) {

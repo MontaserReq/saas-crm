@@ -43,3 +43,13 @@ export async function importLeadDiscoveryResultsAction(jobId: string, resultIds:
   try { const user = await requireAuth(); allowed(user, PERMISSIONS.AI_RESEARCH_APPROVE); const ids = z.array(z.string().min(1).max(100)).min(1).max(100).parse(resultIds); const imported = await LeadDiscoveryService.importResults(user, z.string().min(1).max(100).parse(jobId), ids); revalidatePath('/lead-discovery'); revalidatePath('/leads'); return { success: true as const, imported }; }
   catch (error) { return { success: false as const, error: error instanceof Error ? error.message : 'Unable to import selected leads' }; }
 }
+
+export async function cancelLeadDiscoveryJobAction(jobId: string) {
+  try { const user = await requireAuth(); allowed(user, PERMISSIONS.AI_RESEARCH_CREATE); const result = await LeadDiscoveryService.cancelJob(user, z.string().min(1).max(100).parse(jobId)); revalidatePath('/lead-discovery'); return result; }
+  catch (error) { return { success: false as const, error: error instanceof Error ? error.message : 'Unable to cancel discovery' }; }
+}
+
+export async function retryLeadDiscoveryJobAction(jobId: string) {
+  try { const user = await requireAuth(); allowed(user, PERMISSIONS.AI_RESEARCH_CREATE); const job = await LeadDiscoveryService.retryJob(user, z.string().min(1).max(100).parse(jobId)); revalidatePath('/lead-discovery'); return { success: true as const, job: { id: job.id, status: job.status, stage: job.stage } }; }
+  catch (error) { return { success: false as const, error: error instanceof Error ? error.message : 'Unable to retry discovery' }; }
+}

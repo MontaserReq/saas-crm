@@ -12,7 +12,7 @@ import { areKnownPlanFeatureTokens, expandPlanFeatures, parseFeatureOverrides } 
 import { getPlatformDefaults } from './PlatformCatalogService';
 import { assertOrganizationUserCapacity } from '@/lib/platform/userCapacity';
 import { AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY, AI_RESEARCH_CLEARED_SECRET, AI_RESEARCH_PROVIDERS_SETTING_KEY, AI_RESEARCH_SETTING_KEYS, getAiResearchPlatformSettings } from '@/lib/ai/researchSettings';
-import { SEARCH_ACTIVE_PROVIDER_SETTING_KEY, SEARCH_PROVIDERS_SETTING_KEY, getSearchProviderSettings, searchClearedSecret } from '@/lib/search/settings';
+import { SEARCH_ACTIVE_PROVIDER_SETTING_KEY, SEARCH_FALLBACK_PROVIDER_SETTING_KEY, SEARCH_PROVIDERS_SETTING_KEY, getSearchProviderSettings, searchClearedSecret } from '@/lib/search/settings';
 
 export function requirePlatformAdmin(user: UserSession) {
   if (!isPlatformSuperAdmin(user)) throw new Error('Forbidden');
@@ -117,7 +117,7 @@ export class PlatformAdminService {
   static async getSearchProviderSettings(user: UserSession) {
     requirePlatformAdmin(user);
     const settings = await getSearchProviderSettings();
-    return { activeProviderId: settings.activeProviderId, providers: settings.providers.map(({ apiKey, ...provider }) => ({ ...provider, configured: Boolean(apiKey) })) };
+    return { activeProviderId: settings.activeProviderId, fallbackProviderIds: settings.fallbackProviderIds, providers: settings.providers.map(({ apiKey, ...provider }) => ({ ...provider, configured: Boolean(apiKey) })) };
   }
 
   static async saveSearchProviderSettings(user: UserSession, raw: unknown) {
@@ -133,8 +133,9 @@ export class PlatformAdminService {
     await prisma.$transaction(async (tx) => {
       const upsert = (key: string, value: string) => tx.platformSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
       await upsert(SEARCH_ACTIVE_PROVIDER_SETTING_KEY, input.activeProviderId || '');
+      await upsert(SEARCH_FALLBACK_PROVIDER_SETTING_KEY, JSON.stringify(input.fallbackProviderIds));
       await upsert(SEARCH_PROVIDERS_SETTING_KEY, JSON.stringify(providers));
-      await audit(tx, user, 'search_providers', 'global', 'updated', { activeProviderId: input.activeProviderId, providerCount: providers.length, providerIds: providers.map((provider) => provider.id) });
+      await audit(tx, user, 'search_providers', 'global', 'updated', { activeProviderId: input.activeProviderId, fallbackProviderIds: input.fallbackProviderIds, providerCount: providers.length, providerIds: providers.map((provider) => provider.id) });
     }, { maxWait: 10000, timeout: 20000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return this.getSearchProviderSettings(user);
   }

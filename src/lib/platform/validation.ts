@@ -69,6 +69,7 @@ export const aiResearchSettingsInput = z.object({
 
 export const searchProviderSettingsInput = z.object({
   activeProviderId: text.max(80).default('').transform(value => value || null),
+  fallbackProviderIds: z.array(z.string().max(80)).max(10).default([]),
   providers: z.array(z.object({
     id: text.min(2).max(80).regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
     name: text.min(2).max(120),
@@ -83,4 +84,5 @@ export const searchProviderSettingsInput = z.object({
   const ids = value.providers.map(provider => provider.id);
   if (new Set(ids).size !== ids.length) context.addIssue({ code: 'custom', path: ['providers'], message: 'Provider ids must be unique' });
   if (value.activeProviderId && !ids.includes(value.activeProviderId)) context.addIssue({ code: 'custom', path: ['activeProviderId'], message: 'Select an existing provider' });
+  for (const providerId of value.fallbackProviderIds) if (!ids.includes(providerId)) context.addIssue({ code: 'custom', path: ['fallbackProviderIds'], message: 'Select existing fallback providers' });
 });

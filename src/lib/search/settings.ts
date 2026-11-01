@@ -14,7 +14,8 @@ export type SearchProviderConfig = {
 
 export const SEARCH_PROVIDERS_SETTING_KEY = 'search_providers';
 export const SEARCH_ACTIVE_PROVIDER_SETTING_KEY = 'search_active_provider';
-export const SEARCH_SETTING_KEYS = [SEARCH_PROVIDERS_SETTING_KEY, SEARCH_ACTIVE_PROVIDER_SETTING_KEY] as const;
+export const SEARCH_FALLBACK_PROVIDER_SETTING_KEY = 'search_fallback_providers';
+export const SEARCH_SETTING_KEYS = [SEARCH_PROVIDERS_SETTING_KEY, SEARCH_ACTIVE_PROVIDER_SETTING_KEY, SEARCH_FALLBACK_PROVIDER_SETTING_KEY] as const;
 const CLEARED_SECRET = '__SEARCH_SECRET_CLEARED__';
 
 function decrypt(value: unknown): string | null {
@@ -48,7 +49,9 @@ export async function getSearchProviderSettings() {
     } catch { /* fall back to environment providers */ }
   }
   const activeProviderId = values.get(SEARCH_ACTIVE_PROVIDER_SETTING_KEY) || providers.find((provider) => provider.enabled && provider.apiKey)?.id || providers[0]?.id || null;
-  return { providers, activeProviderId, activeProvider: providers.find((provider) => provider.id === activeProviderId) || null };
+  let fallbackProviderIds: string[] = [];
+  try { const parsed = JSON.parse(values.get(SEARCH_FALLBACK_PROVIDER_SETTING_KEY) || '[]'); if (Array.isArray(parsed)) fallbackProviderIds = parsed.filter((value): value is string => typeof value === 'string'); } catch { /* no explicit fallbacks */ }
+  return { providers, activeProviderId, fallbackProviderIds, activeProvider: providers.find((provider) => provider.id === activeProviderId) || null };
 }
 
 export function searchClearedSecret(): string { return CLEARED_SECRET; }
