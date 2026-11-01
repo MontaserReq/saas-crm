@@ -3,6 +3,8 @@ import type { AiResearchProviderConfig } from './researchSettings';
 import { AiExtractionError, AiNotConfiguredError } from './types';
 import prisma from '@/lib/db/prisma';
 import { sanitizeErrorMessage } from './usage';
+import { assertOrganizationAiRequestAllowed } from './organizationPolicy';
+import { safeProviderEndpoint } from '@/lib/security/url';
 
 export type AiGatewayRole = 'system' | 'user' | 'assistant';
 export type AiGatewayMessage = { role: AiGatewayRole; content: string };
@@ -46,11 +48,10 @@ function timeoutFor(provider: AiResearchProviderConfig): number {
 }
 
 function providerBaseUrl(provider: AiResearchProviderConfig): string {
-  if (provider.baseUrl) return provider.baseUrl.replace(/\/+$/, '');
-  if (provider.kind === 'groq') return 'https://api.groq.com/openai/v1';
-  if (provider.kind === 'gemini') return 'https://generativelanguage.googleapis.com/v1beta/models';
-  if (provider.kind === 'anthropic') return 'https://api.anthropic.com';
-  return '';
+  const candidate = provider.baseUrl || (provider.kind === 'groq' ? 'https://api.groq.com/openai/v1' : provider.kind === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta/models' : provider.kind === 'anthropic' ? 'https://api.anthropic.com' : '');
+  const safe = safeProviderEndpoint(candidate);
+  if (!safe) throw new AiNotConfiguredError(`Provider "${provider.name}" has an invalid or private endpoint.`);
+  return safe.replace(/\/+$/, '');
 }
 
 function parseJson<T>(content: string): T {
@@ -110,9 +111,33 @@ async function requestWithTimeout(url: string, init: RequestInit, timeoutMs: num
   finally { clearTimeout(timer); }
 }
 
+class AiProviderHttpError extends AiExtractionError {
+  constructor(label: string, readonly httpStatus: number) {
+    super(`${label} returned HTTP ${httpStatus}`);
+    this.name = 'AiProviderHttpError';
+  }
+}
+
 async function responseError(response: Response, label: string): Promise<never> {
-  const body = await response.text().catch(() => '');
-  throw new AiExtractionError(`${label} returned HTTP ${response.status}${body ? `: ${body.slice(0, 300)}` : ''}`);
+  await response.text().catch(() => '');
+  throw new AiProviderHttpError(label, response.status);
+}
+
+function retryableProviderError(error: unknown): boolean {
+  if (error instanceof AiProviderHttpError) return error.httpStatus === 408 || error.httpStatus === 409 || error.httpStatus === 425 || error.httpStatus === 429 || error.httpStatus >= 500;
+  return error instanceof TypeError || (error instanceof Error && error.name === 'AbortError');
+}
+
+async function retryableGenerate(provider: AiResearchProviderConfig, request: AiGatewayRequest) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { return await generateForProvider(provider, request); } catch (error) {
+      lastError = error;
+      if (attempt === 1 || !retryableProviderError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new AiExtractionError('AI provider request failed');
 }
 
 function normalizedToolCalls(value: unknown): AiGatewayToolCall[] {
@@ -247,7 +272,8 @@ function supportsCapabilities(provider: AiResearchProviderConfig, required: stri
   return !provider.capabilities?.length || required.every((capability) => provider.capabilities?.some((configured) => configured === capability));
 }
 
-function selectProvider(settings: Awaited<ReturnType<typeof getAiResearchPlatformSettings>>, providerId?: string, requiredCapabilities: string[] = []): AiResearchProviderConfig {
+function selectProvider(settings: Awaited<ReturnType<typeof getAiResearchPlatformSettings>>, providerId?: string, requiredCapabilities: string[] = [], allowWhenOff = false): AiResearchProviderConfig {
+  if (settings.status === 'OFF' && !allowWhenOff) throw new AiNotConfiguredError('AI features are disabled by the platform administrator.');
   const requested = settings.providers.find((candidate) => candidate.id === providerId);
   const candidates = [requested, settings.activeProvider, ...settings.providers].filter((candidate, index, all): candidate is AiResearchProviderConfig => Boolean(candidate && candidate.enabled && candidate.apiKey && supportsCapabilities(candidate, requiredCapabilities) && all.findIndex((item) => item?.id === candidate.id) === index));
   const provider = candidates[0];
@@ -353,6 +379,29 @@ async function* streamProvider(provider: AiResearchProviderConfig, request: AiGa
   }
 }
 
+async function* retryableStream(provider: AiResearchProviderConfig, request: AiGatewayRequest): AsyncGenerator<string> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let emitted = false;
+    try {
+      for await (const content of streamProvider(provider, request)) { emitted = true; yield content; }
+      return;
+    } catch (error) {
+      if (attempt === 1 || emitted || !retryableProviderError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
+}
+
+async function retryableEmbedding(provider: AiResearchProviderConfig, request: AiEmbeddingRequest) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { return await embedForProvider(provider, request); } catch (error) {
+      if (attempt === 1 || !retryableProviderError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
+  throw new AiExtractionError('Embedding request failed');
+}
+
 async function embedForProvider(provider: AiResearchProviderConfig, request: AiEmbeddingRequest): Promise<{ embeddings: number[][]; inputTokens: number | null }> {
   const input = Array.isArray(request.input) ? request.input : [request.input];
   if (provider.kind === 'gemini') {
@@ -386,10 +435,11 @@ export class UniversalAiGateway {
 
   static async generate(request: AiGatewayRequest): Promise<AiGatewayResponse> {
     const startedAt = performance.now();
+    if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
     const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const requiredCapabilities = [...new Set([...(request.requiredCapabilities || []), ...(request.tools?.length ? ['tools'] : [])])];
-    const primary = selectProvider(settings, requestedProviderId, requiredCapabilities);
+    const primary = selectProvider(settings, requestedProviderId, requiredCapabilities, request.purpose?.endsWith('connection-test') || request.purpose === 'provider-connection-test');
     const explicitFallbacks = settings.fallbackProviderIds
       .map((id) => settings.providers.find((candidate) => candidate.id === id))
       .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate && candidate.enabled && candidate.apiKey && supportsCapabilities(candidate, requiredCapabilities) && candidate.id !== primary.id));
@@ -400,7 +450,7 @@ export class UniversalAiGateway {
     for (const candidate of candidates) {
       try {
         provider = candidate;
-        generated = await generateForProvider(candidate, request);
+        generated = await retryableGenerate(candidate, request);
         break;
       } catch (error) {
         lastError = error;
@@ -425,6 +475,7 @@ export class UniversalAiGateway {
 
   static async *stream(request: AiGatewayRequest): AsyncGenerator<AiGatewayStreamChunk> {
     const startedAt = performance.now();
+    if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
     const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const requiredCapabilities = [...new Set([...(request.requiredCapabilities || []), 'streaming'])];
@@ -435,7 +486,7 @@ export class UniversalAiGateway {
     for (const provider of candidates) {
       let emitted = false;
       try {
-        for await (const content of streamProvider(provider, request)) {
+        for await (const content of retryableStream(provider, request)) {
           emitted = true;
           yield { content, providerId: provider.id, model: request.model || provider.model, done: false };
         }
@@ -453,6 +504,7 @@ export class UniversalAiGateway {
 
   static async getEmbeddings(request: AiEmbeddingRequest): Promise<AiEmbeddingResponse> {
     const startedAt = performance.now();
+    if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
     const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
     const requiredCapabilities = ['embeddings'];
@@ -461,7 +513,7 @@ export class UniversalAiGateway {
     let lastError: unknown;
     for (const provider of candidates) {
       try {
-        const result = await embedForProvider(provider, request);
+        const result = await retryableEmbedding(provider, request);
         const durationMs = Math.round(performance.now() - startedAt);
         const usageRequest: AiGatewayRequest = { messages: [], purpose: request.purpose, organizationId: request.organizationId, userId: request.userId };
         await recordUsage(usageRequest, provider, { status: 'SUCCESS', model: request.model || provider.model, inputTokens: result.inputTokens, outputTokens: null, durationMs });

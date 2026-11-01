@@ -69,6 +69,7 @@ export function getAiProvider(onAttempt?: OnAttemptCallback, overrideConfig?: Ai
   return new GeminiProvider(config, onAttempt, false);
 }
 
-export async function getAiProviderFromPlatform(onAttempt?: OnAttemptCallback): Promise<AiProvider> {
-  return getAiProvider(onAttempt, await getAiResearchConfigFromPlatform());
+export async function getAiProviderFromPlatform(onAttempt?: OnAttemptCallback, organizationId?: string, userId?: string): Promise<AiProvider> {
+  const config = await getAiResearchConfigFromPlatform(organizationId, userId);
+  return config.activeProvider ? new UniversalResearchProvider(config.activeProvider.id, onAttempt, organizationId, userId) : getAiProvider(onAttempt, config);
 }

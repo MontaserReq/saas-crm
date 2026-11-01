@@ -3,12 +3,12 @@ import type { UserSession } from '@/types';
 import { requireOrganizationContext } from '@/lib/auth/organization';
 import { LeadService } from './LeadService';
 import { SearchGateway } from '@/lib/search';
-import { fetchPublicContent } from '@/lib/search/http';
 import { UniversalAiGateway } from '@/lib/ai/gateway';
 import { getAiResearchFeatureStatus } from '@/lib/ai/researchSettings';
 import { completeness, normalizeDomain, normalizeEmail, normalizeName, normalizePhone, safeUrl, scoreLead } from '@/lib/lead-discovery/normalize';
 import { leadDiscoveryExtractionSchema, type LeadDiscoveryExtraction, type LeadDiscoveryIntent } from '@/lib/lead-discovery/types';
 import { z } from 'zod';
+import { assertOrganizationDiscoveryCapacity } from '@/lib/ai/organizationPolicy';
 
 export type LeadDiscoveryInput = {
   prompt: string;
@@ -86,6 +86,7 @@ export class LeadDiscoveryService {
   static async createJob(user: UserSession, input: LeadDiscoveryInput) {
     const organizationId = (await requireOrganizationContext(user)).id;
     if ((await getAiResearchFeatureStatus()) === 'OFF') throw new Error('Smart Lead Discovery is disabled by the platform administrator.');
+    await assertOrganizationDiscoveryCapacity(organizationId);
     if (!input.prompt?.trim()) throw new Error('Describe the businesses you want to discover.');
     const intent = parseIntent(input);
     const job = await prisma.leadDiscoveryJob.create({ data: { organizationId, createdById: user.id, prompt: input.prompt.trim().slice(0, 4000), requestedCount: intent.requestedCount, filters: JSON.stringify(intent) } });
@@ -109,19 +110,31 @@ export class LeadDiscoveryService {
     if (await checkpoint()) return;
     const queries = queriesFor(job.prompt, input);
     await setStage('SEARCHING_WEB');
-    const rawResults = (await Promise.all(queries.map(async (query) => { const result = await SearchGateway.search({ query, maxResults: Math.min(30, input.requestedCount * 2), includeContent: true }); return result.results.map((item) => ({ ...item, query, content: item.content })); }))).flat();
+    const searchRuns = await Promise.all(queries.map(async (query) => ({ query, result: await SearchGateway.search({ query, maxResults: Math.min(30, input.requestedCount * 2), includeContent: true, organizationId: job.organizationId, userId: job.createdById, purpose: 'smart-lead-discovery' }) })));
+    const rawResults = searchRuns.flatMap(({ query, result }) => result.results.map((item) => ({ ...item, query, content: item.content })));
+    const searchProviderIds = [...new Set(searchRuns.map(({ result }) => result.providerId))];
+    await prisma.leadDiscoveryJob.update({ where: { id: jobId }, data: { searchProviderId: searchProviderIds.join(',').slice(0, 200) } });
     if (await checkpoint()) return;
-    const unique = new Map<string, typeof rawResults[number]>();
-    for (const item of rawResults) { const key = normalizeDomain(item.url) || item.url.toLowerCase(); if (!unique.has(key)) unique.set(key, item); }
+    const unique = new Map<string, (typeof rawResults[number]) & { sourceRefs: Array<{ url: string; title: string; description: string | null; query: string; providerId: string }> }>();
+    for (const item of rawResults) {
+      const key = normalizeDomain(item.url) || item.url.toLowerCase();
+      const sourceRef = { url: item.url, title: item.title, description: item.description, query: item.query, providerId: item.providerId };
+      const existing = unique.get(key);
+      if (existing) existing.sourceRefs.push(sourceRef);
+      else unique.set(key, { ...item, sourceRefs: [sourceRef] });
+    }
     const candidates = [...unique.values()].slice(0, Math.min(40, input.requestedCount * 2));
-    await prisma.leadDiscoverySource.createMany({ data: candidates.map((item) => ({ jobId, url: item.url, title: item.title, snippet: item.description, content: item.content, sourceType: 'SEARCH_RESULT', query: item.query, metadata: JSON.stringify({ providerId: item.providerId }) })) });
+    await prisma.leadDiscoverySource.createMany({ data: candidates.flatMap((item) => item.sourceRefs.map((source) => ({ jobId, url: safeUrl(source.url) || item.url, title: source.title, snippet: source.description, content: source.url === item.url ? item.content : null, sourceType: 'SEARCH_RESULT', query: source.query, metadata: JSON.stringify({ providerId: source.providerId }) }))) });
     await setStage('ENRICHING_WEBSITES');
     const enriched = await Promise.all(candidates.slice(0, input.requestedCount).map(async (item) => {
       if (item.content) return item;
-      try { return { ...item, content: (await fetchPublicContent(item.url, 200_000)).content }; } catch { return item; }
+      try { return { ...item, content: (await SearchGateway.fetchContent(item.url, 200_000)).content }; } catch { return item; }
     }));
     await setStage('EXTRACTING');
-    const existingKeys = new Set<string>();
+    const seenDomains = new Set<string>();
+    const seenEmails = new Set<string>();
+    const seenPhones = new Set<string>();
+    const seenNames = new Set<string>();
     let saved = 0;
     for (const item of enriched) {
       if (await checkpoint()) return;
@@ -138,14 +151,20 @@ export class LeadDiscoveryService {
       const phone = normalizePhone(extraction.phone);
       const domain = normalizeDomain(website);
       const normalizedName = normalizeName(extraction.company_name);
-      const dedupeKey = domain || email || phone || normalizedName;
-      if (!dedupeKey || existingKeys.has(dedupeKey)) continue;
-      existingKeys.add(dedupeKey);
-      const sourceCount = extraction.sources.length || 1;
+      const duplicate = Boolean((domain && seenDomains.has(domain)) || (email && seenEmails.has(email)) || (phone && seenPhones.has(phone)) || (!domain && !email && !phone && normalizedName && seenNames.has(normalizedName)));
+      if (!normalizedName || duplicate) continue;
+      if (domain) seenDomains.add(domain);
+      if (email) seenEmails.add(email);
+      if (phone) seenPhones.add(phone);
+      seenNames.add(normalizedName);
+      const allowedDomains = new Set(item.sourceRefs.map((source) => normalizeDomain(source.url)).filter((value): value is string => Boolean(value)));
+      const extractedSources = extraction.sources.flatMap((source) => { const url = safeUrl(source.url); return url && (allowedDomains.has(normalizeDomain(url) || '') || url === safeUrl(item.url)) ? [{ url, field: source.field, evidence: source.evidence }] : []; });
+      const referenceSources = item.sourceRefs.flatMap((source) => { const url = safeUrl(source.url); return url ? [{ url, field: 'company_name', evidence: String(source.title || source.description || url), title: source.title, query: source.query, providerId: source.providerId }] : []; });
+      const sources: Array<{ url: string; field: string; evidence: string; title?: string | null; query?: string | null; providerId?: string }> = [...extractedSources, ...referenceSources].filter((source, index, all) => all.findIndex((candidate) => candidate.url === source.url && candidate.field === source.field) === index);
+      const sourceCount = sources.length || 1;
       const scored = scoreLead({ prompt: job.prompt, companyName: extraction.company_name, industry: extraction.industry, city: extraction.city, country: extraction.country, website, email, phone, sourceCount });
-      const result = await prisma.leadDiscoveryResult.create({ data: { jobId, companyName: extraction.company_name.slice(0, 300), normalizedName, website, normalizedDomain: domain, industry: extraction.industry || null, businessDescription: extraction.business_description || null, country: extraction.country || null, city: extraction.city || null, phone: extraction.phone || null, normalizedPhone: phone, email: extraction.email || null, normalizedEmail: email, linkedin: safeUrl(extraction.linkedin), instagram: safeUrl(extraction.instagram), companySize: extraction.company_size || null, leadRelevanceScore: scored.score, dataCompleteness: completeness([website, email, phone, extraction.industry, extraction.city, extraction.business_description]), qualificationReason: extraction.qualification_reason || scored.reason, verificationStatus: extraction.verification_status === 'verified' && sourceCount > 0 ? 'VERIFIED' : extraction.verification_status === 'partially_verified' ? 'PARTIALLY_VERIFIED' : 'UNVERIFIED', metadata: JSON.stringify({ query: item.query, providerId: item.providerId }) } });
-      const sources = extraction.sources.length ? extraction.sources : [{ url: item.url, field: 'company_name', evidence: item.title }];
-      await prisma.leadDiscoverySource.createMany({ data: sources.map((source) => ({ jobId, resultId: result.id, url: source.url, title: null, snippet: source.evidence, sourceType: source.url === item.url ? 'SEARCH_RESULT' : 'OFFICIAL_WEBSITE', query: item.query, metadata: JSON.stringify({ field: source.field }) })) });
+      const result = await prisma.leadDiscoveryResult.create({ data: { jobId, companyName: extraction.company_name.slice(0, 300), normalizedName, website, normalizedDomain: domain, industry: extraction.industry || null, businessDescription: extraction.business_description || null, country: extraction.country || null, city: extraction.city || null, phone: extraction.phone || null, normalizedPhone: phone, email: extraction.email || null, normalizedEmail: email, linkedin: safeUrl(extraction.linkedin), instagram: safeUrl(extraction.instagram), companySize: extraction.company_size || null, leadRelevanceScore: scored.score, dataCompleteness: completeness([website, email, phone, extraction.industry, extraction.city, extraction.business_description]), qualificationReason: extraction.qualification_reason || scored.reason, verificationStatus: extraction.verification_status === 'verified' && sourceCount > 0 ? 'VERIFIED' : extraction.verification_status === 'partially_verified' ? 'PARTIALLY_VERIFIED' : 'UNVERIFIED', metadata: JSON.stringify({ query: item.query, providerId: item.providerId, sourceCount }) } });
+      await prisma.leadDiscoverySource.createMany({ data: sources.map((source) => ({ jobId, resultId: result.id, url: source.url, title: source.title || null, snippet: source.evidence, sourceType: source.url === safeUrl(item.url) ? 'SEARCH_RESULT' : 'OFFICIAL_WEBSITE', query: source.query || item.query, metadata: JSON.stringify({ field: source.field, providerId: source.providerId || item.providerId }) })) });
       saved++;
       if (saved >= input.requestedCount) break;
     }
@@ -181,7 +200,16 @@ export class LeadDiscoveryService {
 
   static async getJob(user: UserSession, jobId: string) {
     const organizationId = (await requireOrganizationContext(user)).id;
-    return prisma.leadDiscoveryJob.findFirst({ where: { id: jobId, organizationId }, include: { results: { include: { sources: true }, orderBy: [{ leadRelevanceScore: 'desc' }, { createdAt: 'asc' }] }, imports: true } });
+    return prisma.leadDiscoveryJob.findFirst({
+      where: { id: jobId, organizationId },
+      include: {
+        results: {
+          include: { sources: { select: { id: true, url: true, title: true, snippet: true, sourceType: true, query: true, collectedAt: true, metadata: true } } },
+          orderBy: [{ leadRelevanceScore: 'desc' }, { createdAt: 'asc' }],
+        },
+        imports: true,
+      },
+    });
   }
 
   static async importResults(user: UserSession, jobId: string, resultIds: string[]) {
@@ -191,6 +219,11 @@ export class LeadDiscoveryService {
     const results = await prisma.leadDiscoveryResult.findMany({ where: { id: { in: resultIds }, jobId } });
     const imported: Array<{ resultId: string; leadId?: string; status: string }> = [];
     for (const result of results) {
+      const priorImport = await prisma.leadDiscoveryImport.findUnique({ where: { jobId_resultId: { jobId, resultId: result.id } }, select: { leadId: true, status: true } });
+      if (priorImport && ['IMPORTED', 'SKIPPED'].includes(priorImport.status)) {
+        imported.push({ resultId: result.id, leadId: priorImport.leadId || undefined, status: priorImport.status });
+        continue;
+      }
       const existing = await prisma.lead.findFirst({ where: { organizationId, deletedAt: null, OR: [{ email: result.normalizedEmail || undefined }, { phone: result.normalizedPhone || undefined }, { companyName: result.companyName }] }, select: { id: true } });
       if (existing) {
         await prisma.leadDiscoveryImport.upsert({ where: { jobId_resultId: { jobId, resultId: result.id } }, create: { jobId, resultId: result.id, organizationId, importedById: user.id, leadId: existing.id, status: 'SKIPPED', error: 'Matching lead already exists' }, update: { leadId: existing.id, status: 'SKIPPED', error: 'Matching lead already exists', importedById: user.id } });

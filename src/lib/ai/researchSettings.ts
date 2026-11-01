@@ -1,5 +1,6 @@
 import prisma from '@/lib/db/prisma';
 import { decryptSecret } from '@/lib/integrations/oauth';
+import { getOrganizationAiUsagePolicy } from './organizationPolicy';
 
 export const AI_RESEARCH_STATUSES = ['OFF', 'BETA', 'ON'] as const;
 export type AiResearchStatus = typeof AI_RESEARCH_STATUSES[number];
@@ -180,8 +181,9 @@ export async function getAiResearchPlatformSettings(organizationId?: string): Pr
   const configuredStatus = values.get('ai_research_status') || process.env.AI_RESEARCH_STATUS;
   const configuredProvider = values.get('ai_research_provider') || process.env.AI_PROVIDER;
   const platformProviders = parseStoredProviders(values.get(AI_RESEARCH_PROVIDERS_SETTING_KEY)) || legacyProviders(values);
+  const policy = organizationId ? await getOrganizationAiUsagePolicy(organizationId) : null;
   let organizationRows: Array<{ id: string; name: string; kind: string; baseUrl: string; model: string; apiKeyEncrypted: string; customHeadersEncrypted: string | null; organizationRef: string | null; timeoutMs: number; maxOutputTokens: number; temperature: number; capabilities: string; featureKeys: string; enabled: boolean; isDefault: boolean }> = [];
-  if (organizationId) {
+  if (organizationId && policy?.allowOrganizationProviders !== false) {
     try {
       organizationRows = await prisma.organizationAiProvider.findMany({ where: { organizationId }, orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }], select: { id: true, name: true, kind: true, baseUrl: true, model: true, apiKeyEncrypted: true, customHeadersEncrypted: true, organizationRef: true, timeoutMs: true, maxOutputTokens: true, temperature: true, capabilities: true, featureKeys: true, enabled: true, isDefault: true } });
     } catch { /* Older installations use platform-only resolution until migrated. */ }
@@ -194,7 +196,7 @@ export async function getAiResearchPlatformSettings(organizationId?: string): Pr
     try { const parsed = JSON.parse(row.featureKeys); if (Array.isArray(parsed)) featureKeys = parsed.filter((value): value is string => typeof value === 'string'); } catch { /* empty */ }
     return [{ id: row.id, name: row.name, kind: row.kind, baseUrl: row.baseUrl, model: row.model, organizationId: row.organizationRef || undefined, customHeaders: readJsonSecret(row.customHeadersEncrypted || undefined), timeoutMs: row.timeoutMs, maxOutputTokens: row.maxOutputTokens, temperature: row.temperature, capabilities, featureKeys, scope: 'organization' as const, apiKey: readSecret(row.apiKeyEncrypted, undefined), enabled: row.enabled } satisfies AiResearchProviderConfig];
   });
-  const providers = [...organizationProviders, ...platformProviders];
+  const providers = [...organizationProviders, ...(policy?.allowPlatformProviders === false ? [] : platformProviders)];
   const platformRequestedActiveId = values.get(AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY)
     || (configuredProvider === 'groq' ? 'groq' : configuredProvider === 'gemini' ? 'gemini' : providers[0]?.id || null);
   const organizationDefault = organizationProviders.find((provider) => provider.enabled && provider.apiKey && organizationRows.find((row) => row.id === provider.id)?.isDefault);

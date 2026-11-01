@@ -131,6 +131,16 @@ export class PlatformAdminService {
     return { activeProviderId: settings.activeProviderId, fallbackProviderIds: settings.fallbackProviderIds, providers: settings.providers.map(({ apiKey, ...provider }) => ({ ...provider, configured: Boolean(apiKey) })) };
   }
 
+  static async getSearchProviderUsage(user: UserSession) {
+    requirePlatformAdmin(user);
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [aggregate, byProvider] = await Promise.all([
+      prisma.searchProviderUsageLog.aggregate({ where: { createdAt: { gte: since } }, _count: { _all: true }, _sum: { resultCount: true, estimatedCostUsd: true }, _avg: { durationMs: true } }),
+      prisma.searchProviderUsageLog.groupBy({ by: ['providerId', 'status'], where: { createdAt: { gte: since } }, _count: { _all: true }, _sum: { resultCount: true }, orderBy: { _count: { providerId: 'desc' } }, take: 20 }),
+    ]);
+    return { since: since.toISOString(), totalRequests: aggregate._count._all, totalResults: aggregate._sum.resultCount || 0, estimatedCostUsd: aggregate._sum.estimatedCostUsd, averageDurationMs: aggregate._avg.durationMs, providers: byProvider.map((row) => ({ providerId: row.providerId, status: row.status, requests: row._count._all, results: row._sum.resultCount || 0 })) };
+  }
+
   static async saveSearchProviderSettings(user: UserSession, raw: unknown) {
     requirePlatformAdmin(user);
     const input = searchProviderSettingsInput.parse(raw);
@@ -139,7 +149,7 @@ export class PlatformAdminService {
     const providers = input.providers.map((provider) => {
       const old = existingById.get(provider.id);
       const apiKey = provider.clearApiKey ? null : provider.apiKey || old?.apiKey || null;
-      return { id: provider.id, name: provider.name, kind: provider.kind, baseUrl: provider.baseUrl, enabled: provider.enabled, maxResults: provider.maxResults, apiKeyEncrypted: apiKey ? encryptSecret(apiKey) : searchClearedSecret() };
+      return { id: provider.id, name: provider.name, kind: provider.kind, baseUrl: provider.baseUrl, enabled: provider.enabled, maxResults: provider.maxResults, estimatedCostPerRequestUsd: provider.estimatedCostPerRequestUsd, apiKeyEncrypted: apiKey ? encryptSecret(apiKey) : searchClearedSecret() };
     });
     await prisma.$transaction(async (tx) => {
       const upsert = (key: string, value: string) => tx.platformSetting.upsert({ where: { key }, create: { key, value }, update: { value } });

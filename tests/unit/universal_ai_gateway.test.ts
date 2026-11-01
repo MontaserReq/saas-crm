@@ -47,6 +47,7 @@ describe('Universal AI Gateway', () => {
     vi.mocked(getAiResearchPlatformSettings).mockResolvedValue(settings([primary, fallback], 'primary'));
     const fetch = vi.fn()
       .mockResolvedValueOnce(new Response('upstream down', { status: 503 }))
+      .mockResolvedValueOnce(new Response('upstream still down', { status: 503 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: 'fallback result' } }] }), { status: 200 }));
     vi.stubGlobal('fetch', fetch);
 
@@ -54,7 +55,7 @@ describe('Universal AI Gateway', () => {
 
     expect(result.providerId).toBe('fallback');
     expect(result.content).toBe('fallback result');
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it('discovers model ids from an OpenAI-compatible models endpoint', async () => {
@@ -88,5 +89,12 @@ describe('Universal AI Gateway', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1, 0.2] }], usage: { prompt_tokens: 4 } }), { status: 200 })));
 
     await expect(UniversalAiGateway.getEmbeddings({ input: 'acme' })).resolves.toMatchObject({ providerId: 'embed', embeddings: [[0.1, 0.2]], inputTokens: 4 });
+  });
+
+  it('blocks feature requests when platform AI status is OFF', async () => {
+    vi.mocked(getAiResearchPlatformSettings).mockResolvedValue({ ...settings([provider()]), status: 'OFF' });
+    vi.stubGlobal('fetch', vi.fn());
+    await expect(UniversalAiGateway.generate({ messages: [{ role: 'user', content: 'hello' }] })).rejects.toThrow('disabled by the platform administrator');
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

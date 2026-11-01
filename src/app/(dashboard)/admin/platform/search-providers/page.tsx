@@ -7,6 +7,6 @@ import { SearchProviderSettingsView } from '@/components/admin/SearchProviderSet
 export default async function PlatformSearchProvidersPage() {
   const user = await getCurrentUser();
   if (!user || !isPlatformSuperAdmin(user)) redirect('/dashboard');
-  const settings = await PlatformAdminService.getSearchProviderSettings(user);
-  return <SearchProviderSettingsView language="en" settings={settings} />;
+  const [settings, usage] = await Promise.all([PlatformAdminService.getSearchProviderSettings(user), PlatformAdminService.getSearchProviderUsage(user)]);
+  return <SearchProviderSettingsView language="en" settings={settings} usage={usage} />;
 }

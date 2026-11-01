@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { emailSchema, optionalEmailSchema, optionalInternationalPhoneSchema } from '@/lib/validation/contactInfo';
+import { safeProviderEndpoint } from '@/lib/security/url';
 
 const text = z.string().trim();
 const aiProviderCapabilities = ['text', 'streaming', 'structured-json', 'tools', 'vision', 'embeddings', 'reasoning'] as const;
@@ -66,6 +67,7 @@ export const aiResearchSettingsInput = z.object({
   for (const providerId of value.fallbackProviderIds) if (!ids.includes(providerId)) context.addIssue({ code: 'custom', path: ['fallbackProviderIds'], message: 'Select existing fallback providers' });
   for (const [index, provider] of value.providers.entries()) {
     if (['openai-compatible', 'openai-responses', 'anthropic', 'custom-http'].includes(provider.kind) && !provider.baseUrl) context.addIssue({ code: 'custom', path: ['providers', index, 'baseUrl'], message: 'Base URL is required for this provider adapter' });
+    if (provider.baseUrl && !safeProviderEndpoint(provider.baseUrl)) context.addIssue({ code: 'custom', path: ['providers', index, 'baseUrl'], message: 'Provider endpoints must be public http(s) URLs' });
   }
 });
 
@@ -81,12 +83,14 @@ export const searchProviderSettingsInput = z.object({
     clearApiKey: z.boolean().default(false),
     enabled: z.boolean().default(true),
     maxResults: z.number().int().min(1).max(100).default(25),
+    estimatedCostPerRequestUsd: z.number().min(0).max(10000).nullable().default(null),
   }).strict()).min(1).max(15),
 }).strict().superRefine((value, context) => {
   const ids = value.providers.map(provider => provider.id);
   if (new Set(ids).size !== ids.length) context.addIssue({ code: 'custom', path: ['providers'], message: 'Provider ids must be unique' });
   if (value.activeProviderId && !ids.includes(value.activeProviderId)) context.addIssue({ code: 'custom', path: ['activeProviderId'], message: 'Select an existing provider' });
   for (const providerId of value.fallbackProviderIds) if (!ids.includes(providerId)) context.addIssue({ code: 'custom', path: ['fallbackProviderIds'], message: 'Select existing fallback providers' });
+  value.providers.forEach((provider, index) => { if (!safeProviderEndpoint(provider.baseUrl)) context.addIssue({ code: 'custom', path: ['providers', index, 'baseUrl'], message: 'Search endpoints must be public http(s) URLs' }); });
 });
 
 export const organizationAiProviderInput = z.object({
@@ -109,4 +113,15 @@ export const organizationAiProviderInput = z.object({
   isDefault: z.boolean().default(false),
 }).strict().superRefine((value, context) => {
   if (['openai-compatible', 'openai-responses', 'anthropic', 'custom-http'].includes(value.kind) && !value.baseUrl) context.addIssue({ code: 'custom', path: ['baseUrl'], message: 'Base URL is required for this provider adapter' });
+  if (value.baseUrl && !safeProviderEndpoint(value.baseUrl)) context.addIssue({ code: 'custom', path: ['baseUrl'], message: 'Provider endpoints must be public http(s) URLs' });
 });
+
+export const organizationAiUsagePolicyInput = z.object({
+  monthlyRequestLimit: z.number().int().min(1).max(1000000).nullable(),
+  monthlyCostLimitUsd: z.number().min(0).max(1000000).nullable(),
+  monthlySearchRequestLimit: z.number().int().min(1).max(1000000).nullable(),
+  monthlySearchCostLimitUsd: z.number().min(0).max(1000000).nullable(),
+  maxConcurrentDiscoveries: z.number().int().min(1).max(100).default(2),
+  allowPlatformProviders: z.boolean().default(true),
+  allowOrganizationProviders: z.boolean().default(true),
+}).strict();

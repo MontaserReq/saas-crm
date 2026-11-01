@@ -26,6 +26,8 @@ export interface AiResearchConfig {
   maxRetries?: number;
   maxTokens?: number;
   maxDurationMs?: number;
+  organizationId?: string;
+  userId?: string;
 }
 
 export function getAiResearchConfig(): AiResearchConfig {
@@ -60,10 +62,10 @@ export function getAiResearchConfig(): AiResearchConfig {
 }
 
 /** Resolve environment defaults plus the Platform Admin's persisted settings. */
-export async function getAiResearchConfigFromPlatform(): Promise<AiResearchConfig> {
+export async function getAiResearchConfigFromPlatform(organizationId?: string, userId?: string): Promise<AiResearchConfig> {
   const environmentConfig = getAiResearchConfig();
   const { getAiResearchPlatformSettings } = await import('./researchSettings');
-  const platform = await getAiResearchPlatformSettings();
+  const platform = await getAiResearchPlatformSettings(organizationId);
   return {
     ...environmentConfig,
     aiProvider: platform.provider,
@@ -74,5 +76,7 @@ export async function getAiResearchConfigFromPlatform(): Promise<AiResearchConfi
     activeProvider: platform.activeProvider,
     providers: platform.providers,
     providerId: platform.activeProviderId || undefined,
+    organizationId,
+    userId,
   };
 }

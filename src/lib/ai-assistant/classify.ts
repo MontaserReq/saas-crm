@@ -8,6 +8,8 @@ export interface ClassifyContext {
   recentTurns?: { role: 'user' | 'assistant'; content: string }[];
   lastResultSummary?: string | null;
   language: 'ar' | 'en';
+  organizationId?: string;
+  userId?: string;
 }
 
 export interface ClassifyResult {
@@ -63,7 +65,8 @@ export async function classifyIntent(message: string, context: ClassifyContext):
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      300
+      300,
+      { organizationId: context.organizationId, userId: context.userId }
     );
   } catch {
     return { tool: 'none', args: { reason: 'classifier_unavailable' } };

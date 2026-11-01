@@ -20,9 +20,9 @@ export class AiAssistantUnavailableError extends Error {
  * assistant only ever reasons over CRM data the server already fetched).
  * Used for cheap/fast intent classification.
  */
-export async function callGroqChat(messages: ChatMessage[], maxTokens = 500): Promise<string> {
+export async function callGroqChat(messages: ChatMessage[], maxTokens = 500, context?: { organizationId?: string; userId?: string }): Promise<string> {
   try {
-    return (await UniversalAiGateway.generate({ messages, maxOutputTokens: maxTokens, temperature: 0.1, purpose: 'assistant' })).content;
+    return (await UniversalAiGateway.generate({ messages, maxOutputTokens: maxTokens, temperature: 0.1, purpose: 'assistant', organizationId: context?.organizationId, userId: context?.userId })).content;
   } catch (error) {
     if (error instanceof AiNotConfiguredError) throw new AiAssistantUnavailableError(error.message);
     throw error;
@@ -33,9 +33,9 @@ export async function callGroqChat(messages: ChatMessage[], maxTokens = 500): Pr
  * Plain Gemini chat-completion call (no google_search grounding tool).
  * Used only when a tool result needs natural-language summarization.
  */
-export async function callGeminiChat(messages: ChatMessage[], maxTokens = 700): Promise<string> {
+export async function callGeminiChat(messages: ChatMessage[], maxTokens = 700, context?: { organizationId?: string; userId?: string }): Promise<string> {
   try {
-    return (await UniversalAiGateway.generate({ messages, maxOutputTokens: maxTokens, temperature: 0.2, purpose: 'assistant' })).content;
+    return (await UniversalAiGateway.generate({ messages, maxOutputTokens: maxTokens, temperature: 0.2, purpose: 'assistant', organizationId: context?.organizationId, userId: context?.userId })).content;
   } catch (error) {
     if (error instanceof AiNotConfiguredError) throw new AiAssistantUnavailableError(error.message);
     throw error;

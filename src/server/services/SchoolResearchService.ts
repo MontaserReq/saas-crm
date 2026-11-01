@@ -63,9 +63,9 @@ export class SchoolResearchService {
       throw new Error('AI Research is currently disabled by the platform administrator.');
     }
     const validated = schoolResearchJobSchema.parse({ mode: 'FIND_NEW', ...input });
-    const config = await getAiResearchConfigFromPlatform();
-    const requestedCount = Math.min(validated.requestedCount, config.maxSchoolsPerJob);
     const organizationId = await this.organizationForActor(actorId);
+    const config = await getAiResearchConfigFromPlatform(organizationId, actorId);
+    const requestedCount = Math.min(validated.requestedCount, config.maxSchoolsPerJob);
 
     const job = await prisma.schoolResearchJob.create({
       data: {
@@ -104,7 +104,7 @@ export class SchoolResearchService {
     if (!job || !isValidJobTransition(job.status as ResearchJobStatus, 'RUNNING')) return;
 
     const organizationId = requireOrganizationIdValue(job.organizationId);
-    const config = await getAiResearchConfigFromPlatform();
+    const config = await getAiResearchConfigFromPlatform(organizationId, job.createdById);
     const execution = await acquireOperation({
       organizationId,
       userId: job.createdById,
@@ -181,7 +181,7 @@ export class SchoolResearchService {
       });
     };
 
-    const provider = await getAiProviderFromPlatform(onAttempt);
+    const provider = await getAiProviderFromPlatform(onAttempt, organizationId, job.createdById);
     let aiCallCount = 0;
     let sourceCount = 0;
     const collected: SchoolExtractionItem[] = [];

@@ -12,6 +12,8 @@ export interface ComposeInput {
   language: Lang;
   originalMessage: string;
   unclearReason?: string;
+  organizationId?: string;
+  userId?: string;
 }
 
 export interface ComposeOutput {
@@ -93,7 +95,7 @@ export async function composeAnswer(input: ComposeInput): Promise<ComposeOutput>
       // several tickets, not a plain list — everything else below is
       // deterministically templated (cheaper, and zero hallucination risk
       // since the phrasing never touches the underlying facts).
-      const reply = await summarizeSchoolActivity(data, language);
+      const reply = await summarizeSchoolActivity(data, language, { organizationId: input.organizationId, userId: input.userId });
       return { reply, resultSummary: `activity for ${data.schoolName}: ${data.recentTickets.length} recent tickets` };
     }
 
@@ -184,7 +186,7 @@ function templateAnswer(tool: ToolName, data: any, lang: Lang): string {
   }
 }
 
-async function summarizeSchoolActivity(data: { schoolName: string; recentTickets: any[] }, lang: Lang): Promise<string> {
+async function summarizeSchoolActivity(data: { schoolName: string; recentTickets: any[] }, lang: Lang, context?: { organizationId?: string; userId?: string }): Promise<string> {
   if (!data.recentTickets.length) {
     return lang === 'ar' ? `ما في نشاط مسجل للعميل ${data.schoolName}.` : `No recorded activity for ${data.schoolName}.`;
   }
@@ -200,7 +202,8 @@ async function summarizeSchoolActivity(data: { schoolName: string; recentTickets
         { role: 'system', content: system },
         { role: 'user', content: `Customer: ${data.schoolName}\nRecent tickets (JSON): ${JSON.stringify(data.recentTickets)}` },
       ],
-      400
+      400,
+      context
     );
     return reply.trim();
   } catch {

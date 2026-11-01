@@ -90,21 +90,22 @@ model User {
   createdWorkflows              Workflow[]                  @relation("WorkflowCreatedBy")
   updatedWorkflows              Workflow[]                  @relation("WorkflowUpdatedBy")
 
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @updatedAt
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
   userPermissions         UserPermission[]
   organizationMemberships OrganizationMember[]
   teamMemberships         TeamMember[]
-  sentInvitations         OrganizationInvite[]  @relation("InvitationSender")
-  receivedInvitations     OrganizationInvite[]  @relation("InvitationRecipient")
-  operationExecutions     OperationExecution[]  @relation("OperationExecutionUser")
-  requestedPlanUpgrades   PlanUpgradeRequest[]  @relation("PlanUpgradeRequester")
-  reviewedPlanUpgrades    PlanUpgradeRequest[]  @relation("PlanUpgradeReviewer")
-  confirmedPlanPayments   PlanUpgradeRequest[]  @relation("PlanPaymentConfirmer")
-  initiatedDataImports    DataImport[]          @relation("DataImportInitiator")
-  leadDiscoveryJobs       LeadDiscoveryJob[]    @relation("LeadDiscoveryJobCreator")
-  leadDiscoveryImports    LeadDiscoveryImport[] @relation("LeadDiscoveryImportActor")
-  aiGatewayUsageLogs      AiGatewayUsageLog[]   @relation("AiGatewayUsageUser")
+  sentInvitations         OrganizationInvite[]     @relation("InvitationSender")
+  receivedInvitations     OrganizationInvite[]     @relation("InvitationRecipient")
+  operationExecutions     OperationExecution[]     @relation("OperationExecutionUser")
+  requestedPlanUpgrades   PlanUpgradeRequest[]     @relation("PlanUpgradeRequester")
+  reviewedPlanUpgrades    PlanUpgradeRequest[]     @relation("PlanUpgradeReviewer")
+  confirmedPlanPayments   PlanUpgradeRequest[]     @relation("PlanPaymentConfirmer")
+  initiatedDataImports    DataImport[]             @relation("DataImportInitiator")
+  leadDiscoveryJobs       LeadDiscoveryJob[]       @relation("LeadDiscoveryJobCreator")
+  leadDiscoveryImports    LeadDiscoveryImport[]    @relation("LeadDiscoveryImportActor")
+  aiGatewayUsageLogs      AiGatewayUsageLog[]      @relation("AiGatewayUsageUser")
+  searchProviderUsageLogs SearchProviderUsageLog[] @relation("SearchUsageUser")
 
   @@index([roleId])
   @@index([departmentId])
@@ -176,7 +177,9 @@ model Organization {
   leadDiscoveryJobs         LeadDiscoveryJob[]
   leadDiscoveryImports      LeadDiscoveryImport[]
   aiGatewayUsageLogs        AiGatewayUsageLog[]          @relation("AiGatewayUsageOrganization")
+  searchProviderUsageLogs   SearchProviderUsageLog[]     @relation("SearchUsageOrganization")
   aiProviders               OrganizationAiProvider[]
+  aiUsagePolicy             OrganizationAiUsagePolicy?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -405,6 +408,42 @@ model AiGatewayUsageLog {
   @@index([userId])
 }
 
+model SearchProviderUsageLog {
+  id               String        @id @default(cuid())
+  organizationId   String?
+  organization     Organization? @relation("SearchUsageOrganization", fields: [organizationId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?         @relation("SearchUsageUser", fields: [userId], references: [id], onDelete: SetNull)
+  providerId       String
+  purpose          String?
+  queryHash        String?
+  status           String
+  resultCount      Int           @default(0)
+  durationMs       Int
+  estimatedCostUsd Float?
+  httpStatus       Int?
+  errorMessage     String?
+  createdAt        DateTime      @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([providerId, status, createdAt])
+  @@index([userId])
+}
+
+model SearchResultCache {
+  id         String   @id @default(cuid())
+  cacheKey   String   @unique
+  providerId String
+  query      String
+  payload    String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([providerId, createdAt])
+}
+
 model OrganizationAiProvider {
   id                     String       @id @default(cuid())
   organizationId         String
@@ -429,6 +468,21 @@ model OrganizationAiProvider {
   @@unique([organizationId, name])
   @@index([organizationId, enabled])
   @@index([organizationId, isDefault])
+}
+
+model OrganizationAiUsagePolicy {
+  id                         String       @id @default(cuid())
+  organizationId             String       @unique
+  organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  monthlyRequestLimit        Int?
+  monthlyCostLimitUsd        Float?
+  monthlySearchRequestLimit  Int?
+  monthlySearchCostLimitUsd  Float?
+  maxConcurrentDiscoveries   Int          @default(2)
+  allowPlatformProviders     Boolean      @default(true)
+  allowOrganizationProviders Boolean      @default(true)
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
 }
 
 model CustomFieldDefinition {

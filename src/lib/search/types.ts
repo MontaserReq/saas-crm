@@ -4,6 +4,9 @@ export type SearchRequest = {
   query: string;
   maxResults?: number;
   includeContent?: boolean;
+  organizationId?: string;
+  userId?: string;
+  purpose?: string;
 };
 
 export type SearchResult = {

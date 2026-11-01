@@ -7,7 +7,7 @@ import type { OnAttemptCallback } from './usage';
 export class UniversalResearchProvider implements AiProvider {
   readonly name: string;
 
-  constructor(private readonly providerId?: string, private readonly onAttempt?: OnAttemptCallback) {
+  constructor(private readonly providerId?: string, private readonly onAttempt?: OnAttemptCallback, private readonly organizationId?: string, private readonly userId?: string) {
     this.name = providerId || 'universal-ai-gateway';
   }
 
@@ -17,6 +17,8 @@ export class UniversalResearchProvider implements AiProvider {
       purpose: 'smart-lead-discovery',
       temperature: 0.2,
       maxOutputTokens: 8192,
+      organizationId: this.organizationId,
+      userId: this.userId,
       messages: [{ role: 'user', content: buildExtractionPrompt(input) }],
     });
     try {

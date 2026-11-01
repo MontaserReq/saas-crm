@@ -10,6 +10,8 @@ import prisma from '@/lib/db/prisma';
 import { EmailIntegrationSettings } from '@/components/settings/EmailIntegrationSettings';
 import { OrganizationAiProvidersView } from '@/components/settings/OrganizationAiProvidersView';
 import { OrganizationAiProviderService } from '@/server/services/OrganizationAiProviderService';
+import { OrganizationAiUsagePolicyService } from '@/server/services/OrganizationAiUsagePolicyService';
+import { OrganizationAiUsagePolicyView } from '@/components/settings/OrganizationAiUsagePolicyView';
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
@@ -21,17 +23,19 @@ export default async function SettingsPage() {
   const customFieldEntities = Object.entries(customFieldEntityFeatures).filter(([, feature]) => hasPlanFeature(user, feature)).map(([entity]) => entity);
   const canUseCustomFields = hasPlanFeature(user, 'custom_fields') && customFieldEntities.length > 0;
   const canViewOrganizationAi = hasPlanFeature(user, 'ai_research') && hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_VIEW);
-  const [config, unfilteredFields, integrations, organizationAiProviders] = await Promise.all([
+  const [config, unfilteredFields, integrations, organizationAiProviders, organizationAiUsagePolicy] = await Promise.all([
     OrganizationConfigService.get(user),
     canUseCustomFields ? CustomFieldService.listDefinitions(user) : Promise.resolve([]),
     user.organizationId ? prisma.externalIntegration.findMany({ where: { organizationId: user.organizationId }, select: { provider: true, accountEmail: true, scopes: true, tokenExpiresAt: true } }) : Promise.resolve([]),
     canViewOrganizationAi ? OrganizationAiProviderService.list(user) : Promise.resolve([]),
+    canViewOrganizationAi ? OrganizationAiUsagePolicyService.get(user) : Promise.resolve(null),
   ]);
   const fields = unfilteredFields.filter(field => customFieldEntities.includes(field.entityType));
   return <div className="space-y-6">
     <SettingsClientView config={config} fields={fields} customFieldEntities={customFieldEntities} canUseCustomFields={canUseCustomFields} canConfigureClients={hasPlanFeature(user, 'clients')} canConfigureLeads={hasPlanFeature(user, 'leads')} canManageApprovals={hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)} />
     {config.settings.onboardingState && user.planFeatures == null && hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE) && <WorkspaceModules initialModules={config.settings.enabledModules} />}
     {canViewOrganizationAi && <OrganizationAiProvidersView initialProviders={organizationAiProviders} canManage={hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)} language={config.organization.language === 'ar' ? 'ar' : 'en'} />}
+    {canViewOrganizationAi && organizationAiUsagePolicy && <OrganizationAiUsagePolicyView initialPolicy={organizationAiUsagePolicy} canManage={hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)} language={config.organization.language === 'ar' ? 'ar' : 'en'} />}
     {user.planFeatures?.includes('integrations') && <EmailIntegrationSettings integrations={integrations.map((item) => { let scopes: string[] = []; try { scopes = JSON.parse(item.scopes || '[]'); } catch { scopes = []; } return { ...item, provider: item.provider.toLowerCase(), scopes, tokenExpiresAt: item.tokenExpiresAt?.toISOString() || null }; })} canManage={hasPermission(user, PERMISSIONS.EMAIL_INTEGRATIONS_MANAGE) || hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)} googleApprovalPending={process.env.GOOGLE_EMAIL_INTEGRATION_PENDING_REVIEW === 'true'} />}
   </div>;
 }

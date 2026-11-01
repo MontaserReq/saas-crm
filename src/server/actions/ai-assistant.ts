@@ -90,6 +90,8 @@ export async function askAssistantAction(input: AskAssistantInput): Promise<AskA
       recentTurns: (input.recentTurns || []).slice(-MAX_TURNS),
       lastResultSummary: input.lastResultSummary,
       language,
+      organizationId: user.organizationId || undefined,
+      userId: user.id,
     });
 
     const { tool, result } = await routeTool(user, classification.tool, classification.args);
@@ -100,6 +102,8 @@ export async function askAssistantAction(input: AskAssistantInput): Promise<AskA
       language,
       originalMessage: message,
       unclearReason: classification.args?.reason === 'action_requested' ? 'refused_action' : undefined,
+      organizationId: user.organizationId || undefined,
+      userId: user.id,
     });
 
     await AuditService.logAudit({

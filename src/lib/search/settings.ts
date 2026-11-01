@@ -10,6 +10,7 @@ export type SearchProviderConfig = {
   apiKey: string | null;
   enabled: boolean;
   maxResults: number;
+  estimatedCostPerRequestUsd?: number | null;
 };
 
 export const SEARCH_PROVIDERS_SETTING_KEY = 'search_providers';
@@ -26,8 +27,8 @@ function decrypt(value: unknown): string | null {
 
 function envProviders(): SearchProviderConfig[] {
   return [
-    { id: 'exa', name: 'Exa', kind: 'exa', baseUrl: 'https://api.exa.ai', apiKey: process.env.EXA_API_KEY || null, enabled: true, maxResults: 25 },
-    { id: 'brave', name: 'Brave Search', kind: 'brave', baseUrl: 'https://api.search.brave.com/res/v1', apiKey: process.env.BRAVE_SEARCH_API_KEY || null, enabled: true, maxResults: 25 },
+    { id: 'exa', name: 'Exa', kind: 'exa', baseUrl: 'https://api.exa.ai', apiKey: process.env.EXA_API_KEY || null, enabled: true, maxResults: 25, estimatedCostPerRequestUsd: null },
+    { id: 'brave', name: 'Brave Search', kind: 'brave', baseUrl: 'https://api.search.brave.com/res/v1', apiKey: process.env.BRAVE_SEARCH_API_KEY || null, enabled: true, maxResults: 25, estimatedCostPerRequestUsd: null },
   ];
 }
 
@@ -44,7 +45,7 @@ export async function getSearchProviderSettings() {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) providers = parsed.flatMap((item: any) => {
         if (!item || typeof item.id !== 'string' || typeof item.name !== 'string' || !['exa', 'brave', 'custom'].includes(item.kind)) return [];
-        return [{ id: item.id, name: item.name, kind: item.kind, baseUrl: typeof item.baseUrl === 'string' ? item.baseUrl : '', apiKey: decrypt(item.apiKeyEncrypted), enabled: item.enabled !== false, maxResults: Math.min(100, Math.max(1, Number(item.maxResults) || 25)) } satisfies SearchProviderConfig];
+        return [{ id: item.id, name: item.name, kind: item.kind, baseUrl: typeof item.baseUrl === 'string' ? item.baseUrl : '', apiKey: decrypt(item.apiKeyEncrypted), enabled: item.enabled !== false, maxResults: Math.min(100, Math.max(1, Number(item.maxResults) || 25)), estimatedCostPerRequestUsd: typeof item.estimatedCostPerRequestUsd === 'number' ? Math.max(0, item.estimatedCostPerRequestUsd) : null } satisfies SearchProviderConfig];
       });
     } catch { /* fall back to environment providers */ }
   }
