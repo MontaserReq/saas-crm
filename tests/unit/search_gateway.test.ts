@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const dnsMock = vi.hoisted(() => ({ lookup: vi.fn().mockResolvedValue([{ address: '93.184.216.34' }]) }));
+vi.mock('node:dns/promises', () => ({ default: dnsMock }));
+
 const prismaMock = vi.hoisted(() => ({
   searchResultCache: { findUnique: vi.fn(), upsert: vi.fn(), delete: vi.fn() },
+  searchContentCache: { findUnique: vi.fn(), upsert: vi.fn(), delete: vi.fn() },
   searchProviderUsageLog: { create: vi.fn(), groupBy: vi.fn() },
 }));
 
@@ -49,5 +53,18 @@ describe('SearchGateway', () => {
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(prismaMock.searchProviderUsageLog.create.mock.calls[0][0].data.status).toBe('FAILED');
     expect(prismaMock.searchProviderUsageLog.create.mock.calls[1][0].data.status).toBe('SUCCESS');
+  });
+
+  it('caches sanitized public website content by URL', async () => {
+    prismaMock.searchContentCache.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'content-1', url: 'https://acme.example/', expiresAt: new Date(Date.now() + 60_000), content: 'Acme public contact details' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html><script>alert(1)</script><main>Acme <strong>public</strong> contact details</main></html>', { status: 200, headers: { 'content-type': 'text/html' } })));
+
+    const first = await SearchGateway.fetchContent('https://acme.example/');
+    const second = await SearchGateway.fetchContent('https://acme.example/');
+
+    expect(first.content).toBe('Acme public contact details');
+    expect(second.content).toBe('Acme public contact details');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(prismaMock.searchContentCache.upsert).toHaveBeenCalledTimes(1);
   });
 });

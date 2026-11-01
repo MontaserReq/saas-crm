@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { cancelLeadDiscoveryJobAction, createLeadDiscoveryJobAction, getLeadDiscoveryJobAction, importLeadDiscoveryResultsAction, retryLeadDiscoveryJobAction } from '@/server/actions/lead-discovery';
 
 type Job = { id: string; prompt: string; status: string; stage: string; requestedCount: number; createdAt: string; _count?: { results: number } };
-type Result = { id: string; companyName: string; website: string | null; industry: string | null; country: string | null; city: string | null; phone: string | null; email: string | null; linkedin?: string | null; instagram?: string | null; companySize?: string | null; businessDescription?: string | null; leadRelevanceScore: number; dataCompleteness: number; qualificationReason: string | null; verificationStatus: string; importedLeadId: string | null; sources: Array<{ id: string; url: string; title?: string | null; snippet: string | null; sourceType?: string; query?: string | null }> };
+type Result = { id: string; companyName: string; website: string | null; industry: string | null; country: string | null; city: string | null; address?: string | null; phone: string | null; email: string | null; linkedin?: string | null; instagram?: string | null; companySize?: string | null; businessDescription?: string | null; leadRelevanceScore: number; dataCompleteness: number; qualificationReason: string | null; verificationStatus: string; importedLeadId: string | null; sources: Array<{ id: string; url: string; title?: string | null; snippet: string | null; sourceType?: string; query?: string | null }> };
 
 const stages = ['UNDERSTANDING', 'GENERATING_QUERIES', 'SEARCHING_WEB', 'ENRICHING_WEBSITES', 'EXTRACTING', 'VALIDATING', 'DEDUPLICATING', 'SCORING', 'READY'];
 const requiredFieldOptions = ['website', 'email', 'phone', 'address', 'linkedin'];
@@ -46,7 +46,7 @@ export function LeadDiscoveryView({ initialJobs, canImport, language }: { initia
   const results: Result[] = useMemo(() => job?.results || [], [job?.results]);
   const running = job && !['COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(job.status);
   const filteredResults = useMemo(() => results.filter((item) => {
-    const text = [item.companyName, item.website, item.industry, item.city, item.country, item.email, item.phone].filter(Boolean).join(' ').toLowerCase();
+    const text = [item.companyName, item.website, item.industry, item.city, item.country, item.address, item.email, item.phone].filter(Boolean).join(' ').toLowerCase();
     return (!query.trim() || text.includes(query.trim().toLowerCase())) && (verification === 'ALL' || item.verificationStatus === verification);
   }).sort((a, b) => sort === 'name' ? a.companyName.localeCompare(b.companyName) : sort === 'completeness' ? b.dataCompleteness - a.dataCompleteness : b.leadRelevanceScore - a.leadRelevanceScore), [results, query, verification, sort]);
   const totalPages = Math.max(1, Math.ceil(filteredResults.length / pageSize));
@@ -86,8 +86,8 @@ export function LeadDiscoveryView({ initialJobs, canImport, language }: { initia
   function togglePageSelection() { setSelected((current) => allVisibleSelected ? current.filter((id) => !visibleSelectable.includes(id)) : [...new Set([...current, ...visibleSelectable])]); }
   function exportResults() {
     const rows = selectedResults.length ? selectedResults : filteredResults;
-    const header = ['Company name', 'Industry', 'Country', 'City', 'Email', 'Phone', 'Website', 'Score', 'Verification', 'Sources'];
-    const csv = [header, ...rows.map((item) => [item.companyName, item.industry || '', item.country || '', item.city || '', item.email || '', item.phone || '', item.website || '', item.leadRelevanceScore, item.verificationStatus, item.sources.length])].map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
+    const header = ['Company name', 'Industry', 'Country', 'City', 'Address', 'Email', 'Phone', 'Website', 'Score', 'Verification', 'Sources'];
+    const csv = [header, ...rows.map((item) => [item.companyName, item.industry || '', item.country || '', item.city || '', item.address || '', item.email || '', item.phone || '', item.website || '', item.leadRelevanceScore, item.verificationStatus, item.sources.length])].map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `satrcrm-discovery-${selectedJobId || 'results'}.csv`; anchor.click(); URL.revokeObjectURL(url);
   }
 

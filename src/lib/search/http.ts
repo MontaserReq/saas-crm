@@ -1,6 +1,7 @@
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { safeExternalUrl } from '@/lib/security/url';
+import { sanitizeExternalContent } from '@/lib/security/external';
 
 function privateIp(ip: string): boolean {
   if (net.isIPv4(ip)) {
@@ -33,7 +34,7 @@ export async function fetchPublicContent(value: string, maxBytes = 500_000): Pro
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('text/') && !contentType.includes('html') && !contentType.includes('json')) throw new Error('External content type is not supported');
   const reader = response.body?.getReader();
-  if (!reader) return { url, content: (await response.text()).slice(0, maxBytes) };
+  if (!reader) return { url, content: sanitizeExternalContent((await response.text()).slice(0, maxBytes)) };
   const chunks: Uint8Array[] = [];
   let size = 0;
   while (size < maxBytes) {
@@ -45,5 +46,5 @@ export async function fetchPublicContent(value: string, maxBytes = 500_000): Pro
     size += Math.min(chunk.byteLength, remaining);
     if (chunk.byteLength > remaining) break;
   }
-  return { url, content: new TextDecoder().decode(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)))) };
+  return { url, content: sanitizeExternalContent(new TextDecoder().decode(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)))) ) };
 }

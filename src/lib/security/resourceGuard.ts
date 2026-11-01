@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db/prisma';
 
-export type ResourceOperationType = 'AI_RESEARCH' | 'AI_ASSISTANT' | 'PROPOSAL_GENERATION' | 'SCHOOL_IMPORT' | 'WORKFLOW';
+export type ResourceOperationType = 'AI_RESEARCH' | 'LEAD_DISCOVERY' | 'AI_ASSISTANT' | 'PROPOSAL_GENERATION' | 'SCHOOL_IMPORT' | 'WORKFLOW';
 export type OperationStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
 
 export interface ResourceLimits {
@@ -41,6 +41,12 @@ export const RESOURCE_LIMITS: Record<ResourceOperationType, ResourceLimits> = {
     organization: positiveInt(process.env.AI_RESEARCH_ORG_CONCURRENCY, 1),
     user: positiveInt(process.env.AI_RESEARCH_USER_CONCURRENCY, 1),
     leaseMs: positiveInt(process.env.AI_RESEARCH_LEASE_MS, 20 * 60 * 1000),
+  },
+  LEAD_DISCOVERY: {
+    global: positiveInt(process.env.LEAD_DISCOVERY_GLOBAL_CONCURRENCY, 2),
+    organization: positiveInt(process.env.LEAD_DISCOVERY_ORG_CONCURRENCY, 2),
+    user: positiveInt(process.env.LEAD_DISCOVERY_USER_CONCURRENCY, 1),
+    leaseMs: positiveInt(process.env.LEAD_DISCOVERY_LEASE_MS, 20 * 60 * 1000),
   },
   AI_ASSISTANT: {
     global: positiveInt(process.env.AI_ASSISTANT_GLOBAL_CONCURRENCY, 8),
@@ -175,6 +181,19 @@ export async function withResearchJobOwner<T>(
       FOR UPDATE OF job, operation
     `;
     if (rows.length !== 1) throw new StaleOperationError();
+    return mutation(tx);
+  });
+}
+
+export async function withLeadDiscoveryJobOwner<T>(
+  jobId: string,
+  operationId: string,
+  ownerToken: string,
+  mutation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return withOperationOwner(operationId, ownerToken, async (tx) => {
+    const job = await tx.leadDiscoveryJob.findFirst({ where: { id: jobId, currentOperationId: operationId }, select: { id: true } });
+    if (!job) throw new StaleOperationError();
     return mutation(tx);
   });
 }

@@ -5,6 +5,7 @@ import prisma from '@/lib/db/prisma';
 import { sanitizeErrorMessage } from './usage';
 import { assertOrganizationAiRequestAllowed } from './organizationPolicy';
 import { safeProviderEndpoint } from '@/lib/security/url';
+import { readLimitedJson, readLimitedResponseText } from '@/lib/security/external';
 
 export type AiGatewayRole = 'system' | 'user' | 'assistant';
 export type AiGatewayMessage = { role: AiGatewayRole; content: string };
@@ -183,7 +184,7 @@ async function generateOpenAICompatible(provider: AiResearchProviderConfig, requ
     }),
   }, timeoutFor(provider));
   if (!response.ok) return responseError(response, provider.name);
-  const payload: any = await response.json();
+  const payload: any = await readLimitedJson(response);
   const content = typeof payload?.choices?.[0]?.message?.content === 'string' ? payload.choices[0].message.content : '';
   const toolCalls = normalizedToolCalls(payload?.choices?.[0]?.message?.tool_calls);
   if (!content.trim() && !toolCalls.length) throw new AiExtractionError(`${provider.name} returned an empty response`);
@@ -197,7 +198,7 @@ async function generateResponses(provider: AiResearchProviderConfig, request: Ai
     body: JSON.stringify({ model: request.model || provider.model, input: providerMessages(request.messages), temperature: request.temperature ?? provider.temperature ?? 0.2, max_output_tokens: request.maxOutputTokens || provider.maxOutputTokens || 4096, ...(request.tools?.length ? { tools: responsesTools(request) } : {}) }),
   }, timeoutFor(provider));
   if (!response.ok) return responseError(response, provider.name);
-  const payload: any = await response.json();
+  const payload: any = await readLimitedJson(response);
   const content = typeof payload?.output_text === 'string'
     ? payload.output_text
     : Array.isArray(payload?.output) ? payload.output.flatMap((item: any) => item?.content || []).map((item: any) => item?.text || '').join('') : '';
@@ -215,7 +216,7 @@ async function generateAnthropic(provider: AiResearchProviderConfig, request: Ai
     body: JSON.stringify({ model: request.model || provider.model, max_tokens: request.maxOutputTokens || provider.maxOutputTokens || 4096, temperature: request.temperature ?? provider.temperature ?? 0.2, ...(system ? { system } : {}), messages, ...(request.tools?.length ? { tools: anthropicTools(request), tool_choice: request.toolChoice === 'required' ? { type: 'any' } : request.toolChoice === 'auto' ? { type: 'auto' } : undefined } : {}) }),
   }, timeoutFor(provider));
   if (!response.ok) return responseError(response, provider.name);
-  const payload: any = await response.json();
+  const payload: any = await readLimitedJson(response);
   const content = Array.isArray(payload?.content) ? payload.content.map((item: any) => item?.type === 'text' ? item.text || '' : '').join('') : '';
   const toolCalls = normalizedToolCalls(Array.isArray(payload?.content) ? payload.content.filter((item: any) => item?.type === 'tool_use') : []);
   if (!content.trim() && !toolCalls.length) throw new AiExtractionError(`${provider.name} returned an empty response`);
@@ -232,7 +233,7 @@ async function generateGemini(provider: AiResearchProviderConfig, request: AiGat
     body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents, ...(geminiTools(request) ? { tools: geminiTools(request) } : {}), generationConfig: { temperature: request.temperature ?? provider.temperature ?? 0.2, maxOutputTokens: request.maxOutputTokens || provider.maxOutputTokens || 4096 } }),
   }, timeoutFor(provider));
   if (!response.ok) return responseError(response, provider.name);
-  const payload: any = await response.json();
+  const payload: any = await readLimitedJson(response);
   const parts = payload?.candidates?.[0]?.content?.parts || [];
   const content = parts.map((part: any) => part?.text || '').join('');
   const toolCalls = normalizedToolCalls(parts.filter((part: any) => part?.functionCall).map((part: any) => ({ id: part.functionCall.name, name: part.functionCall.name, arguments: part.functionCall.args })));
@@ -254,7 +255,7 @@ async function generateCustomHttp(provider: AiResearchProviderConfig, request: A
     }),
   }, timeoutFor(provider));
   if (!response.ok) return responseError(response, provider.name);
-  const payload: any = await response.json();
+  const payload: any = await readLimitedJson(response);
   const configuredContent = provider.responsePath ? readPath(payload, provider.responsePath) : undefined;
   const content = typeof configuredContent === 'string'
     ? configuredContent
@@ -306,7 +307,7 @@ async function listModelsForProvider(provider: AiResearchProviderConfig): Promis
   }
   const response = await requestWithTimeout(url, { method: 'GET', headers }, timeoutFor(provider));
   if (!response.ok) return responseError(response, provider.name);
-  const payload: any = await response.json();
+  const payload: any = await readLimitedJson(response);
   const models = provider.kind === 'gemini'
     ? payload?.models?.filter((model: any) => !Array.isArray(model.supportedGenerationMethods) || model.supportedGenerationMethods.includes('generateContent')).map((model: any) => String(model.name || '').replace(/^models\//, '')).filter(Boolean)
     : payload?.data?.map((model: any) => String(model.id || '')).filter(Boolean);
@@ -315,7 +316,7 @@ async function listModelsForProvider(provider: AiResearchProviderConfig): Promis
 
 async function* ssePayloads(response: Response): AsyncGenerator<any> {
   if (!response.body) {
-    const text = await response.text();
+    const text = await readLimitedResponseText(response);
     if (text.trim()) yield JSON.parse(text);
     return;
   }
@@ -334,6 +335,7 @@ async function* ssePayloads(response: Response): AsyncGenerator<any> {
   while (true) {
     const next = await reader.read();
     buffer += decoder.decode(next.value || new Uint8Array(), { stream: !next.done });
+    if (buffer.length > 2_000_000) throw new AiExtractionError('AI stream response is too large.');
     for await (const payload of parseEvents(next.done)) yield payload;
     if (next.done) break;
   }
@@ -409,7 +411,7 @@ async function embedForProvider(provider: AiResearchProviderConfig, request: AiE
     for (const value of input) {
       const response = await requestWithTimeout(`${providerBaseUrl(provider)}/${encodeURIComponent(request.model || provider.model)}:embedContent?key=${encodeURIComponent(provider.apiKey || '')}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(provider.customHeaders || {}) }, body: JSON.stringify({ content: { parts: [{ text: value }] } }) }, timeoutFor(provider));
       if (!response.ok) return responseError(response, provider.name);
-      const payload: any = await response.json();
+      const payload: any = await readLimitedJson(response);
       if (!Array.isArray(payload?.embedding?.values)) throw new AiExtractionError(`${provider.name} returned an invalid embedding`);
       embeddings.push(payload.embedding.values.map((value: unknown) => Number(value)));
     }
@@ -418,7 +420,7 @@ async function embedForProvider(provider: AiResearchProviderConfig, request: AiE
   if (provider.kind === 'anthropic' || provider.kind === 'custom-http') throw new AiExtractionError(`${provider.name} does not expose a supported embeddings adapter.`);
   const response = await requestWithTimeout(`${providerBaseUrl(provider)}/embeddings`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${provider.apiKey || ''}`, ...(provider.customHeaders || {}) }, body: JSON.stringify({ model: request.model || provider.model, input }) }, timeoutFor(provider));
   if (!response.ok) return responseError(response, provider.name);
-  const payload: any = await response.json();
+  const payload: any = await readLimitedJson(response);
   const embeddings = Array.isArray(payload?.data) ? payload.data.sort((a: any, b: any) => (a.index || 0) - (b.index || 0)).map((item: any) => item.embedding).filter((item: any) => Array.isArray(item)) : [];
   if (!embeddings.length) throw new AiExtractionError(`${provider.name} returned no embeddings`);
   return { embeddings, inputTokens: typeof payload?.usage?.prompt_tokens === 'number' ? payload.usage.prompt_tokens : null };
@@ -449,6 +451,7 @@ export class UniversalAiGateway {
     let lastError: unknown;
     for (const candidate of candidates) {
       try {
+        if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
         provider = candidate;
         generated = await retryableGenerate(candidate, request);
         break;
@@ -486,6 +489,7 @@ export class UniversalAiGateway {
     for (const provider of candidates) {
       let emitted = false;
       try {
+        if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
         for await (const content of retryableStream(provider, request)) {
           emitted = true;
           yield { content, providerId: provider.id, model: request.model || provider.model, done: false };
@@ -513,6 +517,7 @@ export class UniversalAiGateway {
     let lastError: unknown;
     for (const provider of candidates) {
       try {
+        if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
         const result = await retryableEmbedding(provider, request);
         const durationMs = Math.round(performance.now() - startedAt);
         const usageRequest: AiGatewayRequest = { messages: [], purpose: request.purpose, organizationId: request.organizationId, userId: request.userId };

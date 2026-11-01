@@ -13,6 +13,7 @@ import { getPlatformDefaults } from './PlatformCatalogService';
 import { assertOrganizationUserCapacity } from '@/lib/platform/userCapacity';
 import { AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY, AI_RESEARCH_CLEARED_SECRET, AI_RESEARCH_PROVIDERS_SETTING_KEY, AI_RESEARCH_SETTING_KEYS, getAiResearchPlatformSettings } from '@/lib/ai/researchSettings';
 import { SEARCH_ACTIVE_PROVIDER_SETTING_KEY, SEARCH_FALLBACK_PROVIDER_SETTING_KEY, SEARCH_PROVIDERS_SETTING_KEY, getSearchProviderSettings, searchClearedSecret } from '@/lib/search/settings';
+import { sanitizeErrorMessage } from '@/lib/ai/usage';
 
 export function requirePlatformAdmin(user: UserSession) {
   if (!isPlatformSuperAdmin(user)) throw new Error('Forbidden');
@@ -39,7 +40,7 @@ export class PlatformAdminService {
       activeProviderId: settings.activeProviderId,
       featureProviderIds: settings.featureProviderIds,
       fallbackProviderIds: settings.fallbackProviderIds,
-      providers: settings.providers.map(({ apiKey, customHeaders, metadata, ...provider }) => ({ ...provider, customHeaderNames: Object.keys(customHeaders || {}), configured: Boolean(apiKey) })),
+      providers: settings.providers.map(({ apiKey, customHeaders, metadata, organizationId, ...provider }) => ({ ...provider, organizationRef: organizationId || '', customHeaderNames: Object.keys(customHeaders || {}), configured: Boolean(apiKey) })),
     };
   }
 
@@ -86,6 +87,7 @@ export class PlatformAdminService {
         kind: provider.kind,
         baseUrl: provider.baseUrl,
         model: provider.model,
+        organizationId: provider.organizationRef || undefined,
         timeoutMs: provider.timeoutMs,
         maxOutputTokens: provider.maxOutputTokens,
         temperature: provider.temperature,
@@ -93,6 +95,10 @@ export class PlatformAdminService {
         capabilities: provider.capabilities,
         inputCostPerMillionUsd: provider.inputCostPerMillionUsd,
         outputCostPerMillionUsd: provider.outputCostPerMillionUsd,
+        connectionStatus: existing?.connectionStatus || 'UNKNOWN',
+        lastTestedAt: existing?.lastTestedAt || null,
+        lastError: existing?.lastError || null,
+        lastLatencyMs: existing?.lastLatencyMs || null,
         customHeadersEncrypted: customHeaders ? encryptSecret(JSON.stringify(customHeaders)) : AI_RESEARCH_CLEARED_SECRET,
         enabled: provider.enabled,
         apiKeyEncrypted: apiKey ? encryptSecret(apiKey) : AI_RESEARCH_CLEARED_SECRET,
@@ -123,6 +129,32 @@ export class PlatformAdminService {
     }, { maxWait: 10000, timeout: 20000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return this.getAiResearchSettings(user);
+  }
+
+  static async recordAiProviderConnectionTest(user: UserSession, providerId: string, result: { status: 'CONNECTED' | 'ERROR'; latencyMs?: number | null; error?: string | null }) {
+    requirePlatformAdmin(user);
+    const setting = await prisma.platformSetting.findUnique({ where: { key: AI_RESEARCH_PROVIDERS_SETTING_KEY }, select: { value: true } });
+    if (!setting) throw new Error('AI provider settings are not configured.');
+    let providers: Array<Record<string, unknown>>;
+    try {
+      const parsed = JSON.parse(setting.value);
+      if (!Array.isArray(parsed)) throw new Error('Invalid provider settings.');
+      providers = parsed.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'));
+    } catch {
+      throw new Error('Invalid AI provider settings.');
+    }
+    const provider = providers.find((item) => item.id === providerId);
+    if (!provider) throw new Error('Provider not found');
+    const testedAt = new Date().toISOString();
+    provider.connectionStatus = result.status;
+    provider.lastTestedAt = testedAt;
+    provider.lastLatencyMs = result.latencyMs ?? null;
+    provider.lastError = result.status === 'ERROR' ? sanitizeErrorMessage(result.error) : null;
+    await prisma.$transaction(async (tx) => {
+      await tx.platformSetting.update({ where: { key: AI_RESEARCH_PROVIDERS_SETTING_KEY }, data: { value: JSON.stringify(providers) } });
+      await audit(tx, user, 'ai_research', providerId, 'connection_tested', { status: result.status, latencyMs: result.latencyMs ?? null, hasError: Boolean(result.error) });
+    }, { maxWait: 10000, timeout: 20000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    return { connectionStatus: result.status, lastTestedAt: testedAt, lastLatencyMs: result.latencyMs ?? null, lastError: result.status === 'ERROR' ? sanitizeErrorMessage(result.error) : null };
   }
 
   static async getSearchProviderSettings(user: UserSession) {

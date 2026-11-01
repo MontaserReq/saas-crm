@@ -71,5 +71,7 @@ export function getAiProvider(onAttempt?: OnAttemptCallback, overrideConfig?: Ai
 
 export async function getAiProviderFromPlatform(onAttempt?: OnAttemptCallback, organizationId?: string, userId?: string): Promise<AiProvider> {
   const config = await getAiResearchConfigFromPlatform(organizationId, userId);
-  return config.activeProvider ? new UniversalResearchProvider(config.activeProvider.id, onAttempt, organizationId, userId) : getAiProvider(onAttempt, config);
+  const featureProviderId = config.featureProviderIds?.['smart-lead-discovery'] || config.activeProviderId;
+  if (!featureProviderId) throw new AiNotConfiguredError('No platform AI provider is configured for this feature.');
+  return new UniversalResearchProvider(featureProviderId, onAttempt, organizationId, userId);
 }

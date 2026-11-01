@@ -19,6 +19,7 @@ export async function createLeadDiscoveryJobAction(raw: unknown) {
   try {
     const user = await requireAuth();
     allowed(user, PERMISSIONS.AI_RESEARCH_CREATE);
+    if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_RUN)) throw new Error('Forbidden');
     const input = inputSchema.parse(raw);
     const policy = RATE_LIMIT_POLICY_CONFIG.ai_research;
     const limited = await checkRateLimit({ policy: 'ai_research', identity: `lead-discovery:${user.id}:${requireOrganizationId(user)}`, ...policy });

@@ -7,11 +7,13 @@ import { createSearchProvider } from './providers';
 import type { SearchRequest, SearchResult } from './types';
 import { safeProviderEndpoint } from '@/lib/security/url';
 import { assertOrganizationSearchRequestAllowed } from '@/lib/ai/organizationPolicy';
+import { safeExternalUrl } from '@/lib/security/url';
 
 export * from './types';
 export * from './settings';
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
+const CONTENT_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 function queryHash(request: SearchRequest): string {
   return crypto.createHash('sha256').update(JSON.stringify({ query: request.query.trim().toLowerCase(), maxResults: request.maxResults || 25, includeContent: request.includeContent !== false })).digest('hex');
@@ -56,6 +58,32 @@ async function writeCachedResults(providerId: string, request: SearchRequest, re
   }
 }
 
+async function readCachedContent(url: string): Promise<{ url: string; content: string } | null> {
+  try {
+    const cached = await prisma.searchContentCache.findUnique({ where: { url } });
+    if (!cached) return null;
+    if (cached.expiresAt <= new Date()) {
+      void prisma.searchContentCache.delete({ where: { id: cached.id } }).catch(() => undefined);
+      return null;
+    }
+    return { url: cached.url, content: cached.content };
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedContent(content: { url: string; content: string }) {
+  try {
+    await prisma.searchContentCache.upsert({
+      where: { url: content.url },
+      create: { url: content.url, content: content.content, expiresAt: new Date(Date.now() + CONTENT_CACHE_TTL_MS) },
+      update: { content: content.content, expiresAt: new Date(Date.now() + CONTENT_CACHE_TTL_MS) },
+    });
+  } catch {
+    // A content-cache failure must not fail enrichment.
+  }
+}
+
 function retryableSearchError(error: unknown): boolean {
   if (error instanceof TypeError || (error instanceof Error && error.name === 'AbortError')) return true;
   return error instanceof Error && /HTTP (408|409|425|429|5\d\d)\b/.test(error.message);
@@ -91,6 +119,7 @@ export class SearchGateway {
         return { providerId: config.id, results: cached };
       }
       try {
+        if (request.organizationId) await assertOrganizationSearchRequestAllowed(request.organizationId);
         const results = await searchWithRetry(config, request);
         await writeCachedResults(config.id, request, results);
         await recordSearchUsage(request, config.id, { status: 'SUCCESS', resultCount: results.length, estimatedCostUsd: config.estimatedCostPerRequestUsd, durationMs: Math.round(performance.now() - startedAt) });
@@ -104,7 +133,13 @@ export class SearchGateway {
   }
 
   static async fetchContent(url: string, maxBytes?: number) {
-    return fetchPublicContent(url, maxBytes);
+    const normalized = safeExternalUrl(url);
+    if (!normalized) throw new Error('Only valid public http(s) URLs can be enriched.');
+    const cached = await readCachedContent(normalized);
+    if (cached) return cached;
+    const content = await fetchPublicContent(normalized, maxBytes);
+    await writeCachedContent(content);
+    return content;
   }
 
   static async getSearchMetadata(organizationId?: string) {

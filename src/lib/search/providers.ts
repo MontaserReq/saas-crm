@@ -1,6 +1,7 @@
 import type { SearchProvider, SearchRequest, SearchResult } from './types';
 import type { SearchProviderConfig } from './settings';
 import { fetchPublicContent } from './http';
+import { readLimitedJson } from '@/lib/security/external';
 
 export class ExaSearchProvider implements SearchProvider {
   readonly id: string;
@@ -19,7 +20,7 @@ export class ExaSearchProvider implements SearchProvider {
       cache: 'no-store',
     });
     if (!response.ok) throw new Error(`Exa returned HTTP ${response.status}`);
-    const payload: any = await response.json();
+    const payload: any = await readLimitedJson(response);
     return (Array.isArray(payload?.results) ? payload.results : []).flatMap((item: any) => typeof item?.url === 'string' ? [{ title: String(item.title || item.url), url: item.url, description: item.summary || item.highlights?.join(' ') || null, content: item.text || null, publishedAt: item.publishedDate || null, providerId: this.id, metadata: { id: item.id || null, score: item.score || null } }] : []);
   }
   async fetchContent(url: string) { return fetchPublicContent(url); }
@@ -35,7 +36,7 @@ export class BraveSearchProvider implements SearchProvider {
     url.searchParams.set('count', String(Math.min(this.config.maxResults, request.maxResults || this.config.maxResults)));
     const response = await fetch(url, { headers: { Accept: 'application/json', 'X-Subscription-Token': this.config.apiKey || '' }, signal: AbortSignal.timeout(30_000), cache: 'no-store' });
     if (!response.ok) throw new Error(`Brave Search returned HTTP ${response.status}`);
-    const payload: any = await response.json();
+    const payload: any = await readLimitedJson(response);
     return (Array.isArray(payload?.web?.results) ? payload.web.results : []).flatMap((item: any) => typeof item?.url === 'string' ? [{ title: String(item.title || item.url), url: item.url, description: item.description || null, content: null, publishedAt: null, providerId: this.id, metadata: { language: item.language || null } }] : []);
   }
   async fetchContent(url: string) { return fetchPublicContent(url); }
@@ -50,7 +51,7 @@ export class CustomSearchProvider implements SearchProvider {
     url.searchParams.set('count', String(Math.min(this.config.maxResults, request.maxResults || this.config.maxResults)));
     const response = await fetch(url, { headers: { Accept: 'application/json', Authorization: `Bearer ${this.config.apiKey || ''}` }, signal: AbortSignal.timeout(30_000), cache: 'no-store' });
     if (!response.ok) throw new Error(`Custom search provider returned HTTP ${response.status}`);
-    const payload: any = await response.json();
+    const payload: any = await readLimitedJson(response);
     const items = Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.web?.results) ? payload.web.results : [];
     return items.flatMap((item: any) => typeof item?.url === 'string' ? [{ title: String(item.title || item.url), url: item.url, description: item.description || item.snippet || null, content: item.content || item.text || null, publishedAt: item.publishedAt || null, providerId: this.id, metadata: {} }] : []);
   }

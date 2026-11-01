@@ -74,6 +74,53 @@ describe('Universal AI Gateway', () => {
     expect(result.toolCalls).toEqual([{ id: 'call-1', name: 'lookup', arguments: '{"q":"acme"}' }]);
   });
 
+  it('uses the native Anthropic Messages adapter', async () => {
+    vi.mocked(getAiResearchPlatformSettings).mockResolvedValue(settings([provider({ id: 'anthropic', kind: 'anthropic', baseUrl: 'https://api.anthropic.example', model: 'claude-test' })]));
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ content: [{ type: 'text', text: 'native anthropic' }], usage: { input_tokens: 2, output_tokens: 3 } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+
+    const result = await UniversalAiGateway.generate({ messages: [{ role: 'system', content: 'system' }, { role: 'user', content: 'hello' }] });
+
+    expect(result.content).toBe('native anthropic');
+    expect(fetch.mock.calls[0][0]).toBe('https://api.anthropic.example/v1/messages');
+    expect(fetch.mock.calls[0][1].headers).toMatchObject({ 'x-api-key': 'secret', 'anthropic-version': '2023-06-01' });
+  });
+
+  it('uses the native Gemini adapter', async () => {
+    vi.mocked(getAiResearchPlatformSettings).mockResolvedValue(settings([provider({ id: 'gemini', kind: 'gemini', baseUrl: 'https://generativelanguage.example/v1beta/models', model: 'gemini-test' })]));
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'native gemini' }] } }], usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 5 } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+
+    const result = await UniversalAiGateway.generate({ messages: [{ role: 'user', content: 'hello' }] });
+
+    expect(result.content).toBe('native gemini');
+    expect(fetch.mock.calls[0][0]).toContain('/gemini-test:generateContent?key=secret');
+  });
+
+  it('uses the OpenAI Responses adapter and normalizes output text', async () => {
+    vi.mocked(getAiResearchPlatformSettings).mockResolvedValue(settings([provider({ id: 'responses', kind: 'openai-responses', baseUrl: 'https://api.openai.example/v1', model: 'gpt-test' })]));
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ output_text: 'responses result', usage: { input_tokens: 1, output_tokens: 2 } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+
+    const result = await UniversalAiGateway.generate({ messages: [{ role: 'user', content: 'hello' }] });
+
+    expect(result.content).toBe('responses result');
+    expect(fetch.mock.calls[0][0]).toBe('https://api.openai.example/v1/responses');
+  });
+
+  it('uses the configured feature provider before the global default', async () => {
+    const primary = provider({ id: 'primary', kind: 'openai-compatible', baseUrl: 'https://primary.example.test/v1' });
+    const feature = provider({ id: 'feature', kind: 'openai-compatible', baseUrl: 'https://feature.example.test/v1' });
+    vi.mocked(getAiResearchPlatformSettings).mockResolvedValue({ ...settings([primary, feature], 'primary'), featureProviderIds: { 'smart-lead-discovery': 'feature' } });
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'feature result' } }] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+
+    const result = await UniversalAiGateway.generate({ purpose: 'smart-lead-discovery', messages: [{ role: 'user', content: 'hello' }] });
+
+    expect(result.providerId).toBe('feature');
+    expect(fetch.mock.calls[0][0]).toContain('feature.example.test');
+  });
+
   it('streams normalized text chunks from an SSE provider', async () => {
     vi.mocked(getAiResearchPlatformSettings).mockResolvedValue(settings([provider({ id: 'stream', kind: 'openai-compatible', baseUrl: 'https://api.example.test/v1', capabilities: ['text', 'streaming'] })]));
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: {"choices":[{"delta":{"content":" world"}}]}\n\ndata: [DONE]\n\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } })));

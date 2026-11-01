@@ -12,6 +12,7 @@ type ProviderView = {
   kind: AiResearchProvider;
   baseUrl: string;
   model: string;
+  organizationRef?: string;
   timeoutMs?: number;
   maxOutputTokens?: number;
   temperature?: number;
@@ -20,6 +21,10 @@ type ProviderView = {
   customHeaderNames?: string[];
   inputCostPerMillionUsd?: number | null;
   outputCostPerMillionUsd?: number | null;
+  connectionStatus?: "UNKNOWN" | "CONNECTED" | "ERROR";
+  lastTestedAt?: string | null;
+  lastError?: string | null;
+  lastLatencyMs?: number | null;
   configured: boolean;
   enabled: boolean;
 };
@@ -118,7 +123,7 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
       activeProviderId,
       featureProviderIds,
       fallbackProviderIds,
-      providers: providers.map(({ id, name, kind, baseUrl, model, timeoutMs, maxOutputTokens, temperature, responsePath, capabilities, customHeadersJson, clearCustomHeaders, inputCostPerMillionUsd, outputCostPerMillionUsd, apiKey, clearApiKey, enabled }) => ({ id, name, kind, baseUrl, model, timeoutMs, maxOutputTokens, temperature, responsePath, capabilities, customHeadersJson, clearCustomHeaders, inputCostPerMillionUsd: inputCostPerMillionUsd ?? null, outputCostPerMillionUsd: outputCostPerMillionUsd ?? null, apiKey, clearApiKey, enabled })),
+      providers: providers.map(({ id, name, kind, baseUrl, model, organizationRef, timeoutMs, maxOutputTokens, temperature, responsePath, capabilities, customHeadersJson, clearCustomHeaders, inputCostPerMillionUsd, outputCostPerMillionUsd, apiKey, clearApiKey, enabled }) => ({ id, name, kind, baseUrl, model, organizationRef, timeoutMs, maxOutputTokens, temperature, responsePath, capabilities, customHeadersJson, clearCustomHeaders, inputCostPerMillionUsd: inputCostPerMillionUsd ?? null, outputCostPerMillionUsd: outputCostPerMillionUsd ?? null, apiKey, clearApiKey, enabled })),
     });
     if (result.success) {
       const next = result.settings as Settings;
@@ -137,6 +142,7 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
   async function testProvider(id: string) {
     setTestingId(id);
     const result = await testAiProviderAction(id);
+    setProviders((current) => current.map((provider) => provider.id === id ? { ...provider, connectionStatus: result.success ? "CONNECTED" : "ERROR", lastTestedAt: result.lastTestedAt || new Date().toISOString(), lastLatencyMs: ("durationMs" in result ? result.durationMs : result.lastLatencyMs) ?? null, lastError: result.success ? null : result.error } : provider));
     setFeedback(result.success ? { ok: true, message: ar ? `الاتصال ناجح (${result.model}).` : `Connection succeeded (${result.model}).` } : { ok: false, message: errorMessage(result.error, ar ? "فشل اختبار الاتصال." : "Connection test failed.") });
     setTestingId(null);
   }
@@ -189,6 +195,7 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
                 <label className="flex items-center gap-3 text-sm font-bold"><input type="radio" name="activeProvider" disabled={!provider.enabled} checked={activeProviderId === provider.id} onChange={() => setActiveProviderId(provider.id)} />{ar ? "المزود الأساسي" : "Primary provider"}</label>
                 <div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={provider.enabled} onChange={(event) => setEnabled(provider.id, event.target.checked)} /><Power className="h-4 w-4" />{provider.enabled ? (ar ? "مفعّل" : "Enabled") : (ar ? "متوقف" : "Disabled")}</label><button type="button" onClick={() => void testProvider(provider.id)} disabled={testingId === provider.id || !provider.enabled || !provider.configured} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-violet-700 disabled:opacity-40">{testingId === provider.id ? (ar ? "اختبار…" : "Testing…") : (ar ? "اختبار" : "Test")}</button><button type="button" onClick={() => removeProvider(provider.id)} disabled={providers.length <= 1} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-30" aria-label={ar ? "حذف المزود" : "Delete provider"}><Trash2 className="h-4 w-4" /></button></div>
               </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs"><span className={`rounded-full px-2 py-1 font-bold ${provider.connectionStatus === "CONNECTED" ? "bg-emerald-100 text-emerald-700" : provider.connectionStatus === "ERROR" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600"}`}>{provider.connectionStatus === "CONNECTED" ? (ar ? "متصل" : "Connected") : provider.connectionStatus === "ERROR" ? (ar ? "خطأ" : "Error") : (ar ? "غير مختبر" : "Not tested")}</span>{provider.lastTestedAt && <span className="text-slate-500">{ar ? "آخر اختبار" : "Last tested"}: {new Date(provider.lastTestedAt).toLocaleString()}</span>}{provider.lastLatencyMs != null && <span className="text-slate-500">{provider.lastLatencyMs} ms</span>}{provider.lastError && <span className="max-w-full truncate text-rose-600" title={provider.lastError}>{provider.lastError}</span>}</div>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <label className="text-sm font-semibold">{ar ? "الاسم" : "Name"}<input className={inputClass} value={provider.name} onChange={(event) => update(provider.id, { name: event.target.value })} /></label>
                 <label className="text-sm font-semibold">{ar ? "إعداد سريع" : "Preset"}<select className={inputClass} defaultValue="" onChange={(event) => applyPreset(provider.id, event.target.value)}><option value="">{ar ? "إعداد يدوي" : "Manual configuration"}</option>{Object.entries(providerPresets).map(([id, preset]) => <option key={id} value={id}>{preset.name}</option>)}</select></label>
@@ -196,6 +203,7 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
                 <label className="text-sm font-semibold">{ar ? "معرّف المزود" : "Provider ID"}<input className={inputClass} value={provider.id} disabled /></label>
                 <label className="text-sm font-semibold">{ar ? "النموذج" : "Model"}<input className={inputClass} value={provider.model} onChange={(event) => update(provider.id, { model: event.target.value })} placeholder="gpt-4o-mini" /><div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={() => void discoverModels(provider.id)} disabled={discoveringId === provider.id || !provider.enabled || !provider.configured || provider.kind === "custom-http"} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-violet-700 disabled:opacity-40">{discoveringId === provider.id ? (ar ? "جلب…" : "Loading…") : (ar ? "جلب النماذج" : "Discover models")}</button>{(modelOptions[provider.id] || []).map((model) => <button type="button" key={model} onClick={() => update(provider.id, { model })} className={`rounded-full px-2 py-1 text-[11px] ${model === provider.model ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>{model}</button>)}</div></label>
                 {!['gemini', 'groq'].includes(provider.kind) && <label className="text-sm font-semibold md:col-span-2">Base URL<input className={inputClass} value={provider.baseUrl} onChange={(event) => update(provider.id, { baseUrl: event.target.value })} placeholder="https://api.openai.com/v1" /></label>}
+                <label className="text-sm font-semibold">{ar ? "معرّف المؤسسة/المشروع" : "Organization / project ref"}<input className={inputClass} value={provider.organizationRef || ""} onChange={(event) => update(provider.id, { organizationRef: event.target.value })} placeholder="org_xxx or project-id" /></label>
                 <label className="text-sm font-semibold">{ar ? "مهلة الاتصال (مللي ثانية)" : "Timeout (ms)"}<input type="number" min={5000} max={120000} className={inputClass} value={provider.timeoutMs ?? 45000} onChange={(event) => update(provider.id, { timeoutMs: Number(event.target.value) || 45000 })} /></label>
                 <label className="text-sm font-semibold">{ar ? "الحد الأقصى للتوكنز" : "Max output tokens"}<input type="number" min={1} max={32768} className={inputClass} value={provider.maxOutputTokens ?? 4096} onChange={(event) => update(provider.id, { maxOutputTokens: Number(event.target.value) || 4096 })} /></label>
                 <label className="text-sm font-semibold">{ar ? "Temperature" : "Temperature"}<input type="number" min={0} max={2} step={0.1} className={inputClass} value={provider.temperature ?? 0.2} onChange={(event) => update(provider.id, { temperature: Number(event.target.value) || 0.2 })} /></label>

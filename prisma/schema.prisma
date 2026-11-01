@@ -444,6 +444,17 @@ model SearchResultCache {
   @@index([providerId, createdAt])
 }
 
+model SearchContentCache {
+  id        String   @id @default(cuid())
+  url       String   @unique
+  content   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
 model OrganizationAiProvider {
   id                     String       @id @default(cuid())
   organizationId         String
@@ -1981,7 +1992,8 @@ model OperationExecution {
   createdAt                          DateTime      @default(now())
   updatedAt                          DateTime      @updatedAt
 
-  authoritativeResearchJob SchoolResearchJob? @relation("ResearchJobCurrentOperation")
+  authoritativeResearchJob      SchoolResearchJob? @relation("ResearchJobCurrentOperation")
+  authoritativeLeadDiscoveryJob LeadDiscoveryJob?  @relation("LeadDiscoveryCurrentOperation")
 
   @@unique([organizationId, operationType, idempotencyKey], map: "OperationExecution_organizationId_operationType_idempotencyKey_")
   @@index([operationType, status, leaseExpiresAt])
@@ -1998,22 +2010,24 @@ model LeadDiscoveryJob {
   createdById    String
   createdBy      User         @relation("LeadDiscoveryJobCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
-  prompt           String
-  status           String    @default("PENDING") // PENDING | RUNNING | COMPLETED | PARTIAL | FAILED | CANCELLED
-  stage            String    @default("UNDERSTANDING")
-  requestedCount   Int
-  filters          String    @default("{}")
-  aiProviderId     String?
-  searchProviderId String?
-  error            String?
-  startedAt        DateTime?
-  completedAt      DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  prompt             String
+  status             String    @default("PENDING") // PENDING | RUNNING | COMPLETED | PARTIAL | FAILED | CANCELLED
+  stage              String    @default("UNDERSTANDING")
+  requestedCount     Int
+  filters            String    @default("{}")
+  aiProviderId       String?
+  searchProviderId   String?
+  error              String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  currentOperationId String?   @unique
 
-  results LeadDiscoveryResult[]
-  sources LeadDiscoverySource[]
-  imports LeadDiscoveryImport[]
+  results          LeadDiscoveryResult[]
+  sources          LeadDiscoverySource[]
+  imports          LeadDiscoveryImport[]
+  currentOperation OperationExecution?   @relation("LeadDiscoveryCurrentOperation", fields: [currentOperationId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt])
   @@index([organizationId, status])
@@ -2032,6 +2046,7 @@ model LeadDiscoveryResult {
   businessDescription String?
   country             String?
   city                String?
+  address             String?
   phone               String?
   normalizedPhone     String?
   email               String?

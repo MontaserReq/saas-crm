@@ -29,6 +29,10 @@ export type AiResearchProviderConfig = {
   featureKeys?: string[];
   scope?: 'platform' | 'organization';
   metadata?: Record<string, unknown>;
+  connectionStatus?: 'UNKNOWN' | 'CONNECTED' | 'ERROR';
+  lastTestedAt?: string | null;
+  lastError?: string | null;
+  lastLatencyMs?: number | null;
   apiKey: string | null;
   enabled: boolean;
 };
@@ -149,6 +153,10 @@ function parseStoredProviders(raw: string | undefined): AiResearchProviderConfig
         outputCostPerMillionUsd: typeof item.outputCostPerMillionUsd === 'number' ? item.outputCostPerMillionUsd : undefined,
         capabilities: Array.isArray(item.capabilities) ? item.capabilities.filter((value: unknown): value is AiProviderCapability => AI_PROVIDER_CAPABILITIES.includes(value as AiProviderCapability)) : undefined,
         metadata: item.metadata && typeof item.metadata === 'object' ? item.metadata : undefined,
+        connectionStatus: item.connectionStatus === 'CONNECTED' || item.connectionStatus === 'ERROR' ? item.connectionStatus : 'UNKNOWN',
+        lastTestedAt: typeof item.lastTestedAt === 'string' ? item.lastTestedAt : null,
+        lastError: typeof item.lastError === 'string' ? item.lastError.slice(0, 500) : null,
+        lastLatencyMs: typeof item.lastLatencyMs === 'number' ? item.lastLatencyMs : null,
         apiKey: readSecret(typeof item.apiKeyEncrypted === 'string' ? item.apiKeyEncrypted : undefined, undefined),
         enabled: item.enabled !== false,
       } satisfies AiResearchProviderConfig];

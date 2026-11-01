@@ -15,7 +15,10 @@ export interface AiResearchConfig {
   groqModel: string;
   /** Selected Platform Admin provider, including custom OpenAI-compatible providers. */
   activeProvider?: AiResearchProviderConfig | null;
+  activeProviderId?: string | null;
   providers?: AiResearchProviderConfig[];
+  featureProviderIds?: Record<string, string>;
+  fallbackProviderIds?: string[];
   providerId?: string;
   groqMaxCompletionTokens: number;
   groqBatchSize: number;
@@ -74,7 +77,10 @@ export async function getAiResearchConfigFromPlatform(organizationId?: string, u
     groqApiKey: platform.groqApiKey,
     groqModel: platform.groqModel,
     activeProvider: platform.activeProvider,
+    activeProviderId: platform.activeProviderId,
     providers: platform.providers,
+    featureProviderIds: platform.featureProviderIds,
+    fallbackProviderIds: platform.fallbackProviderIds,
     providerId: platform.activeProviderId || undefined,
     organizationId,
     userId,

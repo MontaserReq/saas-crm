@@ -7,6 +7,7 @@ export const leadDiscoveryExtractionSchema = z.object({
   business_description: z.string().max(2000).nullable().optional(),
   country: z.string().max(120).nullable().optional(),
   city: z.string().max(120).nullable().optional(),
+  address: z.string().max(500).nullable().optional(),
   phone: z.string().max(100).nullable().optional(),
   email: z.string().email().nullable().optional(),
   linkedin: z.string().url().nullable().optional(),
@@ -14,10 +15,15 @@ export const leadDiscoveryExtractionSchema = z.object({
   company_size: z.string().max(120).nullable().optional(),
   qualification_reason: z.string().max(1000).nullable().optional(),
   verification_status: z.enum(['verified', 'partially_verified', 'unverified']).optional(),
+  source_index: z.number().int().min(0).max(20).optional(),
   sources: z.array(z.object({ url: z.string().url(), field: z.string().max(80), evidence: z.string().max(500) })).max(12).default([]),
 });
 
 export type LeadDiscoveryExtraction = z.infer<typeof leadDiscoveryExtractionSchema>;
+
+export const leadDiscoveryExtractionBatchSchema = z.object({
+  leads: z.array(leadDiscoveryExtractionSchema).max(20),
+});
 
 export type LeadDiscoveryIntent = {
   industry: string | null;

@@ -46,6 +46,7 @@ export const aiResearchSettingsInput = z.object({
     kind: z.enum(['gemini', 'groq', 'openai-compatible', 'openai-responses', 'anthropic', 'custom-http']),
     baseUrl: text.max(500).default(''),
     model: text.min(1).max(160),
+    organizationRef: text.max(200).default(''),
     timeoutMs: z.number().int().min(5000).max(120000).default(45000),
     maxOutputTokens: z.number().int().min(1).max(32768).default(4096),
     temperature: z.number().min(0).max(2).default(0.2),

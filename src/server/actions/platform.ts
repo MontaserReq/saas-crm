@@ -70,8 +70,14 @@ export async function testAiProviderAction(providerId: string) {
     const user = await requireAuth();
     const settings = await PlatformAdminService.getAiResearchSettings(user);
     if (!settings.providers.some((provider) => provider.id === providerId)) throw new Error('Provider not found');
-    const result = await UniversalAiGateway.generate({ providerId, purpose: 'provider-connection-test', maxOutputTokens: 20, messages: [{ role: 'user', content: 'Reply with exactly READY.' }] });
-    return { success: true as const, providerId: result.providerId, model: result.model, durationMs: result.durationMs };
+    try {
+      const result = await UniversalAiGateway.generate({ providerId, purpose: 'provider-connection-test', maxOutputTokens: 20, messages: [{ role: 'user', content: 'Reply with exactly READY.' }] });
+      const status = await PlatformAdminService.recordAiProviderConnectionTest(user, providerId, { status: 'CONNECTED', latencyMs: result.durationMs });
+      return { success: true as const, providerId: result.providerId, model: result.model, durationMs: result.durationMs, ...status };
+    } catch (error) {
+      const status = await PlatformAdminService.recordAiProviderConnectionTest(user, providerId, { status: 'ERROR', error: errorMessage(error) }).catch(() => null);
+      return { success: false as const, error: errorMessage(error), ...status };
+    }
   } catch (error) { return { success: false as const, error: errorMessage(error) }; }
 }
 
