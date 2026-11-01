@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { emailSchema, optionalEmailSchema, optionalInternationalPhoneSchema } from '@/lib/validation/contactInfo';
 
 const text = z.string().trim();
+const aiProviderCapabilities = ['text', 'streaming', 'structured-json', 'tools', 'vision', 'embeddings', 'reasoning'] as const;
 const optionalText = text.max(4000).default('');
 const optionalId = text.transform(value => value || null);
 const date = text.refine(value => !value || !Number.isNaN(Date.parse(value)), 'Invalid date').transform(value => value ? new Date(value) : null);
@@ -44,6 +45,13 @@ export const aiResearchSettingsInput = z.object({
     kind: z.enum(['gemini', 'groq', 'openai-compatible', 'openai-responses', 'anthropic', 'custom-http']),
     baseUrl: text.max(500).default(''),
     model: text.min(1).max(160),
+    timeoutMs: z.number().int().min(5000).max(120000).default(45000),
+    maxOutputTokens: z.number().int().min(1).max(32768).default(4096),
+    temperature: z.number().min(0).max(2).default(0.2),
+    responsePath: text.max(200).default(''),
+    capabilities: z.array(z.enum(aiProviderCapabilities)).max(20).default([]),
+    inputCostPerMillionUsd: z.number().min(0).max(10000).nullable().default(null),
+    outputCostPerMillionUsd: z.number().min(0).max(10000).nullable().default(null),
     apiKey: z.string().trim().max(2000).default(''),
     clearApiKey: z.boolean().default(false),
     enabled: z.boolean().default(true),

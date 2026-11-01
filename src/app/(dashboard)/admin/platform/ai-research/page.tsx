@@ -7,6 +7,6 @@ import { AiResearchSettingsView } from '@/components/admin/AiResearchSettingsVie
 export default async function PlatformAiResearchPage() {
   const user = await getCurrentUser();
   if (!user || !isPlatformSuperAdmin(user)) redirect('/dashboard');
-  const settings = await PlatformAdminService.getAiResearchSettings(user);
-  return <AiResearchSettingsView settings={settings} />;
+  const [settings, usage] = await Promise.all([PlatformAdminService.getAiResearchSettings(user), PlatformAdminService.getAiGatewayUsage(user)]);
+  return <AiResearchSettingsView settings={settings} usage={usage} />;
 }

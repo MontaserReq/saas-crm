@@ -7,6 +7,8 @@ export type AiResearchStatus = typeof AI_RESEARCH_STATUSES[number];
 /** Built-in adapters plus the generic OpenAI-compatible adapter. */
 export const AI_RESEARCH_PROVIDER_KINDS = ['gemini', 'groq', 'openai-compatible', 'openai-responses', 'anthropic', 'custom-http'] as const;
 export type AiResearchProvider = typeof AI_RESEARCH_PROVIDER_KINDS[number];
+export const AI_PROVIDER_CAPABILITIES = ['text', 'streaming', 'structured-json', 'tools', 'vision', 'embeddings', 'reasoning'] as const;
+export type AiProviderCapability = typeof AI_PROVIDER_CAPABILITIES[number];
 
 export type AiResearchProviderConfig = {
   id: string;
@@ -19,7 +21,10 @@ export type AiResearchProviderConfig = {
   timeoutMs?: number;
   maxOutputTokens?: number;
   temperature?: number;
-  capabilities?: string[];
+  responsePath?: string;
+  inputCostPerMillionUsd?: number;
+  outputCostPerMillionUsd?: number;
+  capabilities?: AiProviderCapability[];
   metadata?: Record<string, unknown>;
   apiKey: string | null;
   enabled: boolean;
@@ -119,7 +124,10 @@ function parseStoredProviders(raw: string | undefined): AiResearchProviderConfig
         timeoutMs: typeof item.timeoutMs === 'number' ? item.timeoutMs : undefined,
         maxOutputTokens: typeof item.maxOutputTokens === 'number' ? item.maxOutputTokens : undefined,
         temperature: typeof item.temperature === 'number' ? item.temperature : undefined,
-        capabilities: Array.isArray(item.capabilities) ? item.capabilities.filter((value: unknown): value is string => typeof value === 'string') : undefined,
+        responsePath: typeof item.responsePath === 'string' ? item.responsePath : undefined,
+        inputCostPerMillionUsd: typeof item.inputCostPerMillionUsd === 'number' ? item.inputCostPerMillionUsd : undefined,
+        outputCostPerMillionUsd: typeof item.outputCostPerMillionUsd === 'number' ? item.outputCostPerMillionUsd : undefined,
+        capabilities: Array.isArray(item.capabilities) ? item.capabilities.filter((value: unknown): value is AiProviderCapability => AI_PROVIDER_CAPABILITIES.includes(value as AiProviderCapability)) : undefined,
         metadata: item.metadata && typeof item.metadata === 'object' ? item.metadata : undefined,
         apiKey: readSecret(typeof item.apiKeyEncrypted === 'string' ? item.apiKeyEncrypted : undefined, undefined),
         enabled: item.enabled !== false,

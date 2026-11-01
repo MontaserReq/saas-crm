@@ -39,7 +39,26 @@ export class PlatformAdminService {
       activeProviderId: settings.activeProviderId,
       featureProviderIds: settings.featureProviderIds,
       fallbackProviderIds: settings.fallbackProviderIds,
-      providers: settings.providers.map(({ apiKey, ...provider }) => ({ ...provider, configured: Boolean(apiKey) })),
+      providers: settings.providers.map(({ apiKey, customHeaders, metadata, ...provider }) => ({ ...provider, customHeaderNames: Object.keys(customHeaders || {}), configured: Boolean(apiKey) })),
+    };
+  }
+
+  static async getAiGatewayUsage(user: UserSession) {
+    requirePlatformAdmin(user);
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [aggregate, byProvider] = await Promise.all([
+      prisma.aiGatewayUsageLog.aggregate({ where: { createdAt: { gte: since } }, _count: { _all: true }, _sum: { inputTokens: true, outputTokens: true, totalTokens: true, estimatedCostUsd: true }, _avg: { durationMs: true } }),
+      prisma.aiGatewayUsageLog.groupBy({ by: ['providerId'], where: { createdAt: { gte: since } }, _count: { _all: true }, _sum: { totalTokens: true, estimatedCostUsd: true }, orderBy: { _count: { providerId: 'desc' } }, take: 10 }),
+    ]);
+    return {
+      since: since.toISOString(),
+      totalRequests: aggregate._count._all,
+      inputTokens: aggregate._sum.inputTokens || 0,
+      outputTokens: aggregate._sum.outputTokens || 0,
+      totalTokens: aggregate._sum.totalTokens || 0,
+      estimatedCostUsd: aggregate._sum.estimatedCostUsd,
+      averageDurationMs: aggregate._avg.durationMs,
+      providers: byProvider.map((row) => ({ providerId: row.providerId, requests: row._count._all, totalTokens: row._sum.totalTokens || 0, estimatedCostUsd: row._sum.estimatedCostUsd })),
     };
   }
 
@@ -57,6 +76,13 @@ export class PlatformAdminService {
         kind: provider.kind,
         baseUrl: provider.baseUrl,
         model: provider.model,
+        timeoutMs: provider.timeoutMs,
+        maxOutputTokens: provider.maxOutputTokens,
+        temperature: provider.temperature,
+        responsePath: provider.responsePath || undefined,
+        capabilities: provider.capabilities,
+        inputCostPerMillionUsd: provider.inputCostPerMillionUsd,
+        outputCostPerMillionUsd: provider.outputCostPerMillionUsd,
         enabled: provider.enabled,
         apiKeyEncrypted: apiKey ? encryptSecret(apiKey) : AI_RESEARCH_CLEARED_SECRET,
       };

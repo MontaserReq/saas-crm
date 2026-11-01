@@ -104,6 +104,7 @@ model User {
   initiatedDataImports    DataImport[]          @relation("DataImportInitiator")
   leadDiscoveryJobs       LeadDiscoveryJob[]    @relation("LeadDiscoveryJobCreator")
   leadDiscoveryImports    LeadDiscoveryImport[] @relation("LeadDiscoveryImportActor")
+  aiGatewayUsageLogs      AiGatewayUsageLog[]   @relation("AiGatewayUsageUser")
 
   @@index([roleId])
   @@index([departmentId])
@@ -174,6 +175,7 @@ model Organization {
   operationApprovalRequests OperationApprovalRequest[]
   leadDiscoveryJobs         LeadDiscoveryJob[]
   leadDiscoveryImports      LeadDiscoveryImport[]
+  aiGatewayUsageLogs        AiGatewayUsageLog[]          @relation("AiGatewayUsageOrganization")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -376,6 +378,30 @@ model PlatformSetting {
   key       String   @unique
   value     String
   updatedAt DateTime @updatedAt
+}
+
+model AiGatewayUsageLog {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation("AiGatewayUsageOrganization", fields: [organizationId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?        @relation("AiGatewayUsageUser", fields: [userId], references: [id], onDelete: SetNull)
+  providerId       String
+  model            String
+  purpose          String?
+  status           String
+  inputTokens      Int?
+  outputTokens     Int?
+  totalTokens      Int?
+  estimatedCostUsd Float?
+  durationMs       Int
+  httpStatus       Int?
+  errorMessage     String?
+  createdAt        DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, providerId, status])
+  @@index([userId])
 }
 
 model CustomFieldDefinition {

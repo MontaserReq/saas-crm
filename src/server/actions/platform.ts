@@ -75,6 +75,16 @@ export async function testAiProviderAction(providerId: string) {
   } catch (error) { return { success: false as const, error: errorMessage(error) }; }
 }
 
+export async function discoverAiProviderModelsAction(providerId: string) {
+  try {
+    const user = await requireAuth();
+    const settings = await PlatformAdminService.getAiResearchSettings(user);
+    if (!settings.providers.some((provider) => provider.id === providerId)) throw new Error('Provider not found');
+    const models = await UniversalAiGateway.listModels(providerId);
+    return { success: true as const, providerId, models };
+  } catch (error) { return { success: false as const, error: errorMessage(error) }; }
+}
+
 export async function testSearchProviderAction(providerId: string) {
   try {
     const user = await requireAuth();
