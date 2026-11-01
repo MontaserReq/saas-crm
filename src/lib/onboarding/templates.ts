@@ -101,6 +101,7 @@ export function visibleSetupNavigation(href: string, modules?: string[]) {
   if (!modules) return true; // Legacy organizations retain their navigation.
   const route = href.split('?')[0];
   if (['/messages', '/chat', '/todos', '/support'].includes(route)) return true;
+  if (route === '/lead-discovery' || route === '/ai-school-research') return true;
   const moduleName = ({ '/dashboard': 'dashboard', '/clients': 'clients', '/contacts': 'contacts', '/leads': 'leads', '/deals': 'deals', '/pipelines': 'pipelines', '/tasks': 'tasks', '/calendar': 'calendar', '/tickets': 'tickets', '/proposals': 'proposals', '/activity': 'activities' } as Record<string, string>)[route];
   return moduleName ? modules.includes(moduleName) : route.startsWith('/admin') || route.startsWith('/settings');
 }

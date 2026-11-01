@@ -213,7 +213,7 @@ export function filterPermissionsForPlan(permissions: readonly string[], feature
 const routeFeatures: Array<[string, PlanFeatureId]> = [
   ['/settings/workflows', 'workflows'], ['/settings/message-templates', 'messages'], ['/settings/ticket-priorities', 'tickets'],
   ['/admin/approval-requests', 'team'], ['/admin/analytics', 'reports'], ['/admin/team-activity', 'reports'], ['/admin/audit-logs', 'audit_logs'], ['/admin/users', 'team'], ['/admin/roles', 'team'], ['/admin/departments', 'team'], ['/admin/task-types', 'team'],
-  ['/ai-school-research', 'ai_research'], ['/assignments', 'import_export'], ['/schools', 'import_export'], ['/imports', 'import_export'], ['/clients', 'clients'], ['/contacts', 'contacts'], ['/leads', 'leads'], ['/deals', 'deals'], ['/pipelines', 'pipelines'], ['/tasks', 'tasks'], ['/calendar', 'calendar'], ['/tickets', 'tickets'], ['/proposals', 'proposals'], ['/activity', 'activities'], ['/messages', 'messages'], ['/chat', 'chat'], ['/todos', 'todos'],
+  ['/ai-school-research', 'ai_research'], ['/lead-discovery', 'ai_research'], ['/assignments', 'import_export'], ['/schools', 'import_export'], ['/imports', 'import_export'], ['/clients', 'clients'], ['/contacts', 'contacts'], ['/leads', 'leads'], ['/deals', 'deals'], ['/pipelines', 'pipelines'], ['/tasks', 'tasks'], ['/calendar', 'calendar'], ['/tickets', 'tickets'], ['/proposals', 'proposals'], ['/activity', 'activities'], ['/messages', 'messages'], ['/chat', 'chat'], ['/todos', 'todos'],
 ];
 export function featureForRoute(pathname: string): PlanFeatureId | null {
   return routeFeatures.find(([route]) => pathname === route || pathname.startsWith(`${route}/`))?.[1] ?? null;

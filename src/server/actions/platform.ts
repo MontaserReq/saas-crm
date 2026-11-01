@@ -7,6 +7,8 @@ import { requireAuth } from '@/lib/auth/session';
 import { platformResources } from '@/lib/platform/types';
 import { assertPlatformResourceMutationAllowed } from '@/lib/platform/access';
 import { PlatformAdminService } from '@/server/services/PlatformAdminService';
+import { UniversalAiGateway } from '@/lib/ai/gateway';
+import { SearchGateway } from '@/lib/search';
 
 function errorMessage(error: unknown): string {
   if (error instanceof z.ZodError) return error.issues[0]?.message || 'Invalid form';
@@ -50,6 +52,35 @@ export async function saveAiResearchSettingsAction(input: unknown) {
   } catch (error) {
     return { success: false as const, error: errorMessage(error) };
   }
+}
+
+export async function saveSearchProviderSettingsAction(input: unknown) {
+  try {
+    const user = await requireAuth();
+    const result = await PlatformAdminService.saveSearchProviderSettings(user, input);
+    refresh();
+    return { success: true as const, settings: result };
+  } catch (error) {
+    return { success: false as const, error: errorMessage(error) };
+  }
+}
+
+export async function testAiProviderAction(providerId: string) {
+  try {
+    const user = await requireAuth();
+    const settings = await PlatformAdminService.getAiResearchSettings(user);
+    if (!settings.providers.some((provider) => provider.id === providerId)) throw new Error('Provider not found');
+    const result = await UniversalAiGateway.generate({ providerId, purpose: 'provider-connection-test', maxOutputTokens: 20, messages: [{ role: 'user', content: 'Reply with exactly READY.' }] });
+    return { success: true as const, providerId: result.providerId, model: result.model, durationMs: result.durationMs };
+  } catch (error) { return { success: false as const, error: errorMessage(error) }; }
+}
+
+export async function testSearchProviderAction(providerId: string) {
+  try {
+    const user = await requireAuth();
+    await PlatformAdminService.getSearchProviderSettings(user);
+    return { success: true as const, ...(await SearchGateway.testProvider(providerId)) };
+  } catch (error) { return { success: false as const, error: errorMessage(error) }; }
 }
 
 export async function activateOrganizationTrialAction(input: unknown) {

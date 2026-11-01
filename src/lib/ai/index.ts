@@ -2,6 +2,7 @@ import { AiNotConfiguredError, AiProvider } from './types';
 import { GeminiProvider } from './GeminiProvider';
 import { GroqProvider } from './GroqProvider';
 import { OpenAICompatibleProvider } from './OpenAICompatibleProvider';
+import { UniversalResearchProvider } from './UniversalResearchProvider';
 import { createFallbackProvider } from './FallbackAiProvider';
 import { getAiResearchConfig, getAiResearchConfigFromPlatform } from './config';
 import type { AiResearchConfig } from './config';
@@ -14,9 +15,12 @@ export type { AiProviderName, AiResearchConfig } from './config';
 export { GeminiProvider } from './GeminiProvider';
 export { GroqProvider } from './GroqProvider';
 export { OpenAICompatibleProvider } from './OpenAICompatibleProvider';
+export { UniversalResearchProvider } from './UniversalResearchProvider';
 export { FallbackAiProvider, createFallbackProvider } from './FallbackAiProvider';
 export type { ResearchUsage, ResearchAttemptStatus, ResearchProvider, OnAttemptCallback, JobUsageSummary } from './usage';
 export { sanitizeErrorMessage } from './usage';
+export { UniversalAiGateway } from './gateway';
+export type { AiGatewayMessage, AiGatewayRequest, AiGatewayResponse, AiGatewayStructuredResponse } from './gateway';
 
 /**
  * Provider factory, environment-driven via AI_PROVIDER.
@@ -39,6 +43,10 @@ export function getAiProvider(onAttempt?: OnAttemptCallback, overrideConfig?: Ai
 
   if (config.activeProvider?.kind === 'openai-compatible') {
     return new OpenAICompatibleProvider(config.activeProvider, onAttempt);
+  }
+
+  if (config.activeProvider && ['openai-responses', 'anthropic', 'custom-http'].includes(config.activeProvider.kind)) {
+    return new UniversalResearchProvider(config.activeProvider.id, onAttempt);
   }
 
   if (config.activeProvider?.kind === 'groq') {

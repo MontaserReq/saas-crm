@@ -7,11 +7,12 @@ import { readSetupState } from '@/lib/onboarding/templates';
 import { DEFAULT_MODULES, DEFAULT_CLIENT_TYPES, DEFAULT_LEAD_STATUSES, DEFAULT_TICKET_PRIORITIES } from './OrganizationConfigService';
 import type { UserSession } from '@/types';
 import type { PlatformResource, PlatformRecord, PlatformSectionData, PlatformStats } from '@/lib/platform/types';
-import { organizationInput, userInput, planInput, subscriptionInput, trialActivationInput, integrationInput, supportInput, settingInput, aiResearchSettingsInput } from '@/lib/platform/validation';
+import { organizationInput, userInput, planInput, subscriptionInput, trialActivationInput, integrationInput, supportInput, settingInput, aiResearchSettingsInput, searchProviderSettingsInput } from '@/lib/platform/validation';
 import { areKnownPlanFeatureTokens, expandPlanFeatures, parseFeatureOverrides } from '@/lib/platform/entitlements';
 import { getPlatformDefaults } from './PlatformCatalogService';
 import { assertOrganizationUserCapacity } from '@/lib/platform/userCapacity';
 import { AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY, AI_RESEARCH_CLEARED_SECRET, AI_RESEARCH_PROVIDERS_SETTING_KEY, AI_RESEARCH_SETTING_KEYS, getAiResearchPlatformSettings } from '@/lib/ai/researchSettings';
+import { SEARCH_ACTIVE_PROVIDER_SETTING_KEY, SEARCH_PROVIDERS_SETTING_KEY, getSearchProviderSettings, searchClearedSecret } from '@/lib/search/settings';
 
 export function requirePlatformAdmin(user: UserSession) {
   if (!isPlatformSuperAdmin(user)) throw new Error('Forbidden');
@@ -36,6 +37,7 @@ export class PlatformAdminService {
     return {
       status: settings.status,
       activeProviderId: settings.activeProviderId,
+      featureProviderIds: settings.featureProviderIds,
       providers: settings.providers.map(({ apiKey, ...provider }) => ({ ...provider, configured: Boolean(apiKey) })),
     };
   }
@@ -68,17 +70,44 @@ export class PlatformAdminService {
 
       await upsert('ai_research_status', input.status);
       await upsert(AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY, input.activeProviderId || '');
+      await upsert('ai_feature_providers', JSON.stringify(input.featureProviderIds));
       await upsert(AI_RESEARCH_PROVIDERS_SETTING_KEY, JSON.stringify(providers));
 
       await audit(tx, user, 'ai_research', 'global', 'updated', {
         status: input.status,
         activeProviderId: input.activeProviderId,
+        featureProviderIds: input.featureProviderIds,
         providerCount: providers.length,
         providerIds: providers.map(provider => provider.id),
       });
     }, { maxWait: 10000, timeout: 20000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return this.getAiResearchSettings(user);
+  }
+
+  static async getSearchProviderSettings(user: UserSession) {
+    requirePlatformAdmin(user);
+    const settings = await getSearchProviderSettings();
+    return { activeProviderId: settings.activeProviderId, providers: settings.providers.map(({ apiKey, ...provider }) => ({ ...provider, configured: Boolean(apiKey) })) };
+  }
+
+  static async saveSearchProviderSettings(user: UserSession, raw: unknown) {
+    requirePlatformAdmin(user);
+    const input = searchProviderSettingsInput.parse(raw);
+    const existing = await getSearchProviderSettings();
+    const existingById = new Map(existing.providers.map((provider) => [provider.id, provider]));
+    const providers = input.providers.map((provider) => {
+      const old = existingById.get(provider.id);
+      const apiKey = provider.clearApiKey ? null : provider.apiKey || old?.apiKey || null;
+      return { id: provider.id, name: provider.name, kind: provider.kind, baseUrl: provider.baseUrl, enabled: provider.enabled, maxResults: provider.maxResults, apiKeyEncrypted: apiKey ? encryptSecret(apiKey) : searchClearedSecret() };
+    });
+    await prisma.$transaction(async (tx) => {
+      const upsert = (key: string, value: string) => tx.platformSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
+      await upsert(SEARCH_ACTIVE_PROVIDER_SETTING_KEY, input.activeProviderId || '');
+      await upsert(SEARCH_PROVIDERS_SETTING_KEY, JSON.stringify(providers));
+      await audit(tx, user, 'search_providers', 'global', 'updated', { activeProviderId: input.activeProviderId, providerCount: providers.length, providerIds: providers.map((provider) => provider.id) });
+    }, { maxWait: 10000, timeout: 20000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    return this.getSearchProviderSettings(user);
   }
 
   static async activateTrial(user: UserSession, raw: unknown) {
@@ -193,7 +222,7 @@ export class PlatformAdminService {
           total = count; records = rows.map(row => ({ id: row.id, organizationId: row.organizationId, organizationName: row.organization?.name ?? '', subject: row.subject, description: row.description, contactEmail: row.contactEmail, status: row.status, priority: row.priority, resolution: row.resolution, createdAt: iso(row.createdAt) })); break;
         }
         case 'settings': {
-          const where = { AND: [{ key: { notIn: [...AI_RESEARCH_SETTING_KEYS] } }, { NOT: { key: { startsWith: 'ai_research_' } } }, ...(q ? [{ key: contains(q) }] : [])] };
+          const where = { AND: [{ key: { notIn: [...AI_RESEARCH_SETTING_KEYS] } }, { NOT: { OR: [{ key: { startsWith: 'ai_research_' } }, { key: { startsWith: 'search_' } }] } }, ...(q ? [{ key: contains(q) }] : [])] };
           const [count, rows] = await Promise.all([prisma.platformSetting.count({ where }), prisma.platformSetting.findMany({ where, ...pagination, orderBy: { key: 'asc' } })]);
           total = count; records = rows.map(row => ({ id: row.id, key: row.key, value: row.value, updatedAt: iso(row.updatedAt) })); break;
         }

@@ -36,10 +36,11 @@ export const settingInput = z.object({ key: z.enum(settingKeys), value: text.max
 export const aiResearchSettingsInput = z.object({
   status: z.enum(['OFF', 'BETA', 'ON']),
   activeProviderId: text.max(80).default('').transform(value => value || null),
+  featureProviderIds: z.record(z.string().max(80)).default({}),
   providers: z.array(z.object({
     id: text.min(2).max(80).regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/, 'Use letters, numbers, hyphens or underscores for provider id'),
     name: text.min(2).max(120),
-    kind: z.enum(['gemini', 'groq', 'openai-compatible']),
+    kind: z.enum(['gemini', 'groq', 'openai-compatible', 'openai-responses', 'anthropic', 'custom-http']),
     baseUrl: text.max(500).default(''),
     model: text.min(1).max(160),
     apiKey: z.string().trim().max(2000).default(''),
@@ -50,7 +51,26 @@ export const aiResearchSettingsInput = z.object({
   const ids = value.providers.map(provider => provider.id);
   if (new Set(ids).size !== ids.length) context.addIssue({ code: 'custom', path: ['providers'], message: 'Provider ids must be unique' });
   if (value.activeProviderId && !ids.includes(value.activeProviderId)) context.addIssue({ code: 'custom', path: ['activeProviderId'], message: 'Select an existing provider' });
+  for (const [feature, providerId] of Object.entries(value.featureProviderIds)) if (providerId && !ids.includes(providerId)) context.addIssue({ code: 'custom', path: ['featureProviderIds', feature], message: 'Select an existing provider' });
   for (const [index, provider] of value.providers.entries()) {
-    if (provider.kind === 'openai-compatible' && !provider.baseUrl) context.addIssue({ code: 'custom', path: ['providers', index, 'baseUrl'], message: 'Base URL is required for OpenAI-compatible providers' });
+    if (['openai-compatible', 'openai-responses', 'anthropic', 'custom-http'].includes(provider.kind) && !provider.baseUrl) context.addIssue({ code: 'custom', path: ['providers', index, 'baseUrl'], message: 'Base URL is required for this provider adapter' });
   }
+});
+
+export const searchProviderSettingsInput = z.object({
+  activeProviderId: text.max(80).default('').transform(value => value || null),
+  providers: z.array(z.object({
+    id: text.min(2).max(80).regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
+    name: text.min(2).max(120),
+    kind: z.enum(['exa', 'brave', 'custom']),
+    baseUrl: text.min(1).max(500),
+    apiKey: z.string().trim().max(2000).default(''),
+    clearApiKey: z.boolean().default(false),
+    enabled: z.boolean().default(true),
+    maxResults: z.number().int().min(1).max(100).default(25),
+  }).strict()).min(1).max(15),
+}).strict().superRefine((value, context) => {
+  const ids = value.providers.map(provider => provider.id);
+  if (new Set(ids).size !== ids.length) context.addIssue({ code: 'custom', path: ['providers'], message: 'Provider ids must be unique' });
+  if (value.activeProviderId && !ids.includes(value.activeProviderId)) context.addIssue({ code: 'custom', path: ['activeProviderId'], message: 'Select an existing provider' });
 });

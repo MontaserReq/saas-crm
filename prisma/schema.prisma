@@ -90,18 +90,20 @@ model User {
   createdWorkflows              Workflow[]                  @relation("WorkflowCreatedBy")
   updatedWorkflows              Workflow[]                  @relation("WorkflowUpdatedBy")
 
-  createdAt               DateTime             @default(now())
-  updatedAt               DateTime             @updatedAt
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
   userPermissions         UserPermission[]
   organizationMemberships OrganizationMember[]
   teamMemberships         TeamMember[]
-  sentInvitations         OrganizationInvite[] @relation("InvitationSender")
-  receivedInvitations     OrganizationInvite[] @relation("InvitationRecipient")
-  operationExecutions     OperationExecution[] @relation("OperationExecutionUser")
-  requestedPlanUpgrades   PlanUpgradeRequest[] @relation("PlanUpgradeRequester")
-  reviewedPlanUpgrades    PlanUpgradeRequest[] @relation("PlanUpgradeReviewer")
-  confirmedPlanPayments   PlanUpgradeRequest[] @relation("PlanPaymentConfirmer")
-  initiatedDataImports    DataImport[]         @relation("DataImportInitiator")
+  sentInvitations         OrganizationInvite[]  @relation("InvitationSender")
+  receivedInvitations     OrganizationInvite[]  @relation("InvitationRecipient")
+  operationExecutions     OperationExecution[]  @relation("OperationExecutionUser")
+  requestedPlanUpgrades   PlanUpgradeRequest[]  @relation("PlanUpgradeRequester")
+  reviewedPlanUpgrades    PlanUpgradeRequest[]  @relation("PlanUpgradeReviewer")
+  confirmedPlanPayments   PlanUpgradeRequest[]  @relation("PlanPaymentConfirmer")
+  initiatedDataImports    DataImport[]          @relation("DataImportInitiator")
+  leadDiscoveryJobs       LeadDiscoveryJob[]    @relation("LeadDiscoveryJobCreator")
+  leadDiscoveryImports    LeadDiscoveryImport[] @relation("LeadDiscoveryImportActor")
 
   @@index([roleId])
   @@index([departmentId])
@@ -170,6 +172,8 @@ model Organization {
   platformSupportCases      PlatformSupportCase[]
   dataImports               DataImport[]
   operationApprovalRequests OperationApprovalRequest[]
+  leadDiscoveryJobs         LeadDiscoveryJob[]
+  leadDiscoveryImports      LeadDiscoveryImport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -660,31 +664,32 @@ model Client {
 }
 
 model Lead {
-  id                 String       @id @default(cuid())
-  organizationId     String
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  name               String
-  companyName        String?
-  email              String?
-  phone              String?
-  source             String?
-  status             String       @default("NEW") // NEW | CONTACTED | QUALIFIED | UNQUALIFIED | CONVERTED | LOST
-  notes              String?
-  assignedUserId     String?
-  assignedUser       User?        @relation("LeadAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
-  assignedTeamId     String?
-  assignedTeam       Team?        @relation("LeadTeam", fields: [assignedTeamId], references: [id], onDelete: SetNull)
-  convertedClientId  String?
-  convertedClient    Client?      @relation("LeadConvertedClient", fields: [convertedClientId], references: [id], onDelete: SetNull)
-  convertedContactId String?
-  convertedContact   Contact?     @relation("LeadConvertedContact", fields: [convertedContactId], references: [id], onDelete: SetNull)
-  clientId           String?
-  client             Client?      @relation("LeadClient", fields: [clientId], references: [id], onDelete: SetNull)
-  deals              Deal[]
-  crmTasks           CrmTask[]
-  deletedAt          DateTime?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  id                   String                @id @default(cuid())
+  organizationId       String
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  name                 String
+  companyName          String?
+  email                String?
+  phone                String?
+  source               String?
+  status               String                @default("NEW") // NEW | CONTACTED | QUALIFIED | UNQUALIFIED | CONVERTED | LOST
+  notes                String?
+  assignedUserId       String?
+  assignedUser         User?                 @relation("LeadAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  assignedTeamId       String?
+  assignedTeam         Team?                 @relation("LeadTeam", fields: [assignedTeamId], references: [id], onDelete: SetNull)
+  convertedClientId    String?
+  convertedClient      Client?               @relation("LeadConvertedClient", fields: [convertedClientId], references: [id], onDelete: SetNull)
+  convertedContactId   String?
+  convertedContact     Contact?              @relation("LeadConvertedContact", fields: [convertedContactId], references: [id], onDelete: SetNull)
+  clientId             String?
+  client               Client?               @relation("LeadClient", fields: [clientId], references: [id], onDelete: SetNull)
+  deals                Deal[]
+  crmTasks             CrmTask[]
+  leadDiscoveryImports LeadDiscoveryImport[]
+  deletedAt            DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@index([organizationId, status])
   @@index([organizationId, assignedUserId])
@@ -1491,11 +1496,11 @@ model NotificationDelivery {
 }
 
 model CustomerEmail {
-  id                String              @id @default(cuid())
+  id                String               @id @default(cuid())
   organizationId    String
-  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   senderId          String
-  sender            User                @relation("CustomerEmailSender", fields: [senderId], references: [id], onDelete: Restrict)
+  sender            User                 @relation("CustomerEmailSender", fields: [senderId], references: [id], onDelete: Restrict)
   integrationId     String?
   integration       ExternalIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
   provider          String
@@ -1504,14 +1509,14 @@ model CustomerEmail {
   bodyText          String
   relatedEntityType String
   relatedEntityId   String
-  idempotencyKey    String              @unique
-  status            String              @default("PENDING")
+  idempotencyKey    String               @unique
+  status            String               @default("PENDING")
   providerMessageId String?
   errorCode         String?
   errorMessage      String?
   sentAt            DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
   @@index([organizationId, createdAt])
   @@index([organizationId, relatedEntityType, relatedEntityId])
@@ -1875,4 +1880,116 @@ model OperationExecution {
   @@index([operationType, status, leaseExpiresAt])
   @@index([organizationId, operationType, status])
   @@index([userId, operationType, status])
+}
+
+// Generic, tenant-scoped Smart Lead Discovery staging area. Results remain
+// untrusted until a user explicitly imports them into the normal Lead model.
+model LeadDiscoveryJob {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdById    String
+  createdBy      User         @relation("LeadDiscoveryJobCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  prompt           String
+  status           String    @default("PENDING") // PENDING | RUNNING | COMPLETED | PARTIAL | FAILED | CANCELLED
+  stage            String    @default("UNDERSTANDING")
+  requestedCount   Int
+  filters          String    @default("{}")
+  aiProviderId     String?
+  searchProviderId String?
+  error            String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  results LeadDiscoveryResult[]
+  sources LeadDiscoverySource[]
+  imports LeadDiscoveryImport[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([createdById, createdAt])
+}
+
+model LeadDiscoveryResult {
+  id                  String           @id @default(cuid())
+  jobId               String
+  job                 LeadDiscoveryJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  companyName         String
+  normalizedName      String
+  website             String?
+  normalizedDomain    String?
+  industry            String?
+  businessDescription String?
+  country             String?
+  city                String?
+  phone               String?
+  normalizedPhone     String?
+  email               String?
+  normalizedEmail     String?
+  linkedin            String?
+  instagram           String?
+  companySize         String?
+  leadRelevanceScore  Int              @default(0)
+  dataCompleteness    Int              @default(0)
+  qualificationReason String?
+  verificationStatus  String           @default("UNVERIFIED") // VERIFIED | PARTIALLY_VERIFIED | UNVERIFIED | MISSING
+  conflictDetails     String?
+  metadata            String           @default("{}")
+  importedLeadId      String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  sources LeadDiscoverySource[]
+  imports LeadDiscoveryImport[]
+
+  @@index([jobId, leadRelevanceScore])
+  @@index([normalizedDomain])
+  @@index([normalizedEmail])
+  @@index([normalizedPhone])
+  @@index([normalizedName])
+}
+
+model LeadDiscoverySource {
+  id          String               @id @default(cuid())
+  jobId       String
+  job         LeadDiscoveryJob     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resultId    String?
+  result      LeadDiscoveryResult? @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  url         String
+  title       String?
+  snippet     String?
+  content     String?
+  sourceType  String               @default("SEARCH_RESULT") // SEARCH_RESULT | OFFICIAL_WEBSITE | CONTACT_PAGE | OTHER
+  query       String?
+  metadata    String               @default("{}")
+  collectedAt DateTime             @default(now())
+
+  @@index([jobId])
+  @@index([resultId])
+  @@index([url])
+}
+
+model LeadDiscoveryImport {
+  id             String              @id @default(cuid())
+  jobId          String
+  job            LeadDiscoveryJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resultId       String
+  result         LeadDiscoveryResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  leadId         String?
+  lead           Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  importedById   String
+  importedBy     User                @relation("LeadDiscoveryImportActor", fields: [importedById], references: [id], onDelete: Restrict)
+  status         String              @default("PENDING") // PENDING | IMPORTED | SKIPPED | FAILED
+  error          String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([jobId, resultId])
+  @@index([organizationId, createdAt])
+  @@index([leadId])
 }

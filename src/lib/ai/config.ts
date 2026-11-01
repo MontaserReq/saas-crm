@@ -5,7 +5,7 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export type AiProviderName = 'gemini' | 'groq' | 'openai-compatible';
+export type AiProviderName = 'gemini' | 'groq' | 'openai-compatible' | 'openai-responses' | 'anthropic' | 'custom-http';
 
 export interface AiResearchConfig {
   aiProvider: AiProviderName;

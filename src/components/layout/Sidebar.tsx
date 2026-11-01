@@ -29,6 +29,7 @@ import {
   SlidersHorizontal,
   LifeBuoy,
   LockKeyhole,
+  Search,
 } from "lucide-react";
 import { UserSession } from "@/types";
 import { useI18n } from "@/lib/i18n/context";
@@ -57,8 +58,8 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
   const searchParams = useSearchParams();
   const { t, language } = useI18n();
   const labels = language === 'ar'
-    ? { clients: 'العملاء', deals: 'الصفقات', tasks: 'المهام', pipelines: 'مسارات المبيعات', leads: 'العملاء المحتملون', contacts: 'جهات الاتصال', imports: 'استيراد البيانات', assignments: 'التعيينات', aiResearch: 'البحث الذكي', assistant: 'المساعد الذكي', approvals: 'طلبات الموافقة', workflows: 'أتمتة سير العمل', messageTemplates: 'قوالب الرسائل', ticketPriorities: 'تصنيفات أولوية التذاكر', superAdmin: 'مدير المنصة', organizations: 'الشركات', signups: 'التسجيلات وبدء الاستخدام', billing: 'الخطط والفوترة', integrations: 'التكاملات', health: 'صحة المنصة', support: 'الدعم والمشاكل', platformAnalytics: 'تحليلات المنصة', globalSettings: 'الإعدادات العامة' }
-    : { clients: 'Clients', deals: 'Deals', tasks: 'Tasks', pipelines: 'Sales Pipelines', leads: 'Leads', contacts: 'Contacts', imports: 'Import data', assignments: 'Assignments', aiResearch: 'Smart research', assistant: 'AI Assistant', approvals: 'Approval Requests', workflows: 'Workflow automation', messageTemplates: 'Message Templates', ticketPriorities: 'Ticket Priority Categories', superAdmin: 'Platform Admin', organizations: 'Organizations', signups: 'Signups & Onboarding', billing: 'Plans & Billing', integrations: 'Integrations', health: 'Platform Health', support: 'Support & Issues', platformAnalytics: 'Platform Analytics', globalSettings: 'Global Settings' };
+    ? { clients: 'العملاء', deals: 'الصفقات', tasks: 'المهام', pipelines: 'مسارات المبيعات', leads: 'العملاء المحتملون', contacts: 'جهات الاتصال', imports: 'استيراد البيانات', assignments: 'التعيينات', aiResearch: 'البحث الذكي', leadDiscovery: 'اكتشاف العملاء', assistant: 'المساعد الذكي', approvals: 'طلبات الموافقة', workflows: 'أتمتة سير العمل', messageTemplates: 'قوالب الرسائل', ticketPriorities: 'تصنيفات أولوية التذاكر', superAdmin: 'مدير المنصة', organizations: 'الشركات', signups: 'التسجيلات وبدء الاستخدام', billing: 'الخطط والفوترة', integrations: 'التكاملات', health: 'صحة المنصة', support: 'الدعم والمشاكل', platformAnalytics: 'تحليلات المنصة', globalSettings: 'الإعدادات العامة' }
+    : { clients: 'Clients', deals: 'Deals', tasks: 'Tasks', pipelines: 'Sales Pipelines', leads: 'Leads', contacts: 'Contacts', imports: 'Import data', assignments: 'Assignments', aiResearch: 'Smart research', leadDiscovery: 'Lead discovery', assistant: 'AI Assistant', approvals: 'Approval Requests', workflows: 'Workflow automation', messageTemplates: 'Message Templates', ticketPriorities: 'Ticket Priority Categories', superAdmin: 'Platform Admin', organizations: 'Organizations', signups: 'Signups & Onboarding', billing: 'Plans & Billing', integrations: 'Integrations', health: 'Platform Health', support: 'Support & Issues', platformAnalytics: 'Platform Analytics', globalSettings: 'Global Settings' };
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
 
   const mainNav = [
@@ -96,6 +97,12 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
       icon: Sparkles,
       show: hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW) || hasPermission(user, PERMISSIONS.SCHOOLS_VIEW),
       comingSoon: true,
+    },
+    {
+      label: labels.leadDiscovery,
+      href: "/lead-discovery",
+      icon: Search,
+      show: hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW),
     },
     {
       label: labels.assignments,
@@ -204,6 +211,7 @@ export function Sidebar({ user, schools = [], taskTypes = [], users = [], direct
     { label: t("nav.roles"), href: "/admin/roles", icon: KeyRound },
     { label: labels.integrations, href: "/admin/platform/integrations", icon: Share2 },
     { label: labels.aiResearch, href: "/admin/platform/ai-research", icon: Sparkles },
+    { label: language === 'ar' ? 'مزودو البحث' : 'Search providers', href: "/admin/platform/search-providers", icon: Search },
     { label: t("nav.auditLogs"), href: "/admin/audit-logs", icon: ScrollText },
     { label: labels.health, href: "/admin/platform/health", icon: Activity },
     { label: labels.support, href: "/admin/platform/support", icon: BellRing },

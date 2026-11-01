@@ -5,7 +5,7 @@ export const AI_RESEARCH_STATUSES = ['OFF', 'BETA', 'ON'] as const;
 export type AiResearchStatus = typeof AI_RESEARCH_STATUSES[number];
 
 /** Built-in adapters plus the generic OpenAI-compatible adapter. */
-export const AI_RESEARCH_PROVIDER_KINDS = ['gemini', 'groq', 'openai-compatible'] as const;
+export const AI_RESEARCH_PROVIDER_KINDS = ['gemini', 'groq', 'openai-compatible', 'openai-responses', 'anthropic', 'custom-http'] as const;
 export type AiResearchProvider = typeof AI_RESEARCH_PROVIDER_KINDS[number];
 
 export type AiResearchProviderConfig = {
@@ -14,6 +14,13 @@ export type AiResearchProviderConfig = {
   kind: AiResearchProvider;
   baseUrl: string;
   model: string;
+  organizationId?: string;
+  customHeaders?: Record<string, string>;
+  timeoutMs?: number;
+  maxOutputTokens?: number;
+  temperature?: number;
+  capabilities?: string[];
+  metadata?: Record<string, unknown>;
   apiKey: string | null;
   enabled: boolean;
 };
@@ -29,6 +36,7 @@ export const AI_RESEARCH_SETTING_KEYS = [
   'ai_research_groq_model',
   AI_RESEARCH_PROVIDERS_SETTING_KEY,
   AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY,
+  'ai_feature_providers',
 ] as const;
 
 export const AI_RESEARCH_CLEARED_SECRET = '__AI_RESEARCH_SECRET_CLEARED__';
@@ -44,6 +52,7 @@ export type AiResearchPlatformSettings = {
   providers: AiResearchProviderConfig[];
   activeProviderId: string | null;
   activeProvider: AiResearchProviderConfig | null;
+  featureProviderIds: Record<string, string>;
 };
 
 function validStatus(value: string | undefined): value is AiResearchStatus {
@@ -103,6 +112,13 @@ function parseStoredProviders(raw: string | undefined): AiResearchProviderConfig
         kind: item.kind,
         baseUrl: typeof item.baseUrl === 'string' ? item.baseUrl : '',
         model: typeof item.model === 'string' ? item.model : '',
+        organizationId: typeof item.organizationId === 'string' ? item.organizationId : undefined,
+        customHeaders: item.customHeaders && typeof item.customHeaders === 'object' ? item.customHeaders : undefined,
+        timeoutMs: typeof item.timeoutMs === 'number' ? item.timeoutMs : undefined,
+        maxOutputTokens: typeof item.maxOutputTokens === 'number' ? item.maxOutputTokens : undefined,
+        temperature: typeof item.temperature === 'number' ? item.temperature : undefined,
+        capabilities: Array.isArray(item.capabilities) ? item.capabilities.filter((value: unknown): value is string => typeof value === 'string') : undefined,
+        metadata: item.metadata && typeof item.metadata === 'object' ? item.metadata : undefined,
         apiKey: readSecret(typeof item.apiKeyEncrypted === 'string' ? item.apiKeyEncrypted : undefined, undefined),
         enabled: item.enabled !== false,
       } satisfies AiResearchProviderConfig];
@@ -138,6 +154,16 @@ export async function getAiResearchPlatformSettings(): Promise<AiResearchPlatfor
   const requestedActiveId = values.get(AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY)
     || (configuredProvider === 'groq' ? 'groq' : configuredProvider === 'gemini' ? 'gemini' : providers[0]?.id || null);
   const activeProvider = providers.find((provider) => provider.id === requestedActiveId) || null;
+  let featureProviderIds: Record<string, string> = {};
+  try {
+    const parsed = JSON.parse(values.get('ai_feature_providers') || '{}');
+    if (parsed && typeof parsed === 'object') {
+      featureProviderIds = Object.entries(parsed).reduce<Record<string, string>>((result, [key, value]) => {
+        if (typeof value === 'string') result[key] = value;
+        return result;
+      }, {});
+    }
+  } catch { /* use the global default */ }
 
   return {
     status: validStatus(configuredStatus) ? configuredStatus : fallbackStatus,
@@ -149,6 +175,7 @@ export async function getAiResearchPlatformSettings(): Promise<AiResearchPlatfor
     providers,
     activeProviderId: activeProvider?.id || null,
     activeProvider,
+    featureProviderIds,
   };
 }
 
