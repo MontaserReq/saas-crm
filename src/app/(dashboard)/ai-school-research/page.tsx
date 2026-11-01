@@ -18,7 +18,7 @@ export default async function AiSchoolResearchPage({
 
   const page = Math.max(1, Number.parseInt(query.page || '1', 10) || 1);
   const result = await SchoolResearchService.listJobs(user, page);
-  const isConfigured = Boolean(settings.geminiApiKey || settings.groqApiKey);
+  const isConfigured = Boolean(settings.activeProvider?.enabled && settings.activeProvider.apiKey);
   return (
     <AiResearchHomeView
       jobs={result.data.map((job) => ({

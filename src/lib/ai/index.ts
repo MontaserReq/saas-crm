@@ -1,6 +1,7 @@
-import { AiProvider } from './types';
+import { AiNotConfiguredError, AiProvider } from './types';
 import { GeminiProvider } from './GeminiProvider';
 import { GroqProvider } from './GroqProvider';
+import { OpenAICompatibleProvider } from './OpenAICompatibleProvider';
 import { createFallbackProvider } from './FallbackAiProvider';
 import { getAiResearchConfig, getAiResearchConfigFromPlatform } from './config';
 import type { AiResearchConfig } from './config';
@@ -12,6 +13,7 @@ export { getAiResearchConfigFromPlatform } from './config';
 export type { AiProviderName, AiResearchConfig } from './config';
 export { GeminiProvider } from './GeminiProvider';
 export { GroqProvider } from './GroqProvider';
+export { OpenAICompatibleProvider } from './OpenAICompatibleProvider';
 export { FallbackAiProvider, createFallbackProvider } from './FallbackAiProvider';
 export type { ResearchUsage, ResearchAttemptStatus, ResearchProvider, OnAttemptCallback, JobUsageSummary } from './usage';
 export { sanitizeErrorMessage } from './usage';
@@ -30,6 +32,25 @@ export { sanitizeErrorMessage } from './usage';
  */
 export function getAiProvider(onAttempt?: OnAttemptCallback, overrideConfig?: AiResearchConfig): AiProvider {
   const config = overrideConfig || getAiResearchConfig();
+
+  if (config.activeProvider && !config.activeProvider.enabled) {
+    throw new AiNotConfiguredError(`Provider "${config.activeProvider.name}" is disabled.`);
+  }
+
+  if (config.activeProvider?.kind === 'openai-compatible') {
+    return new OpenAICompatibleProvider(config.activeProvider, onAttempt);
+  }
+
+  if (config.activeProvider?.kind === 'groq') {
+    const groq = new GroqProvider(config, undefined, onAttempt);
+    const configuredGemini = config.providers?.find((provider) => provider.kind === 'gemini' && provider.enabled && provider.apiKey);
+    if (config.providers && !configuredGemini) return groq;
+    return createFallbackProvider(groq, configuredGemini ? { ...config, geminiApiKey: configuredGemini.apiKey, geminiModel: configuredGemini.model } : config, onAttempt);
+  }
+
+  if (config.activeProvider?.kind === 'gemini') {
+    return new GeminiProvider(config, onAttempt, false);
+  }
 
   if (config.aiProvider === 'groq') {
     const groq = new GroqProvider(config, undefined, onAttempt);

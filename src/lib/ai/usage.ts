@@ -9,7 +9,9 @@
  * research logic, prompts, provider selection, or output.
  */
 
-export type ResearchProvider = 'groq' | 'gemini';
+/** Provider id from Platform Admin; built-ins use gemini/groq and custom
+ * providers use their configured id. */
+export type ResearchProvider = string;
 export type ResearchAttemptStatus = 'SUCCESS' | 'FAILED' | 'RATE_LIMITED';
 
 /**

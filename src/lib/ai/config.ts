@@ -1,9 +1,11 @@
+import type { AiResearchProviderConfig } from './researchSettings';
+
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export type AiProviderName = 'gemini' | 'groq';
+export type AiProviderName = 'gemini' | 'groq' | 'openai-compatible';
 
 export interface AiResearchConfig {
   aiProvider: AiProviderName;
@@ -11,6 +13,10 @@ export interface AiResearchConfig {
   geminiModel: string;
   groqApiKey: string | null;
   groqModel: string;
+  /** Selected Platform Admin provider, including custom OpenAI-compatible providers. */
+  activeProvider?: AiResearchProviderConfig | null;
+  providers?: AiResearchProviderConfig[];
+  providerId?: string;
   groqMaxCompletionTokens: number;
   groqBatchSize: number;
   maxSchoolsPerJob: number;
@@ -65,5 +71,8 @@ export async function getAiResearchConfigFromPlatform(): Promise<AiResearchConfi
     geminiModel: platform.geminiModel,
     groqApiKey: platform.groqApiKey,
     groqModel: platform.groqModel,
+    activeProvider: platform.activeProvider,
+    providers: platform.providers,
+    providerId: platform.activeProviderId || undefined,
   };
 }
