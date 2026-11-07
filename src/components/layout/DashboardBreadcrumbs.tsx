@@ -9,6 +9,7 @@ const labels: Record<string, [string, string]> = {
   activity: ["Activity log", "سجل النشاط"],
   admin: ["Administration", "الإدارة والنظام"],
   analytics: ["Analytics & reports", "التحليلات والتقارير"],
+  "team-activity": ["Team activity report", "تقرير نشاط الفريق"],
   "approval-requests": ["Approval requests", "طلبات الموافقة"],
   assignments: ["Assignments", "التعيينات"],
   calendar: ["Calendar & appointments", "التقويم والمواعيد"],

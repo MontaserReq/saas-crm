@@ -98,6 +98,8 @@ export const PERMISSIONS = {
   NOTIFICATION_PREFERENCES_MANAGE: 'notification_preferences.manage',
 
   // Organization email and customer correspondence
+  INTEGRATIONS_VIEW: 'integrations.view',
+  INTEGRATIONS_MANAGE: 'integrations.manage',
   EMAIL_INTEGRATIONS_VIEW: 'email_integrations.view',
   EMAIL_INTEGRATIONS_MANAGE: 'email_integrations.manage',
   CUSTOMER_EMAIL_VIEW: 'customer_email.view',
@@ -156,6 +158,11 @@ export const PERMISSIONS = {
   PROPOSALS_TEMPLATE_CREATE: 'proposals.template.create',
   PROPOSALS_TEMPLATE_UPDATE: 'proposals.template.update',
   PROPOSALS_TEMPLATE_DELETE: 'proposals.template.delete',
+  DOCUMENTS_VIEW: 'documents.view',
+  DOCUMENTS_CREATE: 'documents.create',
+  DOCUMENTS_UPDATE: 'documents.update',
+  DOCUMENTS_DELETE: 'documents.delete',
+  DOCUMENTS_SHARE: 'documents.share',
   DEALS_VIEW: 'deals.view',
   DEALS_CREATE: 'deals.create',
   DEALS_UPDATE: 'deals.update',

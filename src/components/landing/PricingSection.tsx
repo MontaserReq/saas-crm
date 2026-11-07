@@ -3,15 +3,10 @@
 import { ArrowUpRight, Check, Minus, UsersRound } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '@/lib/i18n/context';
-import { expandPlanFeatures, planFeatureLabels, type PlanFeatureId } from '@/lib/platform/entitlements';
+import { expandPlanFeatures, planFeatureLabels } from '@/lib/platform/entitlements';
 import { getAnnualSavings, type BillingInterval, type PlanConfig } from '@/lib/plans';
 import { APP_URL, SALES_HREF } from './MarketingShell';
 import s from './marketing.module.css';
-
-const FEATURE_PRIORITY: PlanFeatureId[] = [
-  'clients', 'contacts', 'leads', 'deals', 'pipelines', 'tasks', 'tickets', 'team',
-  'custom_fields', 'import_export', 'search', 'reports', 'workflows', 'audit_logs',
-];
 
 type ComparisonCell = { en: string; ar: string; included: boolean };
 type ComparisonRow = {
@@ -95,10 +90,11 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   },
 ];
 
-function visibleFeatures(plan: PlanConfig) {
-  const enabled = new Set(expandPlanFeatures(plan.features));
-  return FEATURE_PRIORITY.filter(feature => enabled.has(feature)).slice(0, 6);
+function includedFeatures(plan: PlanConfig) {
+  return expandPlanFeatures(plan.features);
 }
+
+const FEATURE_PREVIEW_COUNT = 6;
 
 export function PricingSection({ standalone = false, plans }: { standalone?: boolean; plans: readonly PlanConfig[] }) {
   const { language } = useI18n();
@@ -108,16 +104,17 @@ export function PricingSection({ standalone = false, plans }: { standalone?: boo
     notice: 'تُدفع الباقة السنوية لفترة 12 شهراً. يتم تفعيل الباقات المدفوعة بعد تنسيق الدفع والتحقق من التحويل البنكي.',
     monthly: 'شهري', annual: 'سنوي', recommended: 'الأفضل للفرق النامية', custom: 'تواصل معنا', month: 'شهرياً', year: 'سنوياً',
     users: 'مستخدمين', customUsers: 'عدد المستخدمين حسب الاتفاق', start: 'ابدأ التجربة المجانية', contact: 'تواصل مع المبيعات', save: 'وفّر', currency: 'د.أ',
-    compare: 'قارن القدرات الفعلية.', compareLead: 'تعرض المقارنة مستوى كل قدرة كما هو محدد في كتالوج الباقات الحالي، وليس مجرد وجودها أو غيابها.', caption: 'مقارنة باقات CodeLine CRM', feature: 'القدرة أو الحد', included: 'متاح', usersRow: 'حد المستخدمين', foot: 'قد تتطلب التكاملات المتقدمة إعداد مزود الخدمة. تسري صلاحيات المستخدم والمؤسسة على جميع الباقات.',
+    compare: 'قارن القدرات الفعلية.', compareLead: 'تعرض المقارنة مستوى كل قدرة كما هو محدد في كتالوج الباقات الحالي، وليس مجرد وجودها أو غيابها.', caption: 'مقارنة باقات SatrCRM', feature: 'القدرة أو الحد', included: 'متاح', usersRow: 'حد المستخدمين', includedFeatures: 'الميزات المشمولة في الباقة', featureCount: 'ميزة مشمولة', showAll: 'عرض كل الميزات', showLess: 'إخفاء الميزات', foot: 'قد تتطلب التكاملات المتقدمة إعداد مزود الخدمة. تسري صلاحيات المستخدم والمؤسسة على جميع الباقات.',
   } : {
     label: 'Straightforward plans for your team', title: 'Choose the right starting point for growth.', lead: 'Clear JOD pricing, with a free seven-day Starter trial for every new workspace.',
     notice: 'Annual plans cover a 12-month period. Paid plans are activated after payment coordination and verified bank transfer.',
     monthly: 'Monthly', annual: 'Annual', recommended: 'Best for growing teams', custom: 'Contact Sales', month: 'per month', year: 'per year',
     users: 'users', customUsers: 'Users agreed with sales', start: 'Start Free Trial', contact: 'Contact Sales', save: 'Save', currency: 'JOD',
-    compare: 'Compare real capabilities.', compareLead: 'The table shows the level of each capability in the current plan catalogue, not just a generic included or excluded flag.', caption: 'CodeLine CRM plan comparison', feature: 'Capability or limit', included: 'Included', usersRow: 'User limit', foot: 'Advanced integrations may require provider configuration. User and organization permissions apply across every plan.',
+    compare: 'Compare real capabilities.', compareLead: 'The table shows the level of each capability in the current plan catalogue, not just a generic included or excluded flag.', caption: 'SatrCRM plan comparison', feature: 'Capability or limit', included: 'Included', usersRow: 'User limit', includedFeatures: 'Features included in this plan', featureCount: 'features included', showAll: 'Show all features', showLess: 'Show fewer features', foot: 'Advanced integrations may require provider configuration. User and organization permissions apply across every plan.',
   };
   const Heading = standalone ? 'h1' : 'h2';
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
+  const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(new Set());
   const number = new Intl.NumberFormat(ar ? 'ar-JO' : 'en-US');
 
   return <section id="pricing" className={s.pricingSection} aria-labelledby="pricing-title"><div className={s.container}>
@@ -132,7 +129,17 @@ export function PricingSection({ standalone = false, plans }: { standalone?: boo
         {savings !== null && <p className={s.savings}>{t.save} {number.format(Number(savings))} {plan.currency}</p>}
         <p className={s.userAllowance}><UsersRound aria-hidden="true" />{plan.userLimit === null ? t.customUsers : `${number.format(plan.userLimit)} ${t.users}`}</p>
         {plan.availability === 'contact_sales' ? <a href={SALES_HREF} className={s.planButton}>{t.contact}<ArrowUpRight aria-hidden="true" /></a> : <a href={`${APP_URL}/onboarding`} className={s.planButton}>{t.start}<ArrowUpRight aria-hidden="true" /></a>}
-        <ul>{visibleFeatures(plan).map(feature => <li key={feature}><Check aria-hidden="true" /><span>{planFeatureLabels[feature][language]}</span></li>)}</ul>
+        {(() => {
+          const features = includedFeatures(plan);
+          const isExpanded = expandedPlanIds.has(plan.id);
+          const visible = isExpanded ? features : features.slice(0, FEATURE_PREVIEW_COUNT);
+          const hasMore = features.length > FEATURE_PREVIEW_COUNT;
+          return <>
+            <div className={s.planFeatureHeader}><strong>{t.includedFeatures}</strong><span>{number.format(features.length)} {t.featureCount}</span></div>
+            <ul className={s.planFeatureList} aria-label={`${t.includedFeatures} — ${plan.name}`}>{visible.map(feature => <li key={feature}><Check aria-hidden="true" /><span>{planFeatureLabels[feature][language]}</span></li>)}</ul>
+            {hasMore && <button type="button" className={s.planFeatureToggle} aria-expanded={isExpanded} onClick={() => setExpandedPlanIds(current => { const next = new Set(current); if (next.has(plan.id)) next.delete(plan.id); else next.add(plan.id); return next; })}>{isExpanded ? t.showLess : `${t.showAll} (+${number.format(features.length - FEATURE_PREVIEW_COUNT)})`}</button>}
+          </>;
+        })()}
       </article>;
     })}</div>
     <div id="compare" className={s.comparison}><div className={s.sectionHeading}><h2>{t.compare}</h2><p>{t.compareLead}</p></div><div className={s.tableScroll} role="region" aria-label={t.caption} tabIndex={0}><table><caption className={s.srOnly}>{t.caption}</caption><thead><tr><th scope="col">{t.feature}</th>{plans.map(plan => <th scope="col" key={plan.id} translate="no">{plan.name}</th>)}</tr></thead><tbody>

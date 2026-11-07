@@ -32,6 +32,7 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    ".next-canva-release/types/**/*.ts",
     ".next-e2e/types/**/*.ts",
     ".next-marketing-build/types/**/*.ts",
     ".next-marketing-qa/types/**/*.ts",
@@ -39,7 +40,8 @@
     ".next-smart-setup-build/types/**/*.ts",
     ".next-smart-setup-qa/types/**/*.ts",
     ".next/types/**/*.ts",
-    "next-env.d.ts"
+    "next-env.d.ts",
+    ".next-slack-popup-build2/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

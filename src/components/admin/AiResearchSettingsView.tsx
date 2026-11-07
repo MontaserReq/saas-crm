@@ -167,7 +167,7 @@ export function AiResearchSettingsView({ settings, usage }: { settings: Settings
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[.24em] text-cyan-300">{ar ? "تحكم مركزي" : "CENTRAL CONTROL"}</p>
             <h1 className="mt-2 text-3xl font-black">{ar ? "مزودو البحث الذكي" : "Smart research providers"}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{ar ? "أضف وعدّل واحذف أي مزود AI متوافق مع OpenAI API، أو استخدم Gemini وGroq كموفرين جاهزين." : "Create, edit, enable, disable, and delete AI providers. Custom providers use the OpenAI-compatible chat-completions API."}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{ar ? "أضف وعدّل واحذف مزودي AI. البحث الذكي على الويب يعمل عبر Gemini أو Groq مباشرة، بدون إعداد مزود بحث منفصل." : "Create, edit, enable, disable, and delete AI providers. Smart web research runs directly through Gemini or Groq, with no separate search-provider setup."}</p>
           </div>
         </div>
       </header>

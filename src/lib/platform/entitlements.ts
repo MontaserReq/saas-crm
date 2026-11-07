@@ -4,7 +4,7 @@ export const planFeatureIds = [
   'dashboard', 'clients', 'contacts', 'leads', 'deals', 'pipelines', 'tasks', 'calendar', 'tickets',
   'proposals', 'activities', 'reports', 'team', 'audit_logs', 'messages', 'chat', 'todos', 'ai_assistant',
   'ai_research', 'workflows', 'integrations', 'custom_fields', 'import_export', 'search',
-  'email_customer_send',
+  'email_customer_send', 'documents',
 ] as const;
 export type PlanFeatureId = typeof planFeatureIds[number];
 
@@ -36,10 +36,11 @@ export const planFeatureLabels: Record<PlanFeatureId, { en: string; ar: string }
   integrations: { en: 'External integrations', ar: 'التكاملات الخارجية' }, custom_fields: { en: 'Custom fields', ar: 'الحقول المخصصة' },
   import_export: { en: 'Import, export & assignments', ar: 'الاستيراد والتصدير والتعيينات' }, search: { en: 'Global search', ar: 'البحث الشامل' },
   email_customer_send: { en: 'Send customer emails', ar: 'إرسال رسائل البريد للعملاء' },
+  documents: { en: 'CRM documents', ar: 'مستندات CRM' },
 };
 
 const bundles: Record<string, PlanFeatureId[]> = {
-  crm: ['dashboard', 'clients', 'contacts', 'leads', 'deals', 'pipelines', 'proposals', 'messages', 'chat'],
+  crm: ['dashboard', 'clients', 'contacts', 'leads', 'deals', 'pipelines', 'proposals', 'documents', 'messages', 'chat'],
   tasks: ['tasks', 'calendar', 'tickets', 'todos'],
   permissions: ['team'], 'permissions-advanced': ['team'],
   'custom-fields': ['custom_fields'], 'custom-fields-expanded': ['custom_fields'],
@@ -52,6 +53,44 @@ const bundles: Record<string, PlanFeatureId[]> = {
 const nonUiPlanFeatures = ['priority-support-proposed', 'assisted-onboarding', 'custom-integrations'] as const;
 export const allowedPlanFeatureTokens = [...planFeatureIds, ...Object.keys(bundles), ...nonUiPlanFeatures];
 export function areKnownPlanFeatureTokens(values: readonly string[]) { return values.every(value => allowedPlanFeatureTokens.includes(value)); }
+
+/** Human-readable labels for the commercial tokens used in the plan editor. */
+export const planFeatureTokenLabels: Record<string, { en: string; ar: string }> = {
+  ...planFeatureLabels,
+  crm: { en: 'Core CRM bundle', ar: 'حزمة CRM الأساسية' },
+  tasks: { en: 'Tasks, calendar & tickets', ar: 'المهام والتقويم والتذاكر' },
+  permissions: { en: 'Basic roles & permissions', ar: 'الأدوار والصلاحيات الأساسية' },
+  'permissions-advanced': { en: 'Advanced roles & permissions', ar: 'الأدوار والصلاحيات المتقدمة' },
+  'custom-fields': { en: 'Basic custom fields', ar: 'الحقول المخصصة الأساسية' },
+  'custom-fields-expanded': { en: 'Expanded custom fields', ar: 'الحقول المخصصة الموسعة' },
+  'import-export': { en: 'Basic import & export', ar: 'الاستيراد والتصدير الأساسي' },
+  'import-mappings': { en: 'Mapped import', ar: 'الاستيراد مع مطابقة الأعمدة' },
+  'import-advanced': { en: 'Advanced import', ar: 'الاستيراد المتقدم' },
+  search: { en: 'Global search', ar: 'البحث الشامل' },
+  reports: { en: 'Standard reports', ar: 'التقارير الأساسية' },
+  analytics: { en: 'Analytics', ar: 'التحليلات' },
+  'analytics-advanced': { en: 'Advanced analytics', ar: 'التحليلات المتقدمة' },
+  workflows: { en: 'Standard workflow automation', ar: 'أتمتة سير العمل الأساسية' },
+  'workflows-advanced': { en: 'Advanced workflow automation', ar: 'أتمتة سير العمل المتقدمة' },
+  integrations: { en: 'External integrations', ar: 'التكاملات الخارجية' },
+  'audit-expanded': { en: 'Audit history', ar: 'سجل التدقيق' },
+  'audit-governance': { en: 'Governance controls', ar: 'ضوابط الحوكمة' },
+  'ai-limited': { en: 'AI assistant', ar: 'المساعد الذكي' },
+  'ai-expanded': { en: 'Smart research & AI assistant', ar: 'البحث الذكي والمساعد الذكي' },
+  'priority-support-proposed': { en: 'Priority support', ar: 'دعم ذو أولوية' },
+  'assisted-onboarding': { en: 'Assisted onboarding', ar: 'إعداد بمرافقة فريقنا' },
+  'custom-integrations': { en: 'Custom integrations', ar: 'تكاملات مخصصة' },
+};
+
+/** Commercial guardrail: Smart Research is Growth+ and never belongs to Starter. */
+export function sanitizePlanFeatureTokensForPlan(planSlug: string | null | undefined, raw: string[]): string[] {
+  return planSlug === 'starter' ? raw.filter(token => token !== 'ai-expanded' && token !== 'ai_research') : raw;
+}
+
+export function expandPlanFeaturesForPlan(planSlug: string | null | undefined, raw: string | string[] | null | undefined): PlanFeatureId[] {
+  const expanded = expandPlanFeatures(raw);
+  return planSlug === 'starter' ? expanded.filter(feature => feature !== 'ai_research') : expanded;
+}
 
 const featureSet = new Set<string>(planFeatureIds);
 export const coreWorkspaceFeatures: PlanFeatureId[] = ['todos', 'calendar', 'messages', 'chat'];
@@ -142,10 +181,10 @@ export function resolveSubscriptionAccess(subscription: {
   startsAt: Date;
   endsAt: Date | null;
   trialEndsAt?: Date | null;
-  plan: { features: string | string[] | null; isActive: boolean };
+  plan: { slug?: string | null; features: string | string[] | null; isActive: boolean };
 } | null | undefined, now = new Date()): SubscriptionAccess {
   if (!subscription?.plan.isActive || subscription.startsAt > now) return { state: 'UNASSIGNED', features: ['dashboard'], readOnly: true, startsAt: subscription?.startsAt ?? null, endsAt: subscription?.endsAt ?? null };
-  const features = expandPlanFeatures(subscription.plan.features);
+  const features = expandPlanFeaturesForPlan(subscription.plan.slug, subscription.plan.features);
   if (subscription.status === 'ACTIVE' || subscription.status === 'CANCELLED') {
     if ((subscription.status === 'ACTIVE' && !subscription.endsAt) || (subscription.endsAt && subscription.endsAt > now)) return { state: 'PAID_ACTIVE', features, readOnly: false, startsAt: subscription.startsAt, endsAt: subscription.endsAt };
     if (subscription.endsAt && subscription.endsAt.getTime() + READ_ONLY_GRACE_MS > now.getTime()) return { state: 'PAID_READ_ONLY_GRACE', features, readOnly: true, startsAt: subscription.startsAt, endsAt: subscription.endsAt };
@@ -179,9 +218,11 @@ const permissionFeature: Array<[string, PlanFeatureId]> = [
   ['users.', 'team'], ['roles.', 'team'], ['departments.', 'team'], ['task_types.', 'team'], ['approval_requests.', 'team'],
   ['deals.', 'deals'], ['pipelines.', 'pipelines'], ['tasks.', 'tasks'], ['tickets.', 'tickets'], ['calendar.', 'calendar'],
   ['proposals.', 'proposals'], ['analytics.', 'reports'], ['reports.', 'reports'], ['audit_logs.', 'audit_logs'], ['activity.', 'activities'],
+  ['documents.', 'documents'],
   ['messages.', 'messages'], ['chat.', 'chat'], ['todo.', 'todos'], ['ai_research.', 'ai_research'], ['ai_assistant.', 'ai_assistant'],
   ['workflows.', 'workflows'], ['custom_fields.', 'custom_fields'], ['search.', 'search'],
   ['customer_email.', 'email_customer_send'],
+  ['integrations.', 'integrations'],
   ['email_integrations.', 'integrations'],
   ['attachments.', 'tickets'], ['communications.', 'tickets'],
 ];
@@ -213,7 +254,7 @@ export function filterPermissionsForPlan(permissions: readonly string[], feature
 const routeFeatures: Array<[string, PlanFeatureId]> = [
   ['/settings/workflows', 'workflows'], ['/settings/message-templates', 'messages'], ['/settings/ticket-priorities', 'tickets'],
   ['/admin/approval-requests', 'team'], ['/admin/analytics', 'reports'], ['/admin/team-activity', 'reports'], ['/admin/audit-logs', 'audit_logs'], ['/admin/users', 'team'], ['/admin/roles', 'team'], ['/admin/departments', 'team'], ['/admin/task-types', 'team'],
-  ['/ai-school-research', 'ai_research'], ['/lead-discovery', 'ai_research'], ['/assignments', 'import_export'], ['/schools', 'import_export'], ['/imports', 'import_export'], ['/clients', 'clients'], ['/contacts', 'contacts'], ['/leads', 'leads'], ['/deals', 'deals'], ['/pipelines', 'pipelines'], ['/tasks', 'tasks'], ['/calendar', 'calendar'], ['/tickets', 'tickets'], ['/proposals', 'proposals'], ['/activity', 'activities'], ['/messages', 'messages'], ['/chat', 'chat'], ['/todos', 'todos'],
+  ['/ai-school-research', 'ai_research'], ['/lead-discovery', 'ai_research'], ['/assignments', 'import_export'], ['/schools', 'import_export'], ['/imports', 'import_export'], ['/clients', 'clients'], ['/contacts', 'contacts'], ['/leads', 'leads'], ['/deals', 'deals'], ['/pipelines', 'pipelines'], ['/tasks', 'tasks'], ['/calendar', 'calendar'], ['/tickets', 'tickets'], ['/proposals', 'proposals'], ['/documents', 'documents'], ['/activity', 'activities'], ['/messages', 'messages'], ['/chat', 'chat'], ['/todos', 'todos'],
 ];
 export function featureForRoute(pathname: string): PlanFeatureId | null {
   return routeFeatures.find(([route]) => pathname === route || pathname.startsWith(`${route}/`))?.[1] ?? null;
@@ -224,9 +265,13 @@ export function isRouteIncluded(pathname: string, features: readonly string[] | 
   return !feature || (features ?? ['dashboard']).includes(feature);
 }
 export function hasPlanFeature(user: { planFeatures?: readonly string[] | null }, feature: PlanFeatureId) {
-  // A Company Super Admin must be able to operate and administer every tenant
-  // module. The AI assistant is intentionally excluded until product launch.
-  if ('role' in user && user.role === 'SUPER_ADMIN') return feature !== 'ai_assistant';
+  // A Company Super Admin can administer the tenant, but paid Smart Research
+  // remains Growth+ and the AI assistant remains unreleased.
+  if ('role' in user && user.role === 'SUPER_ADMIN') {
+    if (feature === 'ai_assistant') return false;
+    if (feature === 'ai_research') return (user.planFeatures ?? ['dashboard']).includes('ai_research');
+    return true;
+  }
   return (user.planFeatures ?? ['dashboard']).includes(feature);
 }
 

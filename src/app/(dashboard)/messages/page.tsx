@@ -5,7 +5,7 @@ import { MessagesClientView } from '@/components/messages/MessagesClientView';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 
 export const metadata: Metadata = {
-  title: 'Messages | CodeLine JO',
+  title: 'Messages | SatrCRM',
   description: 'Internal Team Messaging System',
 };
 

@@ -30,6 +30,7 @@ const ARABIC_MODULES: Record<string, string> = {
   organization_settings: "إعدادات الشركة",
   workflows: "سير العمل",
   notification_preferences: "تفضيلات الإشعارات",
+  integrations: "التكاملات",
   email_integrations: "تكاملات البريد الإلكتروني",
   customer_email: "بريد العملاء",
 };

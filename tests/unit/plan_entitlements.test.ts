@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { expandPlanFeatures, filterPermissionsForPlan, hasPlanFeature, isRouteIncluded, navigationModulesForFeatures, READ_ONLY_GRACE_MS, resolveSubscriptionAccess, resolveSubscriptionFeatures } from '@/lib/platform/entitlements';
+import { expandPlanFeatures, expandPlanFeaturesForPlan, filterPermissionsForPlan, hasPlanFeature, isRouteIncluded, navigationModulesForFeatures, READ_ONLY_GRACE_MS, resolveSubscriptionAccess, resolveSubscriptionFeatures } from '@/lib/platform/entitlements';
 import { hasPermission } from '@/lib/permissions';
 
 describe('plan feature entitlements', () => {
@@ -33,6 +33,14 @@ describe('plan feature entitlements', () => {
     expect(hasPlanFeature({ planFeatures: ['clients'] }, 'leads')).toBe(false);
     expect(hasPlanFeature({ planFeatures: null }, 'workflows')).toBe(false);
     expect(isRouteIncluded('/settings/workflows', null)).toBe(false);
+  });
+  it('keeps Smart Research Growth-only for Company Super Admins', () => {
+    expect(hasPlanFeature({ role: 'SUPER_ADMIN', planFeatures: expandPlanFeatures(['crm', 'tasks', 'ai-limited']) } as any, 'ai_research')).toBe(false);
+    expect(hasPlanFeature({ role: 'SUPER_ADMIN', planFeatures: expandPlanFeatures(['crm', 'tasks', 'ai-expanded']) } as any, 'ai_research')).toBe(true);
+  });
+  it('never grants Smart Research to Starter, even if an old catalog row contains the advanced AI bundle', () => {
+    expect(expandPlanFeaturesForPlan('starter', ['ai-expanded'])).not.toContain('ai_research');
+    expect(resolveSubscriptionAccess({ status: 'ACTIVE', startsAt: new Date('2026-10-01T00:00:00Z'), endsAt: null, plan: { slug: 'starter', features: JSON.stringify(['ai-expanded']), isActive: true } }, new Date('2026-10-14T12:00:00Z')).features).not.toContain('ai_research');
   });
   it('restricts customer email sending to the explicit paid entitlement', () => {
     const starter = expandPlanFeatures(['crm', 'tasks']);

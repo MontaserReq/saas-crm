@@ -11,6 +11,7 @@ export const RATE_LIMIT_POLICIES = [
   'ai',
   'ai_research',
   'import',
+  'mcp',
 ] as const;
 
 export type RateLimitPolicy = (typeof RATE_LIMIT_POLICIES)[number];
@@ -28,6 +29,10 @@ export const RATE_LIMIT_POLICY_CONFIG: Record<RateLimitPolicy, { limit: number; 
   ai: { limit: 20, windowSeconds: 5 * 60 },
   ai_research: { limit: 5, windowSeconds: 15 * 60 },
   import: { limit: 5, windowSeconds: 60 * 60 },
+  // MCP clients can issue several protocol requests per logical prompt, so
+  // this is intentionally higher than the browser AI limit while remaining
+  // bounded per token and organization.
+  mcp: { limit: 120, windowSeconds: 60 },
 };
 
 export interface RateLimitCheckInput {

@@ -1,8 +1,34 @@
 import type { Prisma } from '@prisma/client';
 import { filterPermissionsForPlan, resolveSubscriptionFeatures } from '@/lib/platform/entitlements';
-import { PERMISSIONS } from '@/lib/permissions';
+import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import type { UserSession } from '@/types';
 
 export const INTEGRATION_AUTHORIZATION_REVOKED = 'INTEGRATION_AUTHORIZATION_REVOKED';
+
+/**
+ * The generic integration permissions are the canonical controls shown in the
+ * admin role matrix. The email permissions remain accepted as a backwards-
+ * compatible alias for workspaces created before the integrations section was
+ * introduced.
+ */
+export function canViewIntegrations(user: UserSession | null | undefined) {
+  return Boolean(
+    hasPermission(user, PERMISSIONS.INTEGRATIONS_VIEW) ||
+    hasPermission(user, PERMISSIONS.INTEGRATIONS_MANAGE) ||
+    hasPermission(user, PERMISSIONS.EMAIL_INTEGRATIONS_VIEW) ||
+    hasPermission(user, PERMISSIONS.EMAIL_INTEGRATIONS_MANAGE) ||
+    hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_VIEW) ||
+    hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE),
+  );
+}
+
+export function canManageIntegrations(user: UserSession | null | undefined) {
+  return Boolean(
+    hasPermission(user, PERMISSIONS.INTEGRATIONS_MANAGE) ||
+    hasPermission(user, PERMISSIONS.EMAIL_INTEGRATIONS_MANAGE) ||
+    hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE),
+  );
+}
 
 /**
  * Rebuilds the integration-management authorization decision from current
@@ -62,7 +88,10 @@ export async function requireCurrentIntegrationAuthorization(
 
   const granted = [...activeRole.rolePermissions, ...user.userPermissions].map((item) => item.permission.code);
   const effective = isPlatformAdmin ? granted : filterPermissionsForPlan([...new Set(granted)], features);
-  if (!isPlatformAdmin && !effective.includes(PERMISSIONS.EMAIL_INTEGRATIONS_MANAGE) && !effective.includes(PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)) {
+  if (!isPlatformAdmin &&
+      !effective.includes(PERMISSIONS.INTEGRATIONS_MANAGE) &&
+      !effective.includes(PERMISSIONS.EMAIL_INTEGRATIONS_MANAGE) &&
+      !effective.includes(PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)) {
     throw new Error(INTEGRATION_AUTHORIZATION_REVOKED);
   }
 }

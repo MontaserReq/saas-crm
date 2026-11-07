@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { X } from "lucide-react";
 import { useI18n } from "@/lib/i18n/context";
 import { UserSession } from "@/types";
@@ -46,6 +46,8 @@ interface MobileLayoutProps {
 export function MobileLayout({ children, user, directManager, users = [], enabledModules, organizationBrand }: MobileLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { t, direction } = useI18n();
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   // Close drawer on Escape
   useEffect(() => {
@@ -55,6 +57,42 @@ export function MobileLayout({ children, user, directManager, users = [], enable
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, []);
+
+  // Keep keyboard focus inside the modal drawer and return it to the trigger.
+  useEffect(() => {
+    if (!isMobileMenuOpen) {
+      triggerRef.current?.focus();
+      return;
+    }
+    triggerRef.current = document.activeElement as HTMLElement | null;
+    const drawer = drawerRef.current;
+    const focusable = () => Array.from(drawer?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) || []);
+    const first = focusable()[0];
+    first?.focus();
+    const handleTab = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      if (!elements.length) return;
+      const firstElement = elements[0];
+      const lastElement = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+    document.addEventListener("keydown", handleTab);
+    return () => {
+      document.removeEventListener("keydown", handleTab);
+      if (document.activeElement instanceof HTMLElement && drawer?.contains(document.activeElement)) {
+        triggerRef.current?.focus();
+      }
+    };
+  }, [isMobileMenuOpen]);
 
   // Lock body scroll when drawer is open
   useEffect(() => {
@@ -97,6 +135,7 @@ export function MobileLayout({ children, user, directManager, users = [], enable
           />
           {/* Drawer panel */}
           <div
+            ref={drawerRef}
             className={`lg:hidden fixed top-0 bottom-0 z-50 w-72 max-w-[85vw] transform transition-transform duration-300 ease-out ${
               isMobileMenuOpen ? "translate-x-0" : direction === "rtl" ? "translate-x-full" : "-translate-x-full"
             }`}
@@ -105,13 +144,13 @@ export function MobileLayout({ children, user, directManager, users = [], enable
             } as React.CSSProperties}
             role="dialog"
             aria-modal="true"
-            aria-label={t("nav.navigation")}
+            aria-labelledby="mobile-navigation-title"
           >
             <div className="h-full flex flex-col bg-white dark:bg-slate-900 shadow-xl">
               <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-800">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                <h2 id="mobile-navigation-title" className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                   {t("nav.navigation")}
-                </span>
+                </h2>
                 <button
                   type="button"
                   onClick={closeMobileMenu}

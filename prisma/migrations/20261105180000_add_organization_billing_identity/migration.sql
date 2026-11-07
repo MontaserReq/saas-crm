@@ -1,0 +1,12 @@
+ALTER TABLE "Organization" ADD COLUMN "legalName" TEXT;
+ALTER TABLE "Organization" ADD COLUMN "contactEmail" TEXT;
+ALTER TABLE "Organization" ADD COLUMN "contactPhone" TEXT;
+ALTER TABLE "Organization" ADD COLUMN "website" TEXT;
+ALTER TABLE "Organization" ADD COLUMN "address" TEXT;
+ALTER TABLE "Organization" ADD COLUMN "taxNumber" TEXT;
+ALTER TABLE "Organization" ADD COLUMN "invoicePrefix" TEXT NOT NULL DEFAULT 'INV';
+ALTER TABLE "Organization" ADD COLUMN "invoiceFooter" TEXT;
+ALTER TABLE "Organization" ADD COLUMN "paymentInstructions" TEXT;
+ALTER TABLE "Organization" ADD COLUMN "invoiceShowLogo" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Organization" ADD COLUMN "invoiceShowCompanyDetails" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Organization" ADD COLUMN "invoiceShowTaxNumber" BOOLEAN NOT NULL DEFAULT true;

@@ -3,6 +3,7 @@ import { UserSession } from "@/types";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import { AuditService } from "./AuditService";
 import { requireOrganizationContext } from "@/lib/auth/organization";
+import { NotificationService } from "./NotificationService";
 
 export const CALENDAR_EVENT_TYPES = [
   "MEETING",
@@ -51,6 +52,31 @@ const eventInclude = {
   ticket: { select: { id: true, ticketNumber: true, subject: true } },
   department: { select: { id: true, name: true, code: true } },
 } as const;
+
+async function notifyCalendarAssignees(
+  user: UserSession,
+  event: { id: string; title: string; startDate: Date; endDate: Date | null; location: string | null },
+  assigneeIds: string[],
+  title: string,
+) {
+  const recipients = [...new Set(assigneeIds)].filter((userId) => userId !== user.id);
+  if (!recipients.length) return;
+
+  const schedule = event.startDate.toLocaleString("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const location = event.location ? ` Location: ${event.location}.` : "";
+  await Promise.allSettled(recipients.map((userId) => NotificationService.create({
+    userId,
+    organizationId: user.organizationId || undefined,
+    type: "CALENDAR_EVENT_ASSIGNED",
+    title,
+    message: `${user.name} assigned you “${event.title}” for ${schedule}.${location}`,
+    entityType: "calendarEvent",
+    entityId: event.id,
+  })));
+}
 
 export class CalendarService {
   static async getCalendarEvents(user: UserSession, filter?: any) {
@@ -199,6 +225,13 @@ export class CalendarService {
       },
     });
 
+    await notifyCalendarAssignees(
+      user,
+      event,
+      assigneeIds,
+      "New calendar event assigned to you",
+    );
+
     return event;
   }
 
@@ -212,6 +245,7 @@ export class CalendarService {
     const organizationId = (await requireOrganizationContext(user)).id;
     const existing = await prisma.calendarEvent.findFirst({
       where: { id, organizationId },
+      include: { assignees: { select: { userId: true } } },
     });
     if (!existing) throw new Error("Event not found");
 
@@ -323,11 +357,19 @@ export class CalendarService {
       }
     }
 
-    return prisma.calendarEvent.update({
+    const updated = await prisma.calendarEvent.update({
       where: { id },
       data,
       include: eventInclude,
     });
+
+    const updatedAssigneeIds = updated.assignees.map((assignee) => assignee.userId);
+    const recipients = hasAssigneeUpdate
+      ? updatedAssigneeIds.filter((userId) => !existing.assignees.some((assignee) => assignee.userId === userId))
+      : updatedAssigneeIds;
+    await notifyCalendarAssignees(user, updated, recipients, "Calendar event updated");
+
+    return updated;
   }
 
   static async deleteEvent(user: UserSession, id: string) {

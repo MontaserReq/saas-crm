@@ -106,6 +106,13 @@ model User {
   leadDiscoveryImports    LeadDiscoveryImport[]    @relation("LeadDiscoveryImportActor")
   aiGatewayUsageLogs      AiGatewayUsageLog[]      @relation("AiGatewayUsageUser")
   searchProviderUsageLogs SearchProviderUsageLog[] @relation("SearchUsageUser")
+  leadActivities          LeadActivity[]           @relation("LeadActivityActor")
+  mcpAccessTokens         McpAccessToken[]
+  createdDocuments        Document[]               @relation("DocumentCreator")
+  updatedDocuments        Document[]               @relation("DocumentUpdater")
+  createdDocumentVersions DocumentVersion[]        @relation("DocumentVersionCreator")
+  documentPermissions     DocumentPermission[]     @relation("DocumentPermissionUser")
+  canvaConnections        CanvaConnection[]
 
   @@index([roleId])
   @@index([departmentId])
@@ -123,6 +130,18 @@ model Organization {
   logoKey      String?
   logoProvider String  @default("local")
   primaryColor String?
+  legalName    String?
+  contactEmail String?
+  contactPhone String?
+  website      String?
+  address      String?
+  taxNumber    String?
+  invoicePrefix String @default("INV")
+  invoiceFooter String?
+  paymentInstructions String?
+  invoiceShowLogo Boolean @default(true)
+  invoiceShowCompanyDetails Boolean @default(true)
+  invoiceShowTaxNumber Boolean @default(true)
   timezone     String  @default("UTC")
   currency     String  @default("USD")
   language     String  @default("en")
@@ -168,6 +187,7 @@ model Organization {
   workflowExecutions        WorkflowExecution[]
   operationExecutions       OperationExecution[]
   externalIntegrations      ExternalIntegration[]
+  canvaConnections          CanvaConnection[]
   customerEmails            CustomerEmail[]
   platformSubscription      PlatformSubscription?
   planUpgradeRequests       PlanUpgradeRequest[]
@@ -180,6 +200,11 @@ model Organization {
   searchProviderUsageLogs   SearchProviderUsageLog[]     @relation("SearchUsageOrganization")
   aiProviders               OrganizationAiProvider[]
   aiUsagePolicy             OrganizationAiUsagePolicy?
+  leadActivities            LeadActivity[]
+  mcpAccessTokens           McpAccessToken[]
+  documents                 Document[]
+  documentVersions          DocumentVersion[]
+  documentPermissions       DocumentPermission[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -275,6 +300,50 @@ model ExternalIntegration {
   @@index([organizationId, provider])
 }
 
+model CanvaConnection {
+  id                    String       @id @default(cuid())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountEmail          String?
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  scopes                String       @default("[]")
+  metadata              String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+// Long-lived access credentials for remote MCP clients. The raw secret is
+// never stored; only a keyed digest is persisted, so a database read does not
+// immediately become a usable integration credential.
+model McpAccessToken {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  tokenPrefix    String
+  tokenHash      String       @unique
+  scopes         String       @default("[\"crm.read\"]")
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, revokedAt])
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
 model PlatformPlan {
   id                    String                 @id @default(cuid())
   slug                  String                 @unique
@@ -295,9 +364,23 @@ model PlatformPlan {
   recommended           Boolean                @default(false)
   isActive              Boolean                @default(true)
   subscriptions         PlatformSubscription[]
+  integrationEntitlements PlatformPlanIntegration[]
   upgradeRequests       PlanUpgradeRequest[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
+}
+
+model PlatformPlanIntegration {
+  id        String       @id @default(cuid())
+  planId    String
+  plan      PlatformPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  provider  String
+  enabled   Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([planId, provider])
+  @@index([provider, enabled])
 }
 
 model PlatformSubscription {
@@ -789,6 +872,8 @@ model Lead {
   companyName          String?
   email                String?
   phone                String?
+  website              String?
+  normalizedDomain     String?
   source               String?
   status               String                @default("NEW") // NEW | CONTACTED | QUALIFIED | UNQUALIFIED | CONVERTED | LOST
   notes                String?
@@ -805,6 +890,7 @@ model Lead {
   deals                Deal[]
   crmTasks             CrmTask[]
   leadDiscoveryImports LeadDiscoveryImport[]
+  activities           LeadActivity[]
   deletedAt            DateTime?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
@@ -813,6 +899,25 @@ model Lead {
   @@index([organizationId, assignedUserId])
   @@index([organizationId, assignedTeamId])
   @@index([organizationId, clientId])
+  @@index([organizationId, normalizedDomain])
+}
+
+model LeadActivity {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leadId         String
+  lead           Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actorId        String
+  actor          User         @relation("LeadActivityActor", fields: [actorId], references: [id], onDelete: Restrict)
+  type           String // NOTE | CALL | EMAIL | WHATSAPP | STATUS_CHANGE | ASSIGNMENT
+  outcome        String?
+  content        String?
+  metadata       String       @default("{}")
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, leadId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model Contact {
@@ -1578,6 +1683,58 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
+}
+
+model Document {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String               @default("Untitled document")
+  content        String               @default("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}")
+  status         String               @default("ACTIVE") // ACTIVE | ARCHIVED
+  createdById    String
+  createdBy      User                 @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById    String?
+  updatedBy      User?                @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  versions       DocumentVersion[]
+  permissions    DocumentPermission[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, createdById])
+}
+
+model DocumentVersion {
+  id             String       @id @default(cuid())
+  documentId     String
+  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String
+  content        String
+  createdById    String
+  createdBy      User         @relation("DocumentVersionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
+
+  @@index([documentId, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model DocumentPermission {
+  id             String       @id @default(cuid())
+  documentId     String
+  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("DocumentPermissionUser", fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("VIEWER") // VIEWER | EDITOR
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([documentId, userId])
+  @@index([organizationId, userId])
 }
 
 model UserNotificationPreference {

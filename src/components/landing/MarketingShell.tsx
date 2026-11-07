@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, ChevronDown, Menu, X } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Instagram, Mail, Menu, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
@@ -11,7 +11,7 @@ import { faqCopy, landingCopy } from './content';
 import s from './marketing.module.css';
 
 // Existing published company contact, also used in the proposal PDF footer.
-export const SALES_HREF = 'mailto:info@codeline.jo?subject=CodeLine%20Enterprise%20inquiry';
+export const SALES_HREF = 'mailto:info@codeline.jo?subject=SatrCRM%20Enterprise%20inquiry';
 export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.satrcrm.com').replace(/\/$/, '');
 
 export function MarketingShell({ children, pricing = false }: { children: React.ReactNode; pricing?: boolean }) {
@@ -28,7 +28,6 @@ export function MarketingShell({ children, pricing = false }: { children: React.
     return () => document.removeEventListener('keydown', escape);
   }, [open]);
   return <div className={s.site} dir={ar ? 'rtl' : 'ltr'}>
-    <a className={s.skipLink} href="#main-content">{ar ? 'انتقل إلى المحتوى' : 'Skip to content'}</a>
     <header className={s.header}><div className={`${s.container} ${s.headerInner}`}>
       <Link href="/" className={s.logo} aria-label="SatrCRM"><BrandLogo className={s.logoImage} priority /></Link>
       <nav className={s.desktopNav} aria-label={ar ? 'التنقل الرئيسي' : 'Main navigation'}>{nav.map((label, i) => <a key={label} href={urls[i]}>{label}</a>)}</nav>
@@ -38,7 +37,45 @@ export function MarketingShell({ children, pricing = false }: { children: React.
     <nav id="marketing-mobile-nav" className={s.mobileNav} hidden={!open} aria-label={ar ? 'التنقل للجوال' : 'Mobile navigation'}>{nav.map((label, i) => <a key={label} href={urls[i]} onClick={() => setOpen(false)}>{label}</a>)}<a href={`${APP_URL}/login`} onClick={() => setOpen(false)}>{ar ? 'تسجيل الدخول' : 'Log in'}</a><a className={s.primary} href={`${APP_URL}/onboarding`}>{landingCopy[language].start}</a></nav>
     </header>
     <main id="main-content">{children}</main>
-    <footer className={s.footer}><div className={`${s.container} ${s.footerGrid}`}><div><Link href="/" className={s.logo} aria-label="SatrCRM"><BrandLogo className={s.logoImage} /></Link><p>{ar ? 'علاقات العملاء والعمل اليومي، في مساحة واحدة.' : 'Customer relationships and daily work, connected.'}</p></div><nav aria-label={ar ? 'روابط التذييل' : 'Footer navigation'}><Link href="/#features">{nav[0]}</Link><Link href="/pricing">{nav[2]}</Link><Link href="/legal">{ar ? 'السياسات القانونية' : 'Legal policies'}</Link><a href={`${APP_URL}/login`}>{ar ? 'تسجيل الدخول' : 'Log in'}</a><a href={SALES_HREF}>{ar ? 'تواصل معنا' : 'Contact'}</a></nav></div><div className={`${s.container} ${s.footerBottom}`}><span>© {new Date().getUTCFullYear()} SatrCRM</span><span>{ar ? 'العربية والإنجليزية. مصممة لفريقك.' : 'Arabic & English. Built around your team.'}</span></div></footer>
+    <footer className={s.footer}>
+      <div className={`${s.container} ${s.footerMain}`}>
+        <div className={s.footerBrand}>
+          <Link href="/" className={s.logo} aria-label="SatrCRM"><BrandLogo className={s.logoImage} /></Link>
+          <p>{ar ? 'علاقات العملاء والعمل اليومي، في مساحة واحدة.' : 'Customer relationships and daily work, connected.'}</p>
+          <div className={s.footerSocials} aria-label={ar ? 'حسابات SatrCRM' : 'SatrCRM social accounts'}>
+            <a href="https://www.instagram.com/satrcrm/" target="_blank" rel="noreferrer" aria-label="SatrCRM Instagram"><Instagram aria-hidden="true" /><span>satrcrm</span></a>
+            <a href="https://www.instagram.com/codelinejo/" target="_blank" rel="noreferrer" aria-label="CodeLine JO Instagram"><Instagram aria-hidden="true" /><span>codelinejo</span></a>
+          </div>
+        </div>
+
+        <div className={s.footerColumns}>
+          <div className={s.footerColumn}>
+            <h2>{ar ? 'المنتج' : 'Product'}</h2>
+            <Link href="/#features">{nav[0]}</Link>
+            <Link href="/#workflow">{nav[1]}</Link>
+            <Link href="/pricing">{nav[2]}</Link>
+            <a href={`${APP_URL}/login`}>{ar ? 'تسجيل الدخول' : 'Log in'}</a>
+          </div>
+          <div className={s.footerColumn}>
+            <h2>{ar ? 'الشركة' : 'Company'}</h2>
+            <Link href="/#faq">{nav[3]}</Link>
+            <a href={SALES_HREF}>{ar ? 'تواصل معنا' : 'Contact us'}</a>
+            <Link href="/onboarding">{ar ? 'ابدأ تجربتك' : 'Start your trial'}</Link>
+          </div>
+          <div className={s.footerColumn}>
+            <h2>{ar ? 'الدعم والسياسات' : 'Support & legal'}</h2>
+            <Link href="/legal">{ar ? 'السياسات القانونية' : 'Legal policies'}</Link>
+            <a href={SALES_HREF}><Mail aria-hidden="true" />info@codeline.jo</a>
+          </div>
+        </div>
+      </div>
+
+      <div className={`${s.container} ${s.footerBottom}`}>
+        <span>© {new Date().getUTCFullYear()} SatrCRM</span>
+        <span>{ar ? 'SatrCRM، أحد منتجات CodeLine JO' : 'SatrCRM, a product of CodeLine JO'}</span>
+        <span className={s.footerBottomLinks}><Link href="/legal">{ar ? 'السياسات' : 'Policies'}</Link><Link href="/pricing">{ar ? 'الباقات' : 'Pricing'}</Link></span>
+      </div>
+    </footer>
   </div>;
 }
 
@@ -51,6 +88,6 @@ export function MarketingFaq() {
 export function FinalCta() {
   const { language } = useI18n();
   const ar = language === 'ar';
-  return <section className={s.finalCta} aria-labelledby="final-title"><div className={s.container}><div className={s.finalGrid}><div><span className={s.sectionLabel}>{ar ? 'ابدأ بخطوة واضحة' : 'Move forward with clarity'}</span><h2 id="final-title">{ar ? 'مرحلتك التالية من النمو تبدأ هنا.' : 'Your Next Stage of Growth Starts Here.'}</h2><p>{ar ? 'امنح علاقات عملائك وسير عمل فريقك وضوحاً أكبر مع CodeLine CRM.' : 'Bring greater clarity to your customer relationships and team workflows with CodeLine CRM.'}</p></div><div className={s.finalActions}><a className={s.primary} href={`${APP_URL}/onboarding`}>{landingCopy[language].start}<ArrowUpRight aria-hidden="true" /></a><a className={s.secondary} href={SALES_HREF}>{ar ? 'تواصل مع المبيعات' : 'Contact sales'}</a><span>{ar ? 'للاحتياجات المخصصة، أخبرنا بحجم فريقك.' : 'For custom requirements, tell us about your team.'}</span></div></div></div></section>;
+  return <section className={s.finalCta} aria-labelledby="final-title"><div className={s.container}><div className={s.finalGrid}><div><span className={s.sectionLabel}>{ar ? 'ابدأ بخطوة واضحة' : 'Move forward with clarity'}</span><h2 id="final-title">{ar ? 'مرحلتك التالية من النمو تبدأ هنا.' : 'Your Next Stage of Growth Starts Here.'}</h2><p>{ar ? 'امنح علاقات عملائك وسير عمل فريقك وضوحاً أكبر مع SatrCRM.' : 'Bring greater clarity to your customer relationships and team workflows with SatrCRM.'}</p></div><div className={s.finalActions}><a className={s.primary} href={`${APP_URL}/onboarding`}>{landingCopy[language].start}<ArrowUpRight aria-hidden="true" /></a><a className={s.secondary} href={SALES_HREF}>{ar ? 'تواصل مع المبيعات' : 'Contact sales'}</a><span>{ar ? 'للاحتياجات المخصصة، أخبرنا بحجم فريقك.' : 'For custom requirements, tell us about your team.'}</span></div></div></div></section>;
 }
 

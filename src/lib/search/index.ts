@@ -7,6 +7,7 @@ import { createSearchProvider } from './providers';
 import type { SearchRequest, SearchResult } from './types';
 import { safeProviderEndpoint } from '@/lib/security/url';
 import { safeExternalUrl } from '@/lib/security/url';
+import { assertOrganizationSearchRequestAllowed } from '@/lib/ai/organizationPolicy';
 
 export * from './types';
 export * from './settings';
@@ -116,6 +117,7 @@ export class SearchGateway {
         await recordSearchUsage(request, config.id, { status: 'CACHED', resultCount: cached.length, estimatedCostUsd: 0, durationMs: Math.round(performance.now() - startedAt) });
         return { providerId: config.id, results: cached };
       }
+      if (request.organizationId) await assertOrganizationSearchRequestAllowed(request.organizationId);
       try {
         const results = await searchWithRetry(config, request);
         await writeCachedResults(config.id, request, results);

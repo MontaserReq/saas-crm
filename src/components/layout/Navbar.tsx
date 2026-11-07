@@ -95,22 +95,30 @@ export function Navbar({ user, notifications = [] }: NavbarProps) {
       </button>
 
       {/* Global Search Bar */}
-      <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <form onSubmit={handleSearch} className="relative flex-1 max-w-md" role="search" aria-label={t("nav.search")}>
+        <label htmlFor="global-search" className="sr-only">{t("nav.search")}</label>
+        <Search className="w-4 h-4 text-slate-400 absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
         <input
+          id="global-search"
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={t("nav.search")}
+          autoComplete="off"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="global-search-results"
+          aria-expanded={results.length > 0}
           className="w-full pl-9 pr-4 rtl:pl-4 rtl:pr-9 py-1.5 rounded-lg text-sm bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 border border-transparent focus:border-brand-500 focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all"
         />
       </form>
       {results.length > 0 && (
-        <div className="absolute top-14 start-3 sm:start-6 w-[min(24rem,calc(100vw-2rem))] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 max-h-96 overflow-y-auto">
+        <div id="global-search-results" role="listbox" aria-label={t("nav.search")} className="absolute top-14 start-3 sm:start-6 w-[min(24rem,calc(100vw-2rem))] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 max-h-96 overflow-y-auto">
           {results.map((result: any) => (
             <Link
               key={`${result.type}-${result.id}`}
               href={result.href}
+              role="option"
               onClick={() => setResults([])}
               className="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-0"
             >

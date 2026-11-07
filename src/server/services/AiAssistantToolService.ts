@@ -129,6 +129,7 @@ export class AiAssistantToolService {
 
     const isFullView = hasPermission(user, PERMISSIONS.TICKETS_VIEW_ALL);
     const where: any = {
+      organizationId: requireOrganizationId(user),
       followUpAt: { lte: new Date() },
       status: { notIn: ['CLOSED', 'REJECTED', 'COMPLETED'] },
       schoolId: { not: null },

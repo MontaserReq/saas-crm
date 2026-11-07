@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const industryIds = ['services', 'real_estate', 'education', 'technology', 'commerce', 'agencies', 'other'] as const;
 export const goalIds = ['customers', 'leads', 'pipelines', 'tasks', 'support', 'operations', 'other'] as const;
-export const setupModuleIds = ['dashboard', 'clients', 'contacts', 'leads', 'deals', 'pipelines', 'tasks', 'calendar', 'tickets', 'proposals', 'activities', 'reports'] as const;
+export const setupModuleIds = ['dashboard', 'clients', 'contacts', 'leads', 'deals', 'pipelines', 'tasks', 'calendar', 'tickets', 'proposals', 'documents', 'activities', 'reports'] as const;
 export type SetupModule = typeof setupModuleIds[number];
 const unique = (values: string[]) => new Set(values).size === values.length;
 export const pipelineNamesSchema = z.array(z.string().trim().min(1).max(80)).min(1).max(8)
@@ -35,7 +35,7 @@ export const industries: Record<SetupAnswers['industry'], { title: Localized; qu
   other: { title: label('Other / general business', 'أخرى / أعمال عامة'), question: label('What would you like to organize first?', 'ما الذي تود تنظيمه أولاً؟'), stages: [label('New', 'جديد'), label('Qualified', 'مؤهل'), label('Meeting', 'اجتماع'), label('Proposal', 'عرض')], field: { key: 'customer_interest', label: label('Customer interest', 'اهتمام العميل') } },
 };
 export const moduleLabels: Record<string, Localized> = {
-  dashboard: label('Overview', 'نظرة عامة'), clients: label('Customers and companies', 'العملاء والشركات'), contacts: label('Contacts', 'جهات الاتصال'), leads: label('Potential customers', 'العملاء المحتملون'), deals: label('Sales opportunities', 'فرص البيع'), pipelines: label('Sales stages', 'مراحل البيع'), tasks: label('Follow-up tasks', 'مهام المتابعة'), calendar: label('Appointments', 'المواعيد'), tickets: label('Customer requests', 'طلبات العملاء'), proposals: label('Proposals', 'العروض'), activities: label('Activity', 'النشاط'), reports: label('Reports', 'التقارير'),
+  dashboard: label('Overview', 'نظرة عامة'), clients: label('Customers and companies', 'العملاء والشركات'), contacts: label('Contacts', 'جهات الاتصال'), leads: label('Potential customers', 'العملاء المحتملون'), deals: label('Sales opportunities', 'فرص البيع'), pipelines: label('Sales stages', 'مراحل البيع'), tasks: label('Follow-up tasks', 'مهام المتابعة'), calendar: label('Appointments', 'المواعيد'), tickets: label('Customer requests', 'طلبات العملاء'), proposals: label('Proposals', 'العروض'), documents: label('CRM documents', 'مستندات CRM'), activities: label('Activity', 'النشاط'), reports: label('Reports', 'التقارير'),
 };
 export const goalLabels: Record<typeof goalIds[number], Localized> = {
   customers: label('Customers and companies', 'العملاء والشركات'), leads: label('Leads and opportunities', 'العملاء المحتملون وفرص البيع'),
@@ -102,6 +102,6 @@ export function visibleSetupNavigation(href: string, modules?: string[]) {
   const route = href.split('?')[0];
   if (['/messages', '/chat', '/todos', '/support'].includes(route)) return true;
   if (route === '/lead-discovery' || route === '/ai-school-research') return true;
-  const moduleName = ({ '/dashboard': 'dashboard', '/clients': 'clients', '/contacts': 'contacts', '/leads': 'leads', '/deals': 'deals', '/pipelines': 'pipelines', '/tasks': 'tasks', '/calendar': 'calendar', '/tickets': 'tickets', '/proposals': 'proposals', '/activity': 'activities' } as Record<string, string>)[route];
+  const moduleName = ({ '/dashboard': 'dashboard', '/clients': 'clients', '/contacts': 'contacts', '/leads': 'leads', '/deals': 'deals', '/pipelines': 'pipelines', '/tasks': 'tasks', '/calendar': 'calendar', '/tickets': 'tickets', '/proposals': 'proposals', '/documents': 'documents', '/activity': 'activities' } as Record<string, string>)[route];
   return moduleName ? modules.includes(moduleName) : route.startsWith('/admin') || route.startsWith('/settings');
 }

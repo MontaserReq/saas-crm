@@ -23,7 +23,7 @@ import s from './marketing.module.css';
 const previewCopy = {
   en: {
     sample: 'Product preview · Sample data',
-    workspace: 'CodeLine workspace',
+    workspace: 'SatrCRM workspace',
     nav: ['Overview', 'Customers', 'Pipeline', 'Tasks', 'Conversations'],
     dashboard: 'Sales command center',
     dashboardLead: 'Customer relationships and next steps, in one clear view.',
@@ -63,7 +63,7 @@ const previewCopy = {
   },
   ar: {
     sample: 'معاينة للمنتج · بيانات توضيحية',
-    workspace: 'مساحة عمل CodeLine',
+    workspace: 'مساحة عمل SatrCRM',
     nav: ['نظرة عامة', 'العملاء', 'مسار المبيعات', 'المهام', 'المحادثات'],
     dashboard: 'مركز قيادة المبيعات',
     dashboardLead: 'علاقات العملاء والخطوات التالية في مشهد واحد واضح.',

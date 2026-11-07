@@ -13,7 +13,9 @@ if (!fs.existsSync(path.join(standaloneDir, 'server.js'))) {
 for (const directory of ['public', path.join(distDir, 'static')]) {
   const source = path.join(root, directory);
   if (!fs.existsSync(source)) continue;
-  const target = path.join(standaloneDir, directory === 'public' ? 'public' : '.next', directory === 'public' ? '' : 'static');
+  const target = directory === 'public'
+    ? path.join(standaloneDir, 'public')
+    : path.join(standaloneDir, distDir, 'static');
   fs.cpSync(source, target, { recursive: true, force: true });
 }
 

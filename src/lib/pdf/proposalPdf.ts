@@ -360,7 +360,7 @@ export async function generateProposalPdf(data: ProposalPdfData): Promise<void> 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-  doc.text('For CodeLine Operations Platform', margin, yPos + 16);
+  doc.text('For SatrCRM Operations Platform', margin, yPos + 16);
   doc.text(`For ${data.clientName}`, margin + sigW + 10, yPos + 16);
 
   // Apply footers to all pages

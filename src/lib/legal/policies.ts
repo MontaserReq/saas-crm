@@ -60,12 +60,12 @@ export const LEGAL_POLICIES: LegalPolicy[] = [
     id: 'terms-of-service', slug: 'terms', version: 'draft-0.1', lastUpdated: reviewed, effectiveDate: draftDate,
     title: text('Terms of Service', 'شروط الخدمة'),
     summary: text('Rules for accounts, workspaces, customer content, permitted use, suspension and termination.', 'قواعد الحسابات ومساحات العمل ومحتوى العملاء والاستخدام المسموح والتعليق والإنهاء.'),
-    purpose: text('To describe the proposed contractual framework for using CodeLine CRM without displacing mandatory legal rights.', 'بيان الإطار التعاقدي المقترح لاستخدام CodeLine CRM دون الانتقاص من الحقوق القانونية الآمرة.'),
+    purpose: text('To describe the proposed contractual framework for using SatrCRM without displacing mandatory legal rights.', 'بيان الإطار التعاقدي المقترح لاستخدام SatrCRM دون الانتقاص من الحقوق القانونية الآمرة.'),
     scope: text('Visitors, account holders and organizations using or evaluating the service.', 'الزوار وأصحاب الحسابات والمؤسسات التي تستخدم الخدمة أو تقيّمها.'),
     related: ['privacy', 'subscription-billing', 'acceptable-use', 'availability-support', 'legal-notices'],
     sections: [
       section('service', text('1. Service and contracting party', '1. الخدمة والطرف المتعاقد'), [
-        text('CodeLine CRM provides tenant-based customer relationship and operations tools. The registered legal entity, registration number and registered address have not yet been verified; they must be inserted and approved before these terms become effective.', 'توفر CodeLine CRM أدوات لإدارة علاقات العملاء والعمليات ضمن مساحات عمل منفصلة. لم يتم بعد التحقق من اسم الكيان القانوني المسجل ورقم تسجيله وعنوانه، ويجب إدراجها واعتمادها قبل نفاذ هذه الشروط.'),
+        text('SatrCRM provides tenant-based customer relationship and operations tools. The registered legal entity, registration number and registered address have not yet been verified; they must be inserted and approved before these terms become effective.', 'توفر SatrCRM أدوات لإدارة علاقات العملاء والعمليات ضمن مساحات عمل منفصلة. لم يتم بعد التحقق من اسم الكيان القانوني المسجل ورقم تسجيله وعنوانه، ويجب إدراجها واعتمادها قبل نفاذ هذه الشروط.'),
         text('These pages are review drafts. Creating an account does not currently record acceptance of this draft or make it binding.', 'هذه الصفحات مسودات للمراجعة. لا يسجل إنشاء الحساب حاليًا قبول هذه المسودة ولا يجعلها ملزمة.'),
       ]),
       section('accounts', text('2. Accounts and organization authority', '2. الحسابات وصلاحية المؤسسة'), [
@@ -121,7 +121,7 @@ export const LEGAL_POLICIES: LegalPolicy[] = [
     title: text('Subscription, Pricing, Billing and Renewal Terms', 'شروط الاشتراك والتسعير والفوترة والتجديد'),
     summary: text('Trial, manual payment, activation, expiry and access-state rules.', 'قواعد التجربة والدفع اليدوي والتفعيل والانتهاء وحالات الوصول.'),
     purpose: text('To document verified subscription behavior while operational annual pricing remains under a separate change gate.', 'توثيق سلوك الاشتراك المتحقق منه مع بقاء التسعير السنوي التشغيلي خاضعًا لبوابة تغيير مستقلة.'),
-    scope: text('Organizations evaluating or purchasing a CodeLine CRM subscription.', 'المؤسسات التي تقيّم اشتراك CodeLine CRM أو تشتريه.'),
+    scope: text('Organizations evaluating or purchasing a SatrCRM subscription.', 'المؤسسات التي تقيّم اشتراك SatrCRM أو تشتريه.'),
     related: ['terms', 'cancellation-refunds', 'availability-support', 'retention-deletion'],
     sections: [
       section('pricing-status', text('1. Pricing status', '1. حالة التسعير'), [

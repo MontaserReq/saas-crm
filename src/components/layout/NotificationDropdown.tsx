@@ -53,6 +53,8 @@ export function NotificationDropdown({ initialNotifications = [] }: { initialNot
       router.push('/admin/approval-requests');
     } else if (n.entityType === 'school') {
       router.push('/schools');
+    } else if (n.entityType === 'calendarEvent') {
+      router.push('/calendar');
     }
   };
 

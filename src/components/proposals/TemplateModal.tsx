@@ -220,7 +220,7 @@ export function TemplateModal({
             : "Update template name, description, active status, logo overlay coordinates, or replace base PDF."
           : language === "ar"
             ? "ارفع ملف PDF جاهز ليتم استخدامه كقالب متكرر وإضافة شعار العميل عليه تلقائيًا."
-            : "Upload a reusable PDF proposal base template to overlay customer and CodeLine logos dynamically."
+            : "Upload a reusable PDF proposal base template to overlay customer and SatrCRM logos dynamically."
       }
       maxWidth="lg"
     >

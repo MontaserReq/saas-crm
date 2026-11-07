@@ -17,6 +17,8 @@ export interface LeadInput {
   companyName?: string | null;
   email?: string | null;
   phone?: string | null;
+  website?: string | null;
+  normalizedDomain?: string | null;
   source?: string | null;
   status?: string;
   notes?: string | null;
@@ -159,6 +161,8 @@ export class LeadService {
         companyName: clean(input.companyName),
         email: parseOptionalEmail(input.email),
         phone: parseOptionalInternationalPhone(input.phone),
+        website: clean(input.website),
+        normalizedDomain: clean(input.normalizedDomain),
         source: clean(input.source),
         status: input.status || "NEW",
         notes: clean(input.notes),

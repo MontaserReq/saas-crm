@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TicketStatusBadge } from "@/components/tickets/TicketStatusBadge";
@@ -11,7 +11,16 @@ import { useI18n } from "@/lib/i18n/context";
 import { ExportDropdown } from "@/components/ui/ExportDropdown";
 import { TicketFormModal } from "@/components/tickets/TicketFormModal";
 import { MeetingFormModal } from "@/components/tickets/MeetingFormModal";
-import { Search, Ticket, ArrowRight, Plus, Calendar } from "lucide-react";
+import {
+  Search,
+  Ticket,
+  ArrowRight,
+  Plus,
+  Calendar,
+  LayoutGrid,
+  List,
+  MapPin,
+} from "lucide-react";
 
 interface TicketsClientViewProps {
   user: any;
@@ -73,9 +82,20 @@ export function TicketsClientView({
   const { t, language, getStatusLabel, getPriorityLabel } = useI18n();
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(openCreate);
   const [isNewMeetingOpen, setIsNewMeetingOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const activePriorityOptions = priorityOptions.filter(
     (option) => option.active !== false,
   );
+
+  useEffect(() => {
+    const savedView = window.localStorage.getItem("satrcrm-tickets-view");
+    if (savedView === "cards" || savedView === "table") setViewMode(savedView);
+  }, []);
+
+  function changeViewMode(nextMode: "table" | "cards") {
+    setViewMode(nextMode);
+    window.localStorage.setItem("satrcrm-tickets-view", nextMode);
+  }
 
   const exportColumns = [
     {
@@ -123,6 +143,29 @@ export function TicketsClientView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800" role="group" aria-label={language === "ar" ? "طريقة عرض التذاكر" : "Ticket view mode"}>
+            <button
+              type="button"
+              onClick={() => changeViewMode("table")}
+              aria-pressed={viewMode === "table"}
+              title={language === "ar" ? "عرض جدولي" : "Table view"}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all ${viewMode === "table" ? "bg-white text-brand-700 shadow-sm dark:bg-slate-700 dark:text-brand-300" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
+            >
+              <List className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{language === "ar" ? "جدول" : "Table"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => changeViewMode("cards")}
+              aria-pressed={viewMode === "cards"}
+              title={language === "ar" ? "عرض بطاقات" : "Card view"}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all ${viewMode === "cards" ? "bg-white text-brand-700 shadow-sm dark:bg-slate-700 dark:text-brand-300" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{language === "ar" ? "بطاقات" : "Cards"}</span>
+            </button>
+          </div>
+
           <ExportDropdown
             data={ticketsData.data}
             columns={exportColumns}
@@ -287,6 +330,64 @@ export function TicketsClientView({
 
       {/* Tickets Table */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+        {viewMode === "cards" && (
+          <div className="p-4 sm:p-5">
+            {ticketsData.data.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 space-y-2">
+                <Ticket className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+                <p className="text-sm font-semibold">{t("tickets.noTicketsFound")}</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                {ticketsData.data.map((tItem) => {
+                  const currentAssignee = tItem.assignees?.[0]?.user;
+                  return (
+                    <article
+                      key={tItem.id}
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => router.push(`/tickets/${tItem.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") router.push(`/tickets/${tItem.id}`);
+                      }}
+                      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/80 p-4 text-start transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lg hover:shadow-brand-500/10 focus:outline-none focus:ring-2 focus:ring-brand-500/40 dark:border-slate-700 dark:from-slate-900 dark:to-slate-800/70 dark:hover:border-brand-700"
+                    >
+                      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-cyan-400 to-violet-500 opacity-80" />
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Link href={`/tickets/${tItem.id}`} onClick={(event) => event.stopPropagation()} className="text-sm font-black text-brand-600 hover:underline dark:text-brand-400">
+                              {tItem.ticketNumber}
+                            </Link>
+                            {tItem.meetingDetails && <span className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:border-purple-800 dark:bg-purple-950/40 dark:text-brand-300"><Calendar className="h-2.5 w-2.5" />{t("tickets.meetingBadge")}</span>}
+                          </div>
+                          <h3 className="mt-2 truncate text-base font-black text-slate-900 dark:text-slate-100">{tItem.school?.name || (language === "ar" ? "تذكرة عامة" : "General Ticket")}</h3>
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{tItem.school ? `${tItem.school.city}${tItem.school.contactPerson ? ` • ${tItem.school.contactPerson}` : ""}` : (language === "ar" ? "لا يوجد عميل مرتبط" : "No customer linked")}</span></div>
+                        </div>
+                        <TicketStatusBadge status={tItem.status} />
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <div className="rounded-xl bg-white/80 p-2.5 dark:bg-slate-950/40"><span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">{t("tickets.taskType")}</span><span className="mt-1 block truncate text-xs font-bold text-slate-700 dark:text-slate-300">{tItem.taskType?.name || (language === "ar" ? "عام" : "General")}</span></div>
+                        <div className="rounded-xl bg-white/80 p-2.5 dark:bg-slate-950/40"><span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">{t("tickets.priority")}</span><span className="mt-1 block"><PriorityBadge priority={tItem.priority} /></span></div>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-200/80 pt-3 dark:border-slate-700">
+                        <div className="flex min-w-0 items-center gap-2">
+                          {currentAssignee ? <><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-100 text-[10px] font-black text-brand-700 dark:bg-brand-900/50 dark:text-brand-300">{currentAssignee.name.charAt(0)}</span><span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-300">{currentAssignee.name}</span></> : <span className="text-xs italic text-slate-400">{language === "ar" ? "غير مسندة" : "Unassigned"}</span>}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2"><span className="text-[11px] text-slate-400">{formatDate(tItem.createdAt, language)}</span><span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1.5 text-xs font-bold text-slate-700 transition-colors group-hover:bg-brand-50 group-hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:group-hover:bg-brand-950/40 dark:group-hover:text-brand-300">{t("tickets.open")}<ArrowRight className="h-3 w-3 rtl:rotate-180" /></span></div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {viewMode === "table" && (
+          <>
         {ticketsData.data.length === 0 ? (
           <div className="p-12 text-center text-slate-400 space-y-2">
             <Ticket className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
@@ -472,6 +573,8 @@ export function TicketsClientView({
               </tbody>
             </table>
           </div>
+        )}
+          </>
         )}
 
         {ticketsData.totalPages > 1 && (

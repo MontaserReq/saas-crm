@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { getCurrentUser } from '@/lib/auth/session';
 import { EMAIL_SCOPES, encodeOAuthState, getAppUrl, getProviderCredentials, getRedirectUri, isEmailProvider, isGoogleIntegrationPendingReview, requestedScopes } from '@/lib/integrations/oauth';
-import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { hasPlanFeature } from '@/lib/platform/entitlements';
+import { canManageIntegrations } from '@/lib/integrations/authorization';
+import { IntegrationEntitlementService } from '@/server/services/IntegrationEntitlementService';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -12,12 +13,13 @@ export async function GET(request: Request) {
   if (!isEmailProvider(provider)) return NextResponse.json({ error: 'Unsupported provider' }, { status: 400 });
   const user = await getCurrentUser();
   if (!user) return NextResponse.redirect(new URL(`/login?connect=${provider}`, appUrl));
-  if (!user.organizationId || (!hasPermission(user, PERMISSIONS.EMAIL_INTEGRATIONS_MANAGE) && !hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE)) || !hasPlanFeature(user, 'integrations')) {
+  const managedProvider = provider === 'google' ? 'GOOGLE' : 'MICROSOFT';
+  if (!user.organizationId || !canManageIntegrations(user) || !hasPlanFeature(user, 'integrations') || !(await IntegrationEntitlementService.isEnabledForUser(user, managedProvider))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (provider === 'google' && isGoogleIntegrationPendingReview()) return NextResponse.redirect(new URL('/settings?integration=google-review-pending', appUrl));
+  if (provider === 'google' && isGoogleIntegrationPendingReview()) return NextResponse.redirect(new URL('/settings/integrations?integration=google-review-pending', appUrl));
   const credentials = getProviderCredentials(provider);
-  if (!credentials.clientId || !credentials.clientSecret) return NextResponse.redirect(new URL(`/settings?integration=not-configured&provider=${provider}`, appUrl));
+  if (!credentials.clientId || !credentials.clientSecret) return NextResponse.redirect(new URL(`/settings/integrations?integration=not-configured&provider=${provider}`, appUrl));
   const requested = (url.searchParams.get('scopes') || 'email,calendar').split(',').filter((item) => item in EMAIL_SCOPES[provider]);
   const { selected, scopes } = requestedScopes(provider, requested);
   const state = randomBytes(32).toString('hex');

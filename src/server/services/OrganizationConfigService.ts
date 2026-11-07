@@ -7,7 +7,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { getStorageProvider } from '@/lib/storage';
 import { validateAttachmentContent } from '@/lib/storage/attachmentPolicy';
 
-export const DEFAULT_MODULES = ['dashboard', 'clients', 'leads', 'contacts', 'deals', 'pipelines', 'tasks', 'tickets', 'calendar', 'proposals', 'activities', 'reports'];
+export const DEFAULT_MODULES = ['dashboard', 'clients', 'leads', 'contacts', 'deals', 'pipelines', 'tasks', 'tickets', 'calendar', 'proposals', 'documents', 'activities', 'reports'];
 export const DEFAULT_CLIENT_TYPES = ['SCHOOL', 'COMPANY', 'NGO', 'UNIVERSITY', 'GOVERNMENT', 'INDIVIDUAL', 'OTHER'];
 export const DEFAULT_LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'UNQUALIFIED', 'CONVERTED', 'LOST'];
 export const APPROVAL_RESOURCES = ['CLIENT', 'LEAD', 'CONTACT', 'DEAL', 'TASK', 'CALENDAR_EVENT', 'DEPARTMENT'] as const;
@@ -38,14 +38,52 @@ export class OrganizationConfigService {
     return { organization, settings: { ...settings, enabledModules: json(settings.enabledModules, DEFAULT_MODULES), clientTypes: json(settings.clientTypes, DEFAULT_CLIENT_TYPES), leadStatuses: json(settings.leadStatuses, DEFAULT_LEAD_STATUSES), ticketStatuses: json(settings.ticketStatuses, []), ticketPriorities, approvalRules } };
   }
 
-  static async updateOrganization(user: UserSession, input: Partial<{ name: string; primaryColor: string | null; language: string; timezone: string; currency: string; dateFormat: string }>) {
+  static async updateOrganization(user: UserSession, input: Partial<{
+    name: string;
+    primaryColor: string | null;
+    language: string;
+    timezone: string;
+    currency: string;
+    dateFormat: string;
+    legalName: string | null;
+    contactEmail: string | null;
+    contactPhone: string | null;
+    website: string | null;
+    address: string | null;
+    taxNumber: string | null;
+    invoicePrefix: string;
+    invoiceFooter: string | null;
+    paymentInstructions: string | null;
+    invoiceShowLogo: boolean;
+    invoiceShowCompanyDetails: boolean;
+    invoiceShowTaxNumber: boolean;
+  }>) {
     const organizationId = (await requireOrganizationContext(user)).id;
     if (input.name !== undefined && !input.name.trim()) throw new Error('Organization name is required');
     if (input.language !== undefined && !['en', 'ar'].includes(input.language)) throw new Error('Unsupported language');
     if (input.currency !== undefined && !/^[A-Z]{3}$/.test(input.currency)) throw new Error('Currency must be a three-letter ISO code');
     if (input.timezone !== undefined) { try { Intl.DateTimeFormat('en-US', { timeZone: input.timezone }).format(); } catch { throw new Error('Invalid timezone'); } }
     if (input.primaryColor !== undefined && input.primaryColor !== null && !isValidBrandColor(input.primaryColor)) throw new Error('Brand color must be a six-digit hex color');
+    if (input.contactEmail !== undefined && input.contactEmail !== null && input.contactEmail && !/^\S+@\S+\.\S+$/.test(input.contactEmail.trim())) throw new Error('Invalid contact email');
+    if (input.website !== undefined && input.website !== null && input.website && !/^https?:\/\/.+/i.test(input.website.trim())) throw new Error('Website must start with http:// or https://');
+    if (input.invoicePrefix !== undefined && !/^[A-Z0-9][A-Z0-9_-]{1,9}$/.test(input.invoicePrefix.trim().toUpperCase())) throw new Error('Invoice prefix must be 2–10 letters or numbers');
+    if (input.invoiceFooter !== undefined && input.invoiceFooter !== null && input.invoiceFooter.length > 500) throw new Error('Invoice footer is too long');
+    if (input.paymentInstructions !== undefined && input.paymentInstructions !== null && input.paymentInstructions.length > 1000) throw new Error('Payment instructions are too long');
     const organization = await prisma.organization.update({ where: { id: organizationId }, data: { ...(input.name !== undefined ? { name: input.name.trim() } : {}), ...(input.primaryColor !== undefined ? { primaryColor: input.primaryColor === null ? null : normalizeBrandColor(input.primaryColor) } : {}), ...(input.language !== undefined ? { language: input.language } : {}), ...(input.timezone !== undefined ? { timezone: input.timezone } : {}), ...(input.currency !== undefined ? { currency: input.currency } : {}) } });
+    await prisma.organization.update({ where: { id: organizationId }, data: {
+      ...(input.legalName !== undefined ? { legalName: input.legalName?.trim() || null } : {}),
+      ...(input.contactEmail !== undefined ? { contactEmail: input.contactEmail?.trim() || null } : {}),
+      ...(input.contactPhone !== undefined ? { contactPhone: input.contactPhone?.trim() || null } : {}),
+      ...(input.website !== undefined ? { website: input.website?.trim() || null } : {}),
+      ...(input.address !== undefined ? { address: input.address?.trim() || null } : {}),
+      ...(input.taxNumber !== undefined ? { taxNumber: input.taxNumber?.trim() || null } : {}),
+      ...(input.invoicePrefix !== undefined ? { invoicePrefix: input.invoicePrefix.trim().toUpperCase() } : {}),
+      ...(input.invoiceFooter !== undefined ? { invoiceFooter: input.invoiceFooter?.trim() || null } : {}),
+      ...(input.paymentInstructions !== undefined ? { paymentInstructions: input.paymentInstructions?.trim() || null } : {}),
+      ...(input.invoiceShowLogo !== undefined ? { invoiceShowLogo: input.invoiceShowLogo } : {}),
+      ...(input.invoiceShowCompanyDetails !== undefined ? { invoiceShowCompanyDetails: input.invoiceShowCompanyDetails } : {}),
+      ...(input.invoiceShowTaxNumber !== undefined ? { invoiceShowTaxNumber: input.invoiceShowTaxNumber } : {}),
+    } });
     if (input.dateFormat !== undefined) await prisma.organizationSettings.upsert({ where: { organizationId }, create: { organizationId, dateFormat: input.dateFormat }, update: { dateFormat: input.dateFormat } });
     await AuditService.logAudit({ actorId: user.id, organizationId, action: 'ORGANIZATION_SETTINGS_UPDATED', entityType: 'Organization', entityId: organizationId, metadata: { fields: Object.keys(input) } });
     return organization;

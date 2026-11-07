@@ -5,7 +5,7 @@ import { MessageSquareReply, Send } from "lucide-react";
 import { useI18n } from "@/lib/i18n/context";
 import { Modal } from "@/components/ui/Modal";
 import { savePlatformRecordAction } from "@/server/actions/platform";
-import { planFeatureIds, planFeatureLabels } from "@/lib/platform/entitlements";
+import { allowedPlanFeatureTokens, planFeatureIds, planFeatureLabels, planFeatureTokenLabels } from "@/lib/platform/entitlements";
 import { settingKeys } from "@/lib/platform/validation";
 import type {
   PlatformResource,
@@ -252,8 +252,10 @@ const fields: Record<PlatformResource, Field[]> = {
     },
     {
       key: "features",
-      en: "Features (comma separated)",
-      ar: "المزايا (افصل بفاصلة)",
+      en: "Included features and capability level",
+      ar: "الميزات ومستوى القدرات المشمولة",
+      type: "multi-select",
+      options: allowedPlanFeatureTokens,
     },
     {
       key: "availability",
@@ -724,7 +726,12 @@ export function PlatformRecordForm({
                   (option) => option.organizationId === values.organizationId,
                 );
               const featureChoices =
-                resource === "organizations" &&
+                resource === "plans" && field.key === "features"
+                  ? choices.map((option) => ({
+                      ...option,
+                      name: planFeatureTokenLabels[option.id]?.[ar ? "ar" : "en"] ?? option.name,
+                    }))
+                  : resource === "organizations" &&
                 ["featureEnable", "featureDisable"].includes(field.key)
                   ? choices.map((option) => ({
                       ...option,
@@ -734,10 +741,60 @@ export function PlatformRecordForm({
                         ]?.[ar ? "ar" : "en"] ?? option.name,
                     }))
                   : choices;
+              if (presentedField.type === "multi-select") {
+                const selectedValues = new Set(
+                  String(values[field.key] || "")
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean),
+                );
+                return (
+                  <fieldset
+                    key={field.key}
+                    className="block text-sm font-semibold sm:col-span-2"
+                  >
+                    <legend>{label}</legend>
+                    <div className="mt-1 grid max-h-64 gap-2 overflow-y-auto rounded-xl border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-950 sm:grid-cols-2">
+                      {featureChoices.map((option) => {
+                        const checked = selectedValues.has(option.id);
+                        return (
+                          <label
+                            key={option.id}
+                            className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm transition-colors ${
+                              checked
+                                ? "border-violet-400 bg-violet-50 text-violet-950 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-100"
+                                : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+                            } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={disabled}
+                              onChange={() => {
+                                const next = new Set(selectedValues);
+                                if (checked) next.delete(option.id);
+                                else next.add(option.id);
+                                change(Array.from(next).join(", "));
+                              }}
+                              className="h-4 w-4 accent-violet-600"
+                            />
+                            <span className="leading-5">{option.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-xs font-normal text-slate-500">
+                      {ar
+                        ? "اضغط على الميزة لتفعيلها أو إلغاء تفعيلها."
+                        : "Click a feature to enable or remove it."}
+                    </p>
+                  </fieldset>
+                );
+              }
               return (
                 <label
                   key={field.key}
-                    className={`block text-sm font-semibold ${presentedField.type === "textarea" ? "sm:col-span-2" : ""}`}
+                  className={`block text-sm font-semibold ${presentedField.type === "textarea" ? "sm:col-span-2" : ""}`}
                 >
                   {label}
                   {presentedField.type === "select" ? (
@@ -751,31 +808,6 @@ export function PlatformRecordForm({
                     >
                       <option value="">{ar ? "اختر" : "Select"}</option>
                       {choices.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : presentedField.type === "multi-select" ? (
-                    <select
-                      name={field.key}
-                      multiple
-                      size={6}
-                      disabled={disabled}
-                      value={String(values[field.key] || "")
-                        .split(",")
-                        .map((item) => item.trim())
-                        .filter(Boolean)}
-                      onChange={(event) =>
-                        change(
-                          Array.from(event.target.selectedOptions)
-                            .map((option) => option.value)
-                            .join(", "),
-                        )
-                      }
-                      className={inputClass + " min-h-40"}
-                    >
-                      {featureChoices.map((option) => (
                         <option key={option.id} value={option.id}>
                           {option.name}
                         </option>

@@ -1,43 +1,47 @@
-import { getCurrentUser } from '@/lib/auth/session';
-import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { ComingSoonPanel } from '@/components/ai-school-research/ComingSoonPanel';
-import { AiResearchHomeView } from '@/components/ai-school-research/AiResearchHomeView';
-import { SchoolResearchService } from '@/server/services/SchoolResearchService';
-import { getAiResearchPlatformSettings } from '@/lib/ai/researchSettings';
+import { getCurrentUser } from "@/lib/auth/session";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
+import { ComingSoonPanel } from "@/components/ai-school-research/ComingSoonPanel";
+import { LeadDiscoveryView } from "@/components/lead-discovery/LeadDiscoveryView";
+import { LeadDiscoveryService } from "@/server/services/LeadDiscoveryService";
+import { getAiResearchPlatformSettings } from "@/lib/ai/researchSettings";
+import { getOrganizationAiUsageSummary } from "@/lib/ai/organizationPolicy";
+import { headers } from "next/headers";
 
-export default async function AiSchoolResearchPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | undefined }>;
-}) {
+export default async function AiSchoolResearchPage() {
   const user = (await getCurrentUser())!;
   if (!hasPermission(user, PERMISSIONS.AI_RESEARCH_VIEW)) return null;
-  const query = await searchParams;
   const settings = await getAiResearchPlatformSettings();
-  if (settings.status === 'OFF') return <ComingSoonPanel status={settings.status} />;
+  if (settings.status === "OFF")
+    return <ComingSoonPanel status={settings.status} />;
 
-  const page = Math.max(1, Number.parseInt(query.page || '1', 10) || 1);
-  const result = await SchoolResearchService.listJobs(user, page);
-  const isConfigured = Boolean(settings.activeProvider?.enabled && settings.activeProvider.apiKey);
+  const jobs = await LeadDiscoveryService.listJobs(user);
+  const isConfigured = settings.providers.some(
+    (provider) => provider.enabled && provider.apiKey && ["gemini", "groq"].includes(provider.kind),
+  );
+  const usage = user.organizationId ? await getOrganizationAiUsageSummary(user.organizationId) : null;
+  const language =
+    (await headers()).get("x-satrcrm-locale") === "en" ? "en" : "ar";
   return (
-    <AiResearchHomeView
-      jobs={result.data.map((job) => ({
+    <LeadDiscoveryView
+      initialJobs={jobs.map((job) => ({
         id: job.id,
-        location: job.location,
-        area: job.area,
+        prompt: job.prompt,
         status: job.status,
+        stage: job.stage,
         requestedCount: job.requestedCount,
         createdAt: job.createdAt.toISOString(),
-        createdBy: job.createdBy,
         _count: job._count,
       }))}
-      total={result.total}
-      page={result.page}
-      totalPages={result.totalPages}
-      canCreate={isConfigured && hasPermission(user, PERMISSIONS.AI_RESEARCH_CREATE) && hasPermission(user, PERMISSIONS.AI_RESEARCH_RUN)}
-      isConfigured={isConfigured}
-      maxSchoolsPerJob={Math.max(1, Number(process.env.AI_RESEARCH_MAX_SCHOOLS || 100))}
-      status={settings.status}
+      canImport={hasPermission(user, PERMISSIONS.AI_RESEARCH_APPROVE)}
+      canCreate={
+        isConfigured &&
+        hasPermission(user, PERMISSIONS.AI_RESEARCH_CREATE) &&
+        hasPermission(user, PERMISSIONS.AI_RESEARCH_RUN)
+      }
+      language={language}
+      featureStatus={settings.status}
+      setup={{ aiConfigured: isConfigured }}
+      usage={usage ? { ai: usage.ai } : null}
     />
   );
 }

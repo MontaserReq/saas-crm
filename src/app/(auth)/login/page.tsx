@@ -57,7 +57,7 @@ export default function LoginPage() {
     ? ['سياق العميل والعمل في مكان واحد', 'وصول منضبط حسب الدور والمؤسسة', 'واجهة عربية وإنجليزية متكاملة']
     : ['Customer context and daily work together', 'Role- and organization-aware access', 'Complete Arabic and English experience'];
 
-  return <main className="min-h-screen bg-[#F7F5FA] text-[#24152F] dark:bg-[#160D1E] dark:text-[#F7F5FA]" dir={ar ? 'rtl' : 'ltr'}>
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#F7F5FA] text-[#24152F] dark:bg-[#160D1E] dark:text-[#F7F5FA]" dir={ar ? 'rtl' : 'ltr'}>
     <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-8 sm:py-7">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <Link href="/" className="inline-flex items-center" aria-label="SatrCRM home">
@@ -93,7 +93,7 @@ export default function LoginPage() {
               <div className="relative -mt-3"><Lock className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input id="login-password" required type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} placeholder={t('auth.passwordPlaceholder')} className="w-full rounded-xl border border-slate-300 bg-white py-3 pe-11 ps-10 text-sm outline-none transition focus:border-[#482080] focus:ring-4 focus:ring-[#482080]/10 dark:border-slate-600 dark:bg-[#1C1026]" /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute end-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#482080] dark:hover:bg-white/10" aria-label={showPassword ? (ar ? 'إخفاء كلمة المرور' : 'Hide password') : (ar ? 'إظهار كلمة المرور' : 'Show password')}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div>
               <button disabled={loading} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#482080] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#351761] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#482080] disabled:opacity-50">{loading ? t('auth.signingIn') : t('auth.signIn')}<ArrowRight className="h-4 w-4 rtl:rotate-180" /></button>
             </form>
-            <p className="mt-7 text-center text-sm text-slate-500 dark:text-slate-300">{ar ? 'جديد في CodeLine؟' : 'New to CodeLine?'} <Link href="/onboarding" className="font-bold text-[#482080] underline-offset-4 hover:underline dark:text-[#D4B16A]">{ar ? 'ابدأ تجربتك المجانية لمدة 7 أيام' : 'Start your free 7-day trial'}</Link></p>
+            <p className="mt-7 text-center text-sm text-slate-500 dark:text-slate-300">{ar ? 'جديد في SatrCRM؟' : 'New to SatrCRM?'} <Link href="/onboarding" className="font-bold text-[#482080] underline-offset-4 hover:underline dark:text-[#D4B16A]">{ar ? 'ابدأ تجربتك المجانية لمدة 7 أيام' : 'Start your free 7-day trial'}</Link></p>
           </div>
         </section>
       </div>

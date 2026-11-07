@@ -9,6 +9,8 @@ import { CrmWorkspaceService } from "@/server/services/CrmWorkspaceService";
 import { CustomFieldService } from "@/server/services/CustomFieldService";
 import { OrganizationConfigService } from "@/server/services/OrganizationConfigService";
 import { LocalizedText } from "@/components/ui/LocalizedText";
+import { LeadActivityService } from "@/server/services/LeadActivityService";
+import { LeadActivityPanel } from "@/components/crm/LeadActivityPanel";
 
 export default async function LeadPage({
   params,
@@ -22,10 +24,11 @@ export default async function LeadPage({
   )
     return null;
   const id = (await params).id;
-  const [lead, timeline, config] = await Promise.all([
+  const [lead, timeline, config, activities] = await Promise.all([
     LeadService.get(user, id),
     CrmWorkspaceService.timeline(user, "Lead", id),
     OrganizationConfigService.get(user),
+    LeadActivityService.list(user, id),
   ]);
   if (!lead)
     return (
@@ -64,6 +67,7 @@ export default async function LeadPage({
         <LeadSetupFields leadId={id} fields={textFields} values={textValues} />
       )}
       <CustomFieldDisplay values={values} />
+      <LeadActivityPanel leadId={id} initialActivities={activities} canUpdate={canUpdate} />
     </div>
   );
 }

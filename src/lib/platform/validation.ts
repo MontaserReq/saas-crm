@@ -38,7 +38,7 @@ export const settingInput = z.object({ key: z.enum(settingKeys), value: text.max
 export const aiResearchSettingsInput = z.object({
   status: z.enum(['OFF', 'BETA', 'ON']),
   activeProviderId: text.max(80).default('').transform(value => value || null),
-  featureProviderIds: z.record(z.string().max(80)).default({}),
+  featureProviderIds: z.record(z.string(), z.string().max(80)).default({}),
   fallbackProviderIds: z.array(z.string().max(80)).max(5).default([]),
   providers: z.array(z.object({
     id: text.min(2).max(80).regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/, 'Use letters, numbers, hyphens or underscores for provider id'),
@@ -70,28 +70,6 @@ export const aiResearchSettingsInput = z.object({
     if (['openai-compatible', 'openai-responses', 'anthropic', 'custom-http'].includes(provider.kind) && !provider.baseUrl) context.addIssue({ code: 'custom', path: ['providers', index, 'baseUrl'], message: 'Base URL is required for this provider adapter' });
     if (provider.baseUrl && !safeProviderEndpoint(provider.baseUrl)) context.addIssue({ code: 'custom', path: ['providers', index, 'baseUrl'], message: 'Provider endpoints must be public http(s) URLs' });
   }
-});
-
-export const searchProviderSettingsInput = z.object({
-  activeProviderId: text.max(80).default('').transform(value => value || null),
-  fallbackProviderIds: z.array(z.string().max(80)).max(10).default([]),
-  providers: z.array(z.object({
-    id: text.min(2).max(80).regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
-    name: text.min(2).max(120),
-    kind: z.enum(['exa', 'brave', 'custom']),
-    baseUrl: text.min(1).max(500),
-    apiKey: z.string().trim().max(2000).default(''),
-    clearApiKey: z.boolean().default(false),
-    enabled: z.boolean().default(true),
-    maxResults: z.number().int().min(1).max(100).default(25),
-    estimatedCostPerRequestUsd: z.number().min(0).max(10000).nullable().default(null),
-  }).strict()).min(1).max(15),
-}).strict().superRefine((value, context) => {
-  const ids = value.providers.map(provider => provider.id);
-  if (new Set(ids).size !== ids.length) context.addIssue({ code: 'custom', path: ['providers'], message: 'Provider ids must be unique' });
-  if (value.activeProviderId && !ids.includes(value.activeProviderId)) context.addIssue({ code: 'custom', path: ['activeProviderId'], message: 'Select an existing provider' });
-  for (const providerId of value.fallbackProviderIds) if (!ids.includes(providerId)) context.addIssue({ code: 'custom', path: ['fallbackProviderIds'], message: 'Select existing fallback providers' });
-  value.providers.forEach((provider, index) => { if (!safeProviderEndpoint(provider.baseUrl)) context.addIssue({ code: 'custom', path: ['providers', index, 'baseUrl'], message: 'Search endpoints must be public http(s) URLs' }); });
 });
 
 export const organizationAiProviderInput = z.object({

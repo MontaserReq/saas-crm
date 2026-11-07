@@ -9,6 +9,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { validateAttachmentBatch, validateAttachmentContent, validateAttachmentFile } from '@/lib/storage/attachmentPolicy';
 import { requireOrganizationId } from '@/lib/auth/organization';
 import { isPlatformSuperAdmin } from '@/lib/security/platform';
+import { sendSlackCrmNotification } from '@/lib/integrations/slack';
 
 function ticketPermission(user: Awaited<ReturnType<typeof requireAuth>>, permission: string) {
   if (!hasPermission(user, permission)) throw new Error(`Forbidden: missing ${permission}`);
@@ -271,6 +272,8 @@ export async function createTicketAction(input: {
       initialNote: input.initialNote,
     });
 
+    void sendSlackCrmNotification({ organizationId, title: `New ticket ${ticket.ticketNumber}`, details: `${ticket.subject} · ${user.name}`, urlPath: `/tickets/${ticket.id}` }).catch(() => undefined);
+
     revalidatePath('/tickets');
     revalidatePath('/');
     return { success: true, ticketId: ticket.id, ticketNumber: ticket.ticketNumber };
@@ -299,6 +302,8 @@ export async function createMeetingTicketAction(input: {
 
     const ticket = await TicketService.createMeetingTicket(user, input);
 
+    void sendSlackCrmNotification({ organizationId: requireOrganizationId(user), title: `New meeting ${ticket.ticketNumber}`, details: `${ticket.subject} · ${user.name}`, urlPath: `/tickets/${ticket.id}` }).catch(() => undefined);
+
     revalidatePath('/tickets');
     revalidatePath('/');
     return { success: true, ticketId: ticket.id, ticketNumber: ticket.ticketNumber };
@@ -318,6 +323,7 @@ export async function updateTicketStatusAction(ticketId: string, newStatus: Tick
     if (!requiredPermission) throw new Error('Forbidden: unsupported status mutation');
     ticketPermission(user, requiredPermission);
     const res = await TicketService.updateStatus(user, ticketId, newStatus);
+    void sendSlackCrmNotification({ organizationId: requireOrganizationId(user), title: `Ticket ${res.ticketNumber} status changed`, details: `${res.subject} → ${newStatus} · ${user.name}`, urlPath: `/tickets/${res.id}` }).catch(() => undefined);
     revalidatePath(`/tickets/${ticketId}`);
     revalidatePath('/tickets');
     revalidatePath('/');

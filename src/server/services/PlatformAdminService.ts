@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import prisma from '@/lib/db/prisma';
 import { hashPassword } from '@/lib/auth/session';
 import { isPlatformSuperAdmin } from '@/lib/security/platform';
@@ -7,13 +8,13 @@ import { readSetupState } from '@/lib/onboarding/templates';
 import { DEFAULT_MODULES, DEFAULT_CLIENT_TYPES, DEFAULT_LEAD_STATUSES, DEFAULT_TICKET_PRIORITIES } from './OrganizationConfigService';
 import type { UserSession } from '@/types';
 import type { PlatformResource, PlatformRecord, PlatformSectionData, PlatformStats } from '@/lib/platform/types';
-import { organizationInput, userInput, planInput, subscriptionInput, trialActivationInput, integrationInput, supportInput, settingInput, aiResearchSettingsInput, searchProviderSettingsInput } from '@/lib/platform/validation';
+import { organizationInput, userInput, planInput, subscriptionInput, trialActivationInput, integrationInput, supportInput, settingInput, aiResearchSettingsInput } from '@/lib/platform/validation';
 import { areKnownPlanFeatureTokens, expandPlanFeatures, parseFeatureOverrides } from '@/lib/platform/entitlements';
 import { getPlatformDefaults } from './PlatformCatalogService';
 import { assertOrganizationUserCapacity } from '@/lib/platform/userCapacity';
 import { AI_RESEARCH_ACTIVE_PROVIDER_SETTING_KEY, AI_RESEARCH_CLEARED_SECRET, AI_RESEARCH_PROVIDERS_SETTING_KEY, AI_RESEARCH_SETTING_KEYS, getAiResearchPlatformSettings } from '@/lib/ai/researchSettings';
-import { SEARCH_ACTIVE_PROVIDER_SETTING_KEY, SEARCH_FALLBACK_PROVIDER_SETTING_KEY, SEARCH_PROVIDERS_SETTING_KEY, getSearchProviderSettings, searchClearedSecret } from '@/lib/search/settings';
 import { sanitizeErrorMessage } from '@/lib/ai/usage';
+import { normalizeManagedIntegrationProvider, type ManagedIntegrationProvider } from '@/lib/integrations/catalog';
 
 export function requirePlatformAdmin(user: UserSession) {
   if (!isPlatformSuperAdmin(user)) throw new Error('Forbidden');
@@ -32,6 +33,71 @@ async function audit(tx: Prisma.TransactionClient, user: UserSession, resource: 
 }
 
 export class PlatformAdminService {
+  static async getIntegrationPolicies(user: UserSession) {
+    requirePlatformAdmin(user);
+    const { IntegrationEntitlementService } = await import('./IntegrationEntitlementService');
+    return IntegrationEntitlementService.listPolicies(user);
+  }
+
+  static async setIntegrationPolicy(user: UserSession, raw: unknown) {
+    requirePlatformAdmin(user);
+    const input = z.object({
+      // Platform catalog plans use stable IDs such as "platform-growth";
+      // validate the identifier shape here and verify ownership/existence
+      // immediately below instead of assuming Prisma's cuid default.
+      planId: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/, 'Invalid plan identifier'),
+      provider: z.string().trim().transform((value) => normalizeManagedIntegrationProvider(value)),
+      enabled: z.boolean(),
+    }).superRefine((value, ctx) => {
+      if (!value.provider) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['provider'], message: 'Unsupported integration provider' });
+    }).parse(raw) as { planId: string; provider: ManagedIntegrationProvider; enabled: boolean };
+
+    return prisma.$transaction(async (tx) => {
+      const plan = await tx.platformPlan.findUnique({ where: { id: input.planId }, select: { id: true, name: true, slug: true } });
+      if (!plan) throw new Error('Plan not found');
+      const current = await tx.platformPlanIntegration.findUnique({ where: { planId_provider: { planId: plan.id, provider: input.provider } }, select: { enabled: true } });
+      if (current?.enabled === input.enabled) return { changed: false, enabled: input.enabled };
+
+      await tx.platformPlanIntegration.upsert({
+        where: { planId_provider: { planId: plan.id, provider: input.provider } },
+        create: { planId: plan.id, provider: input.provider, enabled: input.enabled },
+        update: { enabled: input.enabled },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: user.organizationId || null,
+          actorId: user.id,
+          action: 'PLATFORM_INTEGRATION_POLICY_UPDATED',
+          entityType: 'PlatformPlanIntegration',
+          entityId: `${plan.id}:${input.provider}`,
+          metadata: JSON.stringify({ planId: plan.id, planSlug: plan.slug, provider: input.provider, enabled: input.enabled }),
+        },
+      });
+
+      const organizations = await tx.organization.findMany({
+        where: { isActive: true, platformSubscription: { planId: plan.id } },
+        select: { id: true, members: { where: { status: 'ACTIVE', user: { isActive: true } }, select: { userId: true } } },
+      });
+      const providerName = input.provider === 'GOOGLE' ? 'Google' : input.provider.charAt(0) + input.provider.slice(1).toLowerCase();
+      const stateEn = input.enabled ? 'enabled' : 'disabled';
+      const stateAr = input.enabled ? 'تم تفعيله' : 'تم تعطيله';
+      const data = organizations.flatMap((organization) => organization.members.map((member) => ({
+        organizationId: organization.id,
+        userId: member.userId,
+        type: 'SYSTEM_INTEGRATION_POLICY',
+        title: `Integration policy updated / تحديث سياسة التكامل`,
+        message: `${providerName} integration has been ${stateEn} for your plan. / تكامل ${providerName} ${stateAr} ضمن خطتكم.`,
+        entityType: 'PlatformPlanIntegration',
+        entityId: `${plan.id}:${input.provider}`,
+        inAppVisible: true,
+      })));
+      for (let index = 0; index < data.length; index += 500) await tx.notification.createMany({ data: data.slice(index, index + 500) });
+
+      return { changed: true, enabled: input.enabled, notifiedUsers: data.length };
+    }, { maxWait: 10000, timeout: 30000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
   static async getAiResearchSettings(user: UserSession) {
     requirePlatformAdmin(user);
     const settings = await getAiResearchPlatformSettings();
@@ -155,42 +221,6 @@ export class PlatformAdminService {
       await audit(tx, user, 'ai_research', providerId, 'connection_tested', { status: result.status, latencyMs: result.latencyMs ?? null, hasError: Boolean(result.error) });
     }, { maxWait: 10000, timeout: 20000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return { connectionStatus: result.status, lastTestedAt: testedAt, lastLatencyMs: result.latencyMs ?? null, lastError: result.status === 'ERROR' ? sanitizeErrorMessage(result.error) : null };
-  }
-
-  static async getSearchProviderSettings(user: UserSession) {
-    requirePlatformAdmin(user);
-    const settings = await getSearchProviderSettings();
-    return { activeProviderId: settings.activeProviderId, fallbackProviderIds: settings.fallbackProviderIds, providers: settings.providers.map(({ apiKey, ...provider }) => ({ ...provider, configured: Boolean(apiKey) })) };
-  }
-
-  static async getSearchProviderUsage(user: UserSession) {
-    requirePlatformAdmin(user);
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const [aggregate, byProvider] = await Promise.all([
-      prisma.searchProviderUsageLog.aggregate({ where: { createdAt: { gte: since } }, _count: { _all: true }, _sum: { resultCount: true, estimatedCostUsd: true }, _avg: { durationMs: true } }),
-      prisma.searchProviderUsageLog.groupBy({ by: ['providerId', 'status'], where: { createdAt: { gte: since } }, _count: { _all: true }, _sum: { resultCount: true }, orderBy: { _count: { providerId: 'desc' } }, take: 20 }),
-    ]);
-    return { since: since.toISOString(), totalRequests: aggregate._count._all, totalResults: aggregate._sum.resultCount || 0, estimatedCostUsd: aggregate._sum.estimatedCostUsd, averageDurationMs: aggregate._avg.durationMs, providers: byProvider.map((row) => ({ providerId: row.providerId, status: row.status, requests: row._count._all, results: row._sum.resultCount || 0 })) };
-  }
-
-  static async saveSearchProviderSettings(user: UserSession, raw: unknown) {
-    requirePlatformAdmin(user);
-    const input = searchProviderSettingsInput.parse(raw);
-    const existing = await getSearchProviderSettings();
-    const existingById = new Map(existing.providers.map((provider) => [provider.id, provider]));
-    const providers = input.providers.map((provider) => {
-      const old = existingById.get(provider.id);
-      const apiKey = provider.clearApiKey ? null : provider.apiKey || old?.apiKey || null;
-      return { id: provider.id, name: provider.name, kind: provider.kind, baseUrl: provider.baseUrl, enabled: provider.enabled, maxResults: provider.maxResults, estimatedCostPerRequestUsd: provider.estimatedCostPerRequestUsd, apiKeyEncrypted: apiKey ? encryptSecret(apiKey) : searchClearedSecret() };
-    });
-    await prisma.$transaction(async (tx) => {
-      const upsert = (key: string, value: string) => tx.platformSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
-      await upsert(SEARCH_ACTIVE_PROVIDER_SETTING_KEY, input.activeProviderId || '');
-      await upsert(SEARCH_FALLBACK_PROVIDER_SETTING_KEY, JSON.stringify(input.fallbackProviderIds));
-      await upsert(SEARCH_PROVIDERS_SETTING_KEY, JSON.stringify(providers));
-      await audit(tx, user, 'search_providers', 'global', 'updated', { activeProviderId: input.activeProviderId, fallbackProviderIds: input.fallbackProviderIds, providerCount: providers.length, providerIds: providers.map((provider) => provider.id) });
-    }, { maxWait: 10000, timeout: 20000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    return this.getSearchProviderSettings(user);
   }
 
   static async activateTrial(user: UserSession, raw: unknown) {
@@ -362,6 +392,7 @@ export class PlatformAdminService {
           const parsed = planInput.parse(input);
           const features = split(parsed.features);
           if (!areKnownPlanFeatureTokens(features)) throw new Error('One or more plan features are not supported');
+          if (parsed.slug === 'starter' && features.some(feature => feature === 'ai-expanded' || feature === 'ai_research')) throw new Error('Smart Research is available from the Growth plan onward');
           const existing = id ? await tx.platformPlan.findUniqueOrThrow({ where: { id } }) : null;
           if (existing && existing.slug !== parsed.slug) throw new Error('The plan code is immutable after publication');
           const monthlyPrice = parsed.monthlyPrice === null ? null : new Prisma.Decimal(parsed.monthlyPrice);

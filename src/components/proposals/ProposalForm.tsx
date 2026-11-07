@@ -366,7 +366,7 @@ export function ProposalForm({
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 {language === "ar"
                   ? "تم توليد العرض مع الحفاظ الكامل على تصميم الـ PDF الأصلي وشعار العميل."
-                  : "Generated with customer logo and CodeLine branding overlaid onto original template."}
+                  : "Generated with customer logo and SatrCRM branding overlaid onto original template."}
               </p>
             </div>
           </div>

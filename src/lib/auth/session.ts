@@ -72,9 +72,26 @@ export async function getCurrentUser(): Promise<UserSession | null> {
     return null;
   }
 
+  return loadUserSession(session.id, { sessionId: session.sessionId });
+}
+
+/**
+ * Loads the same authoritative tenant session used by browser authentication,
+ * but for a non-cookie identity such as a scoped MCP access token.
+ *
+ * The organization is supplied by the already-authenticated token record and
+ * is used only as a membership constraint. It is never accepted from a tool
+ * argument or request body.
+ */
+export async function getUserSessionForOrganization(userId: string, organizationId: string): Promise<UserSession | null> {
+  return loadUserSession(userId, { organizationId });
+}
+
+async function loadUserSession(userId: string, options: { sessionId?: string; organizationId?: string }): Promise<UserSession | null> {
+
   // Verify user is still active in database
   const dbUser = await prisma.user.findUnique({
-    where: { id: session.id },
+    where: { id: userId },
     select: {
       id: true,
       name: true,
@@ -107,7 +124,7 @@ export async function getCurrentUser(): Promise<UserSession | null> {
         },
       },
       organizationMemberships: {
-        where: { status: 'ACTIVE', organization: { isActive: true } },
+        where: { status: 'ACTIVE', ...(options.organizationId ? { organizationId: options.organizationId } : {}), organization: { isActive: true } },
         orderBy: { createdAt: 'asc' },
         take: 2,
         select: {
@@ -179,7 +196,7 @@ export async function getCurrentUser(): Promise<UserSession | null> {
     departmentName: dbUser.department.name,
     reportsToUserId: dbUser.reportsToUserId,
     permissions,
-    sessionId: session.sessionId,
+    sessionId: options.sessionId,
     organizationId: activeOrganization.organizationId,
     organizationName: activeOrganization.organization.name,
     planFeatures,

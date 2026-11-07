@@ -73,6 +73,85 @@ body {
   overflow-x: hidden;
 }
 
+/* Keyboard users should always have a predictable, high-visibility focus. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  inset-inline-start: 1rem;
+  top: -5rem;
+  z-index: 100;
+  border-radius: 0.75rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 800;
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.2);
+  transition: top 150ms ease;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+/* The user can increase text without changing individual component markup. */
+html.a11y-large-text { font-size: 112.5%; }
+html.a11y-xlarge-text { font-size: 125%; }
+
+html.a11y-high-contrast {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+  --muted-foreground: 0 0% 18%;
+  --border: 0 0% 18%;
+  --input: 0 0% 15%;
+  --ring: 0 0% 0%;
+}
+
+html.dark.a11y-high-contrast {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 5%;
+  --card-foreground: 0 0% 100%;
+  --muted-foreground: 0 0% 88%;
+  --border: 0 0% 85%;
+  --input: 0 0% 90%;
+  --ring: 0 0% 100%;
+}
+
+html.a11y-high-contrast :where(a, button, input, select, textarea, summary) {
+  border-color: currentColor;
+}
+
+html.a11y-underline-links :where(a):not([aria-hidden="true"]) {
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.12em;
+  text-underline-offset: 0.18em;
+}
+
+html.a11y-reduced-motion *,
+html.a11y-reduced-motion *::before,
+html.a11y-reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @media (max-width: 640px) {
   button, input, select, textarea { min-height: 2.5rem; }
 }
@@ -80,6 +159,22 @@ body {
 [dir="ltr"] body {
   font-family: var(--font-inter), var(--font-arabic), sans-serif;
 }
+
+.crm-document-editor .ProseMirror {
+  min-height: 28rem;
+  outline: none;
+  line-height: 1.8;
+  color: hsl(var(--foreground));
+}
+.crm-document-editor .ProseMirror > * + * { margin-top: 0.75rem; }
+.crm-document-editor .ProseMirror h1 { font-size: 2rem; line-height: 1.2; font-weight: 800; }
+.crm-document-editor .ProseMirror h2 { font-size: 1.5rem; line-height: 1.3; font-weight: 800; }
+.crm-document-editor .ProseMirror h3 { font-size: 1.2rem; line-height: 1.4; font-weight: 800; }
+.crm-document-editor .ProseMirror ul { list-style: disc; padding-inline-start: 1.5rem; }
+.crm-document-editor .ProseMirror ol { list-style: decimal; padding-inline-start: 1.5rem; }
+.crm-document-editor .ProseMirror blockquote { border-inline-start: 3px solid hsl(var(--primary)); padding-inline-start: 1rem; color: hsl(var(--muted-foreground)); }
+.crm-document-editor .ProseMirror a { color: hsl(var(--primary)); text-decoration: underline; }
+.crm-document-editor .ProseMirror p.is-editor-empty:first-child::before { color: hsl(var(--muted-foreground)); content: attr(data-placeholder); float: inline-start; height: 0; pointer-events: none; }
 
 /* Custom Sticky Note Shadows */
 .sticky-note-shadow {

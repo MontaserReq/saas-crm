@@ -309,7 +309,7 @@ function buildPrintableHtml(parts: PrintableHtmlParts): string {
 </head>
 <body>
   <header class="head">
-    <div class="brand">CODELINE</div>
+    <div class="brand">SATRCRM</div>
     <h1>${escapeHtml(title)}</h1>
     <div class="meta">
       <span><b>${escapeHtml(labels.generatedAt)}:</b> ${escapeHtml(stamp)}</span>

@@ -5,7 +5,7 @@ import { requireOrganizationId } from '@/lib/auth/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import prisma from '@/lib/db/prisma';
 
-export const NOTIFICATION_EMAIL_CATEGORIES = ['TICKET_ASSIGNED', 'TICKET_TRANSFERRED', 'NEW_MESSAGE', 'MENTION', 'WORKFLOW', 'SCHOOL_APPROVAL_REQUESTED'] as const;
+export const NOTIFICATION_EMAIL_CATEGORIES = ['TICKET_ASSIGNED', 'TICKET_TRANSFERRED', 'NEW_MESSAGE', 'MENTION', 'WORKFLOW', 'SCHOOL_APPROVAL_REQUESTED', 'CALENDAR_EVENT_ASSIGNED'] as const;
 
 export async function updateNotificationPreferencesAction(input: { inAppEnabled: boolean; emailEnabled: boolean; categories: Record<string, boolean> }) {
   try {

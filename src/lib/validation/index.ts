@@ -181,7 +181,7 @@ export const userUpdateSchema = z.object({
   departmentId: z.string().min(1, 'Department is required'),
   isActive: z.boolean().default(true),
   accessMode: z.enum(['ANY_IP', 'RESTRICTED_IPS']).default('ANY_IP'),
-  allowedIps: z.array(z.string().ip()).default([]),
+  allowedIps: z.array(z.union([z.ipv4(), z.ipv6()])).default([]),
   reportsToUserId: z.string().optional().nullable(),
   directPermissionIds: z.array(z.string()).optional(),
 });

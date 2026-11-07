@@ -6,6 +6,8 @@ import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import { getCurrentUser } from '@/lib/auth/session';
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
+import { AccessibilityControls } from '@/components/accessibility/AccessibilityControls';
+import { ClientErrorReporter } from '@/components/monitoring/ClientErrorReporter';
 
 const SITE_URL = 'https://satrcrm.com';
 
@@ -74,8 +76,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           enableSystem
         >
           <I18nProvider key={preferenceScope} preferenceScope={preferenceScope}>
+            <ClientErrorReporter />
             <GoogleAnalytics measurementId={process.env.GA_MEASUREMENT_ID} />
-            <DialogProvider>{children}</DialogProvider>
+            <a href="#main-content" className="skip-link">{locale === 'ar' ? 'انتقل إلى المحتوى الرئيسي' : 'Skip to main content'}</a>
+            <DialogProvider>
+              {children}
+              <AccessibilityControls />
+            </DialogProvider>
           </I18nProvider>
         </ThemeProvider>
       </body>

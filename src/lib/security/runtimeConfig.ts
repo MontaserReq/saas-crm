@@ -7,7 +7,8 @@ function parseOrigin(raw: string | undefined, requireHttps: boolean): string | n
   try {
     const url = new URL(raw.trim());
     if (!['http:', 'https:'].includes(url.protocol)) return null;
-    if (requireHttps && url.protocol !== 'https:') return null;
+    const localDevelopmentOrigin = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (requireHttps && url.protocol !== 'https:' && !localDevelopmentOrigin) return null;
     if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
     return url.origin;
   } catch {

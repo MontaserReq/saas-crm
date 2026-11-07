@@ -12,6 +12,7 @@ const labels: Record<string, [string, string]> = {
   MENTION: ["Mentions", "الإشارات"],
   WORKFLOW: ["Workflow notifications", "إشعارات سير العمل"],
   SCHOOL_APPROVAL_REQUESTED: ["Approval requests", "طلبات الموافقة"],
+  CALENDAR_EVENT_ASSIGNED: ["Calendar events", "مواعيد التقويم"],
 };
 
 export function NotificationPreferencesCard({ initial }: { initial: { inAppEnabled: boolean; emailEnabled: boolean; categories: Record<string, boolean> } }) {

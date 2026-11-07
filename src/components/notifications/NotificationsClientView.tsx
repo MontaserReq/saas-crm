@@ -81,6 +81,15 @@ export function NotificationsClientView({ notifications }: NotificationsClientVi
                   {t('notifications.viewMessage')}
                 </Link>
               )}
+
+              {n.entityType === 'calendarEvent' && n.entityId && (
+                <Link
+                  href="/calendar"
+                  className="shrink-0 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-600 transition-colors hover:bg-brand-100 dark:bg-brand-950/60 dark:text-brand-300 dark:hover:bg-brand-900/60"
+                >
+                  {language === 'ar' ? 'عرض الموعد' : 'View event'}
+                </Link>
+              )}
             </div>
           ))
         )}

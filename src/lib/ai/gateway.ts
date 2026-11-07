@@ -5,6 +5,7 @@ import prisma from '@/lib/db/prisma';
 import { sanitizeErrorMessage } from './usage';
 import { safeProviderEndpoint } from '@/lib/security/url';
 import { readLimitedJson, readLimitedResponseText } from '@/lib/security/external';
+import { assertOrganizationAiRequestAllowed } from './organizationPolicy';
 
 export type AiGatewayRole = 'system' | 'user' | 'assistant';
 export type AiGatewayMessage = { role: AiGatewayRole; content: string };
@@ -23,6 +24,8 @@ export type AiGatewayRequest = {
   userId?: string;
   tools?: AiGatewayTool[];
   toolChoice?: 'auto' | 'none' | 'required';
+  /** Ask a native web-search-capable provider to ground the response. */
+  webSearch?: boolean;
 };
 
 export type AiGatewayResponse = {
@@ -178,7 +181,7 @@ async function generateOpenAICompatible(provider: AiResearchProviderConfig, requ
       model: request.model || provider.model,
       messages: providerMessages(request.messages),
       temperature: request.temperature ?? provider.temperature ?? 0.2,
-      max_tokens: request.maxOutputTokens || provider.maxOutputTokens || 4096,
+      ...(provider.kind === 'groq' ? { max_completion_tokens: request.maxOutputTokens || provider.maxOutputTokens || 4096 } : { max_tokens: request.maxOutputTokens || provider.maxOutputTokens || 4096 }),
       ...(request.tools?.length ? { tools: openAiTools(request), tool_choice: request.toolChoice || 'auto' } : {}),
     }),
   }, timeoutFor(provider));
@@ -226,10 +229,14 @@ async function generateGemini(provider: AiResearchProviderConfig, request: AiGat
   const system = request.messages.filter((message) => message.role === 'system').map((message) => message.content).join('\n');
   const contents = request.messages.filter((message) => message.role !== 'system').map((message) => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text: message.content }] }));
   const base = providerBaseUrl(provider);
+  const tools = [
+    ...(geminiTools(request) || []),
+    ...(request.webSearch ? [{ google_search: {} }] : []),
+  ];
   const response = await requestWithTimeout(`${base}/${encodeURIComponent(request.model || provider.model)}:generateContent?key=${encodeURIComponent(provider.apiKey || '')}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(provider.customHeaders || {}) },
-    body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents, ...(geminiTools(request) ? { tools: geminiTools(request) } : {}), generationConfig: { temperature: request.temperature ?? provider.temperature ?? 0.2, maxOutputTokens: request.maxOutputTokens || provider.maxOutputTokens || 4096 } }),
+    body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents, ...(tools.length ? { tools } : {}), generationConfig: { temperature: request.temperature ?? provider.temperature ?? 0.2, maxOutputTokens: request.maxOutputTokens || provider.maxOutputTokens || 4096 } }),
   }, timeoutFor(provider));
   if (!response.ok) return responseError(response, provider.name);
   const payload: any = await readLimitedJson(response);
@@ -283,6 +290,9 @@ function selectProvider(settings: Awaited<ReturnType<typeof getAiResearchPlatfor
 }
 
 async function generateForProvider(provider: AiResearchProviderConfig, request: AiGatewayRequest) {
+  if (request.webSearch && !['gemini', 'groq'].includes(provider.kind)) {
+    throw new AiNotConfiguredError(`Provider "${provider.name}" does not support native web search. Configure Gemini or Groq for Smart Lead Discovery.`);
+  }
   if (provider.kind === 'gemini') return generateGemini(provider, request);
   if (provider.kind === 'anthropic') return generateAnthropic(provider, request);
   if (provider.kind === 'openai-responses') return generateResponses(provider, request);
@@ -435,6 +445,7 @@ export class UniversalAiGateway {
   }
 
   static async generate(request: AiGatewayRequest): Promise<AiGatewayResponse> {
+    if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
     const startedAt = performance.now();
     const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
@@ -474,6 +485,7 @@ export class UniversalAiGateway {
   }
 
   static async *stream(request: AiGatewayRequest): AsyncGenerator<AiGatewayStreamChunk> {
+    if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
     const startedAt = performance.now();
     const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);
@@ -502,6 +514,7 @@ export class UniversalAiGateway {
   }
 
   static async getEmbeddings(request: AiEmbeddingRequest): Promise<AiEmbeddingResponse> {
+    if (request.organizationId) await assertOrganizationAiRequestAllowed(request.organizationId);
     const startedAt = performance.now();
     const settings = await getAiResearchPlatformSettings(request.organizationId);
     const requestedProviderId = request.providerId || (request.purpose ? settings.featureProviderIds[request.purpose] : undefined);

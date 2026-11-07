@@ -2,15 +2,14 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import prisma from '@/lib/db/prisma';
 import { decryptSecret, isEmailProvider } from '@/lib/integrations/oauth';
-import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { rejectUntrustedMutation } from '@/lib/security/web';
 import { Prisma } from '@prisma/client';
-import { INTEGRATION_AUTHORIZATION_REVOKED, requireCurrentIntegrationAuthorization } from '@/lib/integrations/authorization';
+import { canManageIntegrations, canViewIntegrations, INTEGRATION_AUTHORIZATION_REVOKED, requireCurrentIntegrationAuthorization } from '@/lib/integrations/authorization';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ provider: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!user.organizationId || (!hasPermission(user, PERMISSIONS.EMAIL_INTEGRATIONS_VIEW) && !hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_VIEW))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!user.organizationId || !canViewIntegrations(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const provider = (await params).provider.toLowerCase();
   if (!isEmailProvider(provider)) return NextResponse.json({ error: 'Unsupported provider' }, { status: 400 });
   const integration = await prisma.externalIntegration.findUnique({
@@ -34,7 +33,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ p
   if (originError) return originError;
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!user.organizationId || (!hasPermission(user, PERMISSIONS.EMAIL_INTEGRATIONS_MANAGE) && !hasPermission(user, PERMISSIONS.ORGANIZATION_SETTINGS_MANAGE))) {
+  if (!user.organizationId || !canManageIntegrations(user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   const provider = (await params).provider.toLowerCase();

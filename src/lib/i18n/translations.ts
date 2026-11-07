@@ -3,9 +3,9 @@ export type Language = "en" | "ar";
 export const translations = {
   en: {
     app: {
-      title: "CodeLine JO",
+      title: "SatrCRM",
       subtitle: "CRM & Business Operations Platform",
-      copyright: "CodeLine JO © 2026. One workspace for growing teams.",
+      copyright: "SatrCRM © 2026. One workspace for growing teams.",
     },
     nav: {
       dashboard: "Dashboard",
@@ -1236,14 +1236,14 @@ export const translations = {
     proposals: {
       title: "Commercial Proposals",
       subtitle:
-        "Create, customize, and export professional PDF commercial proposals with CodeLine branding and customer logo.",
+        "Create, customize, and export professional PDF commercial proposals with SatrCRM branding and customer logo.",
       create: "Create Proposal",
       newProposal: "New Proposal",
       editProposal: "Edit Proposal",
       proposalDetails: "Proposal Details",
       proposalTitle: "Proposal Title / Subject",
       proposalTitlePlaceholder:
-        "e.g., CodeLine Smart System & Interactive Customer Portal Proposal",
+        "e.g., SatrCRM Smart System & Interactive Customer Portal Proposal",
       clientName: "Customer / Client Name",
       clientNamePlaceholder: "e.g., Al-Amal International Academy",
       contactPerson: "Contact Person / Principal",
@@ -1255,7 +1255,7 @@ export const translations = {
       selectSchool: "Link to Registered Customer (Optional)",
       schoolLogo: "Customer Logo (Optional)",
       uploadLogoHint:
-        "Upload customer logo (PNG, JPG, WebP - max 5MB). Will be placed side-by-side with CodeLine logo in PDF header.",
+        "Upload customer logo (PNG, JPG, WebP - max 5MB). Will be placed side-by-side with SatrCRM logo in PDF header.",
       changeLogo: "Change Logo",
       removeLogo: "Remove Logo",
       services: "Scope & Offered Services",
@@ -2526,7 +2526,7 @@ export const translations = {
       selectSchool: "ربط بعميل مسجلة (اختياري)",
       schoolLogo: "شعار العميل (اختياري)",
       uploadLogoHint:
-        "رفع شعار العميل (PNG, JPG, WebP - حد أقصى 5MB). سيظهر بجانب شعار CodeLine في ترويسة ملف الـ PDF.",
+        "رفع شعار العميل (PNG, JPG, WebP - حد أقصى 5MB). سيظهر بجانب شعار SatrCRM في ترويسة ملف الـ PDF.",
       changeLogo: "تغيير الشعار",
       removeLogo: "إزالة الشعار",
       services: "نطاق الخدمات والبنود المشمولة",

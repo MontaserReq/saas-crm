@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const policy = policyBySlug.get(slug);
   if (!policy) return {};
   return {
-    title: `${policy.title.en} | CodeLine CRM`,
+    title: `${policy.title.en} | SatrCRM`,
     description: policy.summary.en,
     robots: { index: false, follow: false },
   };

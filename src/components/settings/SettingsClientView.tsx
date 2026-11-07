@@ -7,19 +7,28 @@ import { useTheme } from "next-themes";
 import {
   Building2,
   CalendarDays,
+  ChevronLeft,
+  FileText,
+  FolderOpen,
   Globe,
   ImageIcon,
+  Link2,
+  Mail,
+  MapPin,
   Moon,
   Palette,
   Plus,
+  ReceiptText,
   Save,
   ShieldCheck,
   Settings,
   Sun,
   Trash2,
   Upload,
+  WalletCards,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useI18n } from "@/lib/i18n/context";
 import {
   archiveCustomFieldAction,
@@ -337,6 +346,24 @@ export function SettingsClientView({
       : null,
   );
   const [logoBusy, setLogoBusy] = useState(false);
+  const [invoiceShowLogo, setInvoiceShowLogo] = useState(
+    config.organization.invoiceShowLogo !== false,
+  );
+  const [invoiceShowCompanyDetails, setInvoiceShowCompanyDetails] = useState(
+    config.organization.invoiceShowCompanyDetails !== false,
+  );
+  const [invoiceShowTaxNumber, setInvoiceShowTaxNumber] = useState(
+    config.organization.invoiceShowTaxNumber !== false,
+  );
+  const [invoiceLegalName, setInvoiceLegalName] = useState(
+    config.organization.legalName || config.organization.name,
+  );
+  const [invoicePrefix, setInvoicePrefix] = useState(
+    config.organization.invoicePrefix || "INV",
+  );
+  const [invoiceTaxNumber, setInvoiceTaxNumber] = useState(
+    config.organization.taxNumber || "",
+  );
   const copy = (ar: string, en: string) => (arabic ? ar : en);
   const control =
     "mt-1.5 w-full rounded-xl border bg-white p-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:bg-slate-950";
@@ -523,6 +550,48 @@ export function SettingsClientView({
     showResult(
       result.success,
       copy("تم حفظ إعدادات المؤسسة.", "Organization settings saved."),
+      result.error,
+    );
+    if (result.success) router.refresh();
+    setSaving(false);
+  }
+
+  async function saveInvoiceIdentity(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const result = await updateOrganizationConfigurationAction({
+      legalName: String(data.legalName || ""),
+      taxNumber: String(data.taxNumber || ""),
+      invoicePrefix: String(data.invoicePrefix || "INV"),
+      invoiceFooter: String(data.invoiceFooter || ""),
+      paymentInstructions: String(data.paymentInstructions || ""),
+      invoiceShowLogo,
+      invoiceShowCompanyDetails,
+      invoiceShowTaxNumber,
+    });
+    showResult(
+      result.success,
+      copy("تم حفظ هوية الفواتير والعروض.", "Invoice and proposal identity saved."),
+      result.error,
+    );
+    if (result.success) router.refresh();
+    setSaving(false);
+  }
+
+  async function saveContactInfo(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const result = await updateOrganizationConfigurationAction({
+      contactEmail: String(data.contactEmail || ""),
+      contactPhone: String(data.contactPhone || ""),
+      website: String(data.website || ""),
+      address: String(data.address || ""),
+    });
+    showResult(
+      result.success,
+      copy("تم حفظ بيانات التواصل.", "Contact details saved."),
       result.error,
     );
     if (result.success) router.refresh();
@@ -768,6 +837,188 @@ export function SettingsClientView({
             : copy("حفظ إعدادات المؤسسة", "Save organization settings")}
         </button>
       </form>
+
+      <section className="overflow-hidden rounded-3xl border bg-white shadow-sm dark:bg-slate-900">
+        <div className="border-b bg-gradient-to-l from-brand-50 via-white to-white p-5 dark:border-slate-800 dark:from-brand-950/30 dark:via-slate-900 dark:to-slate-900 sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-700 dark:bg-brand-950/60 dark:text-brand-200">
+              <ReceiptText className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-lg font-black">
+                {copy("هوية الفواتير والعروض", "Invoice & proposal identity")}
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                {copy(
+                  "حدد كيف تظهر شركتك عند إنشاء الفواتير والعروض، مع معاينة واضحة قبل الحفظ.",
+                  "Control how your company appears on invoices and proposals, with a clear preview before saving.",
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <form onSubmit={saveInvoiceIdentity} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-bold">
+                {copy("الاسم الظاهر على المستند", "Document display name")}
+                <input
+                  name="legalName"
+                  value={invoiceLegalName}
+                  onChange={(event) => setInvoiceLegalName(event.target.value)}
+                  placeholder={config.organization.name}
+                  className={control}
+                />
+              </label>
+              <label className="text-sm font-bold">
+                {copy("الرقم الضريبي", "Tax number")}
+                <input
+                  name="taxNumber"
+                  value={invoiceTaxNumber}
+                  onChange={(event) => setInvoiceTaxNumber(event.target.value)}
+                  placeholder={copy("مثال: ٣٠٠٠١٢٣٤٥", "e.g. 300012345")}
+                  className={control}
+                />
+              </label>
+              <label className="text-sm font-bold sm:max-w-[220px]">
+                {copy("بادئة رقم الفاتورة", "Invoice number prefix")}
+                <input
+                  name="invoicePrefix"
+                  required
+                  maxLength={10}
+                  value={invoicePrefix}
+                  onChange={(event) => setInvoicePrefix(event.target.value.toUpperCase())}
+                  className={`${control} uppercase`}
+                />
+                <span className="mt-1 block text-xs font-normal text-slate-500">
+                  {copy("مثال: INV-0001", "Example: INV-0001")}
+                </span>
+              </label>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-bold">
+                {copy("ملاحظة أسفل الفاتورة", "Invoice footer note")}
+                <textarea
+                  name="invoiceFooter"
+                  defaultValue={config.organization.invoiceFooter || ""}
+                  rows={3}
+                  maxLength={500}
+                  placeholder={copy("شكرًا لتعاملكم معنا.", "Thank you for your business.")}
+                  className={control}
+                />
+              </label>
+              <label className="text-sm font-bold">
+                {copy("تعليمات الدفع", "Payment instructions")}
+                <textarea
+                  name="paymentInstructions"
+                  defaultValue={config.organization.paymentInstructions || ""}
+                  rows={3}
+                  maxLength={1000}
+                  placeholder={copy("تحول الدفعات إلى الحساب البنكي الموضح.", "Please use the bank details provided for payment.")}
+                  className={control}
+                />
+              </label>
+            </div>
+            <div className="grid gap-2 rounded-2xl border bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-950/40 sm:grid-cols-3">
+              {[
+                [invoiceShowLogo, setInvoiceShowLogo, copy("إظهار الشعار", "Show logo")],
+                [invoiceShowCompanyDetails, setInvoiceShowCompanyDetails, copy("إظهار بيانات الشركة", "Show company details")],
+                [invoiceShowTaxNumber, setInvoiceShowTaxNumber, copy("إظهار الرقم الضريبي", "Show tax number")],
+              ].map(([checked, setter, labelText]) => (
+                <label key={String(labelText)} className="flex cursor-pointer items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold hover:bg-white dark:hover:bg-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(checked)}
+                    onChange={(event) => (setter as React.Dispatch<React.SetStateAction<boolean>>)(event.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  {labelText as string}
+                </label>
+              ))}
+            </div>
+            <button
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? copy("جاري الحفظ...", "Saving...") : copy("حفظ هوية المستندات", "Save document identity")}
+            </button>
+          </form>
+
+          <div className="rounded-2xl border bg-slate-100/80 p-3 dark:border-slate-800 dark:bg-slate-950/60">
+            <div className="mb-2 flex items-center justify-between px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              <span>{copy("معاينة", "Preview")}</span>
+              <span>{invoicePrefix || "INV"}-0001</span>
+            </div>
+            <div className="min-h-[292px] rounded-xl bg-white p-4 shadow-sm dark:bg-slate-900">
+              <div className="flex items-start justify-between gap-3 border-b pb-4 dark:border-slate-700">
+                {invoiceShowLogo && (logoPreview || logoUrl) ? (
+                  <Image src={logoPreview || logoUrl!} alt="" width={92} height={42} unoptimized className="h-9 w-20 object-contain object-start" />
+                ) : (
+                  <div className="h-9 w-20 rounded-lg" style={{ backgroundColor: primaryColor }} />
+                )}
+                <div className="text-end">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{copy("فاتورة", "Invoice")}</p>
+                  <p className="mt-1 text-xs font-black" style={{ color: primaryColor }}>{invoicePrefix || "INV"}-0001</p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-1">
+                <p className="text-sm font-black">{invoiceLegalName || config.organization.name}</p>
+                {invoiceShowTaxNumber && invoiceTaxNumber && <p className="text-[10px] text-slate-500">{copy("الرقم الضريبي", "Tax number")}: {invoiceTaxNumber}</p>}
+                {invoiceShowCompanyDetails && <p className="text-[10px] text-slate-500">{config.organization.contactEmail || config.organization.contactPhone || copy("بيانات التواصل", "Contact details")}</p>}
+              </div>
+              <div className="mt-5 space-y-2">
+                {["استشارة وتخطيط", "تنفيذ المشروع"].map((item, index) => (
+                  <div key={item} className="flex items-center justify-between border-b border-dashed py-1.5 text-[10px] dark:border-slate-700">
+                    <span className="text-slate-500">{arabic ? item : index === 0 ? "Consulting & planning" : "Project delivery"}</span>
+                    <span className="font-bold">{index === 0 ? "150.00" : "850.00"} {config.organization.currency}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-black text-white" style={{ backgroundColor: primaryColor }}>
+                <span>{copy("الإجمالي", "Total")}</span><span>1,000.00 {config.organization.currency}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+        <form onSubmit={saveContactInfo} className="space-y-5 rounded-3xl border bg-white p-5 shadow-sm dark:bg-slate-900 sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"><Building2 className="h-5 w-5" /></span>
+            <div>
+              <h2 className="text-lg font-bold">{copy("بيانات التواصل والشركة", "Company & contact details")}</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{copy("تظهر هذه البيانات في الفواتير ومراسلات العملاء.", "These details appear on invoices and customer communications.")}</p>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-bold"><span className="flex items-center gap-1.5"><Mail className="h-4 w-4 text-brand-600" />{copy("البريد الإلكتروني", "Email")}</span><input name="contactEmail" type="email" defaultValue={config.organization.contactEmail || ""} className={control} /></label>
+            <label className="text-sm font-bold"><span className="flex items-center gap-1.5"><WalletCards className="h-4 w-4 text-brand-600" />{copy("رقم الهاتف", "Phone")}</span><input name="contactPhone" defaultValue={config.organization.contactPhone || ""} className={control} /></label>
+            <label className="text-sm font-bold sm:col-span-2"><span className="flex items-center gap-1.5"><Link2 className="h-4 w-4 text-brand-600" />{copy("الموقع الإلكتروني", "Website")}</span><input name="website" type="url" placeholder="https://" defaultValue={config.organization.website || ""} className={control} /></label>
+            <label className="text-sm font-bold sm:col-span-2"><span className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-brand-600" />{copy("العنوان", "Address")}</span><textarea name="address" rows={2} defaultValue={config.organization.address || ""} className={control} /></label>
+          </div>
+          <button disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60"><Save className="h-4 w-4" />{saving ? copy("جاري الحفظ...", "Saving...") : copy("حفظ بيانات التواصل", "Save contact details")}</button>
+        </form>
+
+        <section className="rounded-3xl border bg-white p-5 shadow-sm dark:bg-slate-900 sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200"><FolderOpen className="h-5 w-5" /></span>
+            <div>
+              <h2 className="text-lg font-bold">{copy("الملفات والمستندات", "Files & documents")}</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{copy("نظّم ملفات الشركة وقوالب العروض من مكان واحد.", "Keep company files and proposal templates organized in one place.")}</p>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            <Link href="/documents" className="group flex items-center justify-between rounded-2xl border p-4 transition hover:border-brand-300 hover:bg-brand-50/60 dark:hover:border-brand-700 dark:hover:bg-brand-950/20">
+              <span className="flex items-center gap-3"><span className="rounded-xl bg-brand-50 p-2.5 text-brand-700 dark:bg-brand-950/50 dark:text-brand-200"><FileText className="h-4 w-4" /></span><span><b className="block text-sm">{copy("مستندات مساحة العمل", "Workspace documents")}</b><small className="mt-0.5 block text-xs text-slate-500">{copy("ملاحظات وإجراءات وملفات الفريق", "Notes, playbooks, and team files")}</small></span></span><ChevronLeft className="h-4 w-4 text-slate-400 transition group-hover:-translate-x-1" />
+            </Link>
+            <Link href="/proposals" className="group flex items-center justify-between rounded-2xl border p-4 transition hover:border-brand-300 hover:bg-brand-50/60 dark:hover:border-brand-700 dark:hover:bg-brand-950/20">
+              <span className="flex items-center gap-3"><span className="rounded-xl bg-amber-50 p-2.5 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200"><ReceiptText className="h-4 w-4" /></span><span><b className="block text-sm">{copy("قوالب العروض", "Proposal templates")}</b><small className="mt-0.5 block text-xs text-slate-500">{copy("ملفات PDF جاهزة بهوية الشركة", "PDF templates with your company identity")}</small></span></span><ChevronLeft className="h-4 w-4 text-slate-400 transition group-hover:-translate-x-1" />
+            </Link>
+          </div>
+        </section>
+      </div>
 
       <section className="space-y-5 rounded-3xl border bg-white p-5 shadow-sm dark:bg-slate-900 sm:p-6">
         <h2 className="flex items-center gap-2 text-lg font-bold">

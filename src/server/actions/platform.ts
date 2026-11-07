@@ -8,7 +8,6 @@ import { platformResources } from '@/lib/platform/types';
 import { assertPlatformResourceMutationAllowed } from '@/lib/platform/access';
 import { PlatformAdminService } from '@/server/services/PlatformAdminService';
 import { UniversalAiGateway } from '@/lib/ai/gateway';
-import { SearchGateway } from '@/lib/search';
 
 function errorMessage(error: unknown): string {
   if (error instanceof z.ZodError) return error.issues[0]?.message || 'Invalid form';
@@ -54,17 +53,6 @@ export async function saveAiResearchSettingsAction(input: unknown) {
   }
 }
 
-export async function saveSearchProviderSettingsAction(input: unknown) {
-  try {
-    const user = await requireAuth();
-    const result = await PlatformAdminService.saveSearchProviderSettings(user, input);
-    refresh();
-    return { success: true as const, settings: result };
-  } catch (error) {
-    return { success: false as const, error: errorMessage(error) };
-  }
-}
-
 export async function testAiProviderAction(providerId: string) {
   try {
     const user = await requireAuth();
@@ -91,14 +79,6 @@ export async function discoverAiProviderModelsAction(providerId: string) {
   } catch (error) { return { success: false as const, error: errorMessage(error) }; }
 }
 
-export async function testSearchProviderAction(providerId: string) {
-  try {
-    const user = await requireAuth();
-    await PlatformAdminService.getSearchProviderSettings(user);
-    return { success: true as const, ...(await SearchGateway.testProvider(providerId)) };
-  } catch (error) { return { success: false as const, error: errorMessage(error) }; }
-}
-
 export async function activateOrganizationTrialAction(input: unknown) {
   try {
     const user = await requireAuth();
@@ -107,6 +87,17 @@ export async function activateOrganizationTrialAction(input: unknown) {
     if (typeof input === 'object' && input !== null && 'organizationId' in input && typeof input.organizationId === 'string') {
       revalidatePath(`/admin/platform/organizations/${input.organizationId}`);
     }
+    return { success: true as const, ...result };
+  } catch (error) {
+    return { success: false as const, error: errorMessage(error) };
+  }
+}
+
+export async function setIntegrationPolicyAction(input: unknown) {
+  try {
+    const user = await requireAuth();
+    const result = await PlatformAdminService.setIntegrationPolicy(user, input);
+    refresh();
     return { success: true as const, ...result };
   } catch (error) {
     return { success: false as const, error: errorMessage(error) };

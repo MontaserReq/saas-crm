@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpRight, Check, FileSliders, GitBranch, ListTodo, Search, ShieldCheck, UsersRound } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Check, FileSliders, GitBranch, ListTodo, PlugZap, Search, ShieldCheck, UsersRound } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/context';
 import { APP_URL, MarketingShell, FinalCta, MarketingFaq } from './MarketingShell';
 import { PricingSection } from './PricingSection';
@@ -23,7 +23,7 @@ export default function LandingPage({ plans }: { plans: PlanConfig[] }) {
         '@type': 'Organization',
         '@id': 'https://satrcrm.com/#organization',
         name: 'SatrCRM',
-        alternateName: 'CodeLine CRM',
+        alternateName: 'SatrCRM',
         url: 'https://satrcrm.com/',
         logo: {
           '@type': 'ImageObject',
@@ -43,7 +43,7 @@ export default function LandingPage({ plans }: { plans: PlanConfig[] }) {
       {
         '@type': 'SoftwareApplication',
         name: 'SatrCRM',
-        alternateName: language === 'ar' ? 'منصة ساتر CRM' : 'CodeLine CRM',
+        alternateName: language === 'ar' ? 'منصة SatrCRM' : 'SatrCRM',
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web',
         url: siteUrl,
@@ -84,6 +84,32 @@ export default function LandingPage({ plans }: { plans: PlanConfig[] }) {
         <ProductPreview />
       </div>
       <div className={`${s.container} ${s.heroFoot}`}><span>{t.builtFor}</span><div>{t.audiences.map(label => <span key={label}>{label}</span>)}</div></div>
+    </section>
+    <section className={s.mcpSection} aria-labelledby="mcp-title">
+      <div className={`${s.container} ${s.mcpGrid}`}>
+        <div className={s.mcpCopy}>
+          <span className={s.sectionLabel}><PlugZap aria-hidden="true" />{t.mcpLabel}</span>
+          <h2 id="mcp-title">{t.mcpTitle}</h2>
+          <p className={s.bodyLead}>{t.mcpLead}</p>
+          <div className={s.mcpProof}><span><Check aria-hidden="true" />{t.mcpNote}</span><span><ShieldCheck aria-hidden="true" />{t.mcpSecurity}</span></div>
+        </div>
+        <div className={s.mcpDiagram} aria-label={t.mcpFlowCaption}>
+          <div className={s.mcpDiagramTop}><span>{t.mcpFlowCaption}</span><span className={s.mcpLive}><i />{t.mcpLive}</span></div>
+          <div className={s.mcpNetwork}>
+            <div className={s.mcpSourceColumn}>
+              <div className={s.mcpSourceCard}><span className={s.mcpSourceIcon}>CRM</span><div><strong>{t.mcpSource}</strong><small>{t.mcpSourceDetail}</small></div></div>
+              <div className={s.mcpFlowLine}><i /><i /><i /></div>
+            </div>
+            <div className={s.mcpCore}><span className={s.mcpCoreMark}>S</span><strong>SatrCRM</strong><small>MCP Server</small><span className={s.mcpCoreStatus}><i />{t.mcpServerDetail}</span></div>
+            <div className={s.mcpClientsColumn}>
+              <div className={s.mcpClientCard}><span className={`${s.mcpBrandMark} ${s.mcpChatgpt}`}>✦</span><div><strong>ChatGPT</strong><small>{t.mcpClientDetail}</small></div></div>
+              <div className={s.mcpClientCard}><span className={`${s.mcpBrandMark} ${s.mcpClaude}`}>✺</span><div><strong>Claude</strong><small>{t.mcpClientDetail}</small></div></div>
+              <div className={s.mcpClientCard}><span className={`${s.mcpBrandMark} ${s.mcpGroq}`}>G</span><div><strong>Groq</strong><small>{t.mcpClientDetail}</small></div></div>
+            </div>
+          </div>
+          <div className={s.mcpDiagramFooter}><span>{t.mcpTransfer}</span><ArrowRight aria-hidden="true" /><span>{t.mcpServer}</span></div>
+        </div>
+      </div>
     </section>
     <section className={`${s.container} ${s.section}`} aria-labelledby="benefits-title">
       <div className={s.sectionHeading}><h2 id="benefits-title">{t.benefitTitle}</h2><p>{t.benefitLead}</p></div>

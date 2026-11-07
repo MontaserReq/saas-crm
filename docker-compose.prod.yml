@@ -55,9 +55,9 @@ services:
 
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
+      SMTP_USER: ${SMTP_USER:-tech@codelinejo.com}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_FROM: ${EMAIL_FROM:-tech@codelinejo.com}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-}
 
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
@@ -123,6 +123,36 @@ services:
     networks:
       - codeline_internal
 
+  monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: monitor
+
+    restart: unless-stopped
+
+    environment:
+      NODE_ENV: production
+      MONITOR_URLS: ${MONITOR_URLS:-https://satrcrm.com/api/health,https://satrcrm.com/,https://app.satrcrm.com/}
+      MONITOR_INTERVAL_SECONDS: ${MONITOR_INTERVAL_SECONDS:-60}
+      MONITOR_TIMEOUT_MS: ${MONITOR_TIMEOUT_MS:-10000}
+      MONITOR_FAILURE_THRESHOLD: ${MONITOR_FAILURE_THRESHOLD:-1}
+      MONITOR_RECOVERY_THRESHOLD: ${MONITOR_RECOVERY_THRESHOLD:-1}
+      MONITOR_STATE_FILE: /var/lib/satrcrm-monitor/state.json
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-tech@codelinejo.com}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-SatrCRM Monitoring}
+
+    volumes:
+      - monitoring_state:/var/lib/satrcrm-monitor
+
+    networks:
+      - codeline_internal
+
   migrator:
     build:
       context: .
@@ -145,6 +175,7 @@ services:
 volumes:
   postgres_data:
   uploads_data:
+  monitoring_state:
 
 networks:
   codeline_internal:

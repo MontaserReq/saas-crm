@@ -6,8 +6,8 @@ import { OnboardingService } from '@/server/services/OnboardingService';
 import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
-  title: 'ابدأ تجربتك | CodeLine JO',
-  description: 'جهّز مساحة عمل CodeLine خلال دقائق.',
+  title: 'ابدأ تجربتك | SatrCRM',
+  description: 'جهّز مساحة عمل SatrCRM خلال دقائق.',
 };
 
 export default async function OnboardingPage() {

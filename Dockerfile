@@ -31,6 +31,15 @@ RUN npx prisma generate
 CMD ["npm", "test", "--", "--maxWorkers=1", "--no-file-parallelism"]
 
 
+FROM deps AS monitor
+
+ENV NODE_ENV=production
+
+COPY scripts/uptime-monitor.mjs ./scripts/uptime-monitor.mjs
+
+CMD ["node", "scripts/uptime-monitor.mjs"]
+
+
 FROM base AS builder
 
 ENV NODE_ENV=production

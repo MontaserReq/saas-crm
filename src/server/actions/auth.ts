@@ -13,7 +13,7 @@ import { getRequestContext, parseAllowedIps } from '@/lib/security/request';
 import { checkRateLimit, consumeRateLimit, peekRateLimit, RATE_LIMIT_POLICY_CONFIG } from '@/lib/security/rateLimiter';
 import { initialSetup, readSetupState } from '@/lib/onboarding/templates';
 import { WORKSPACE_OWNER_PERMISSIONS } from '@/lib/onboarding/permissions';
-import { expandPlanFeatures, TRIAL_DURATION_MS } from '@/lib/platform/entitlements';
+import { expandPlanFeaturesForPlan, TRIAL_DURATION_MS } from '@/lib/platform/entitlements';
 
 const RESET_TTL_MS = 3 * 60 * 1000;
 const RESET_GENERIC_MESSAGE = 'If an account exists for this email address, a password reset link will be sent.';
@@ -371,7 +371,7 @@ export async function registerOrganizationAction(input: { workspace: string; nam
     await prisma.loginSession.create({ data: { id: sessionId, userId: created.user.id, ipAddress: request.ipAddress, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } });
     const signupSubscription = await prisma.platformSubscription.findUniqueOrThrow({ where: { organizationId: created.organization.id }, include: { plan: true } });
     const directPermissions = await prisma.userPermission.findMany({ where: { userId: created.user.id }, select: { permission: { select: { code: true } } } });
-    await createSession({ id: created.user.id, name: created.user.name, email: created.user.email, role: 'SUPER_ADMIN', isPlatformAdmin: false, roleDisplayName: role.displayName, departmentId: created.department.id, departmentName: created.department.name, reportsToUserId: null, permissions: [...new Set([...role.rolePermissions.map(item => item.permission.code), ...directPermissions.map(item => item.permission.code)])], sessionId, organizationId: created.organization.id, organizationName: created.organization.name, planFeatures: expandPlanFeatures(signupSubscription.plan.features), planName: signupSubscription.plan.name, planSlug: signupSubscription.plan.slug, workspaceAccessState: 'ACTIVE_TRIAL', workspaceReadOnly: false, subscriptionStartsAt: signupSubscription.startsAt.toISOString(), subscriptionEndsAt: signupSubscription.endsAt?.toISOString() ?? null });
+    await createSession({ id: created.user.id, name: created.user.name, email: created.user.email, role: 'SUPER_ADMIN', isPlatformAdmin: false, roleDisplayName: role.displayName, departmentId: created.department.id, departmentName: created.department.name, reportsToUserId: null, permissions: [...new Set([...role.rolePermissions.map(item => item.permission.code), ...directPermissions.map(item => item.permission.code)])], sessionId, organizationId: created.organization.id, organizationName: created.organization.name, planFeatures: expandPlanFeaturesForPlan(signupSubscription.plan.slug, signupSubscription.plan.features), planName: signupSubscription.plan.name, planSlug: signupSubscription.plan.slug, workspaceAccessState: 'ACTIVE_TRIAL', workspaceReadOnly: false, subscriptionStartsAt: signupSubscription.startsAt.toISOString(), subscriptionEndsAt: signupSubscription.endsAt?.toISOString() ?? null });
     await AuditService.logAudit({ actorId: created.user.id, organizationId: created.organization.id, action: 'ORGANIZATION_SIGNUP', entityType: 'Organization', entityId: created.organization.id, metadata: { version: 1 } });
     if (newlyCreated) {
       // Retain the existing platform signup notification, with explicit platform authority.

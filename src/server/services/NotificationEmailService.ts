@@ -54,7 +54,11 @@ export class NotificationEmailService {
     });
     if (claimed.count !== 1) return;
 
-    const link = notification.entityId ? `${appUrl()}/${notification.entityType === 'ticket' ? 'tickets' : 'notifications'}/${encodeURIComponent(notification.entityId)}` : `${appUrl()}/notifications`;
+    const link = notification.entityId
+      ? notification.entityType === 'calendarEvent'
+        ? `${appUrl()}/calendar`
+        : `${appUrl()}/${notification.entityType === 'ticket' ? 'tickets' : notification.entityType === 'message' ? 'messages' : 'notifications'}/${encodeURIComponent(notification.entityId)}`
+      : `${appUrl()}/notifications`;
     try {
       await sendTransactionalEmail({
         to: notification.user.email,

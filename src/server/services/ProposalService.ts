@@ -461,6 +461,26 @@ export class ProposalService {
     try {
       await assertOperationOwner(execution.execution.id, ownerToken);
       let finalPdfBuffer: Buffer;
+      let companyLogoBuffer: Buffer | null = null;
+      let companyLogoMime = 'image/png';
+
+      const organization = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { logoKey: true, logoProvider: true },
+      });
+      if (organization?.logoKey) {
+        try {
+          const logoStorage = getStorageProvider(organization.logoProvider as any);
+          companyLogoBuffer = await logoStorage.download(organization.logoKey);
+          if (organization.logoKey.endsWith('.jpg') || organization.logoKey.endsWith('.jpeg')) {
+            companyLogoMime = 'image/jpeg';
+          } else if (organization.logoKey.endsWith('.webp')) {
+            companyLogoMime = 'image/webp';
+          }
+        } catch {
+          console.warn('Could not load organization logo for proposal');
+        }
+      }
 
     if (proposal.template) {
       // 1. Fetch template PDF
@@ -497,6 +517,8 @@ export class ProposalService {
         templateConfig,
         schoolLogoBuffer,
         schoolLogoMimeType: schoolLogoMime,
+        codeLineLogoBuffer: companyLogoBuffer,
+        codeLineLogoMimeType: companyLogoMime,
         dynamicValues: {
           clientName: proposal.clientName,
           contactPerson: proposal.contactPerson || undefined,

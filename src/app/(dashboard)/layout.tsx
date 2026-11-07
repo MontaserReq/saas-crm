@@ -138,7 +138,7 @@ export default async function DashboardLayout({
           {/* Main content */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             <Navbar user={user} notifications={notifications as any} />
-            <main className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto max-w-7xl w-full mx-auto">
+            <main id="main-content" tabIndex={-1} className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto max-w-7xl w-full mx-auto">
               <DashboardBreadcrumbs />
               {user.role === "SUPER_ADMIN" && <TrialAccessBanner
                 state={user.workspaceAccessState}
@@ -147,6 +147,7 @@ export default async function DashboardLayout({
               <PlanRouteGuard
                 features={user.planFeatures ?? null}
                 bypassPlanGuard={user.isPlatformAdmin || user.role === "SUPER_ADMIN"}
+                strictFeatures={user.isPlatformAdmin ? [] : ["ai_research"]}
               >
                 {children}
               </PlanRouteGuard>
