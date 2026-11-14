@@ -77,7 +77,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           <I18nProvider key={preferenceScope} preferenceScope={preferenceScope}>
             <ClientErrorReporter />
-            <GoogleAnalytics measurementId={process.env.GA_MEASUREMENT_ID} />
+            <GoogleAnalytics
+              measurementId={process.env.GA_MEASUREMENT_ID}
+              clarityProjectId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID}
+            />
             <a href="#main-content" className="skip-link">{locale === 'ar' ? 'انتقل إلى المحتوى الرئيسي' : 'Skip to main content'}</a>
             <DialogProvider>
               {children}

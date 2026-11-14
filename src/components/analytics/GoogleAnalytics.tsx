@@ -13,17 +13,19 @@ function isValidMeasurementId(value: string) {
   return /^G-[A-Z0-9-]+$/i.test(value);
 }
 
-export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
+export function GoogleAnalytics({ measurementId, clarityProjectId }: { measurementId?: string; clarityProjectId?: string }) {
   const pathname = usePathname();
   const { language } = useI18n();
   const [consent, setConsent] = useState<ConsentState>('unknown');
   const [mounted, setMounted] = useState(false);
 
   const id = measurementId?.trim() ?? '';
-  const enabled = isValidMeasurementId(id);
+  const clarityId = clarityProjectId?.trim() ?? '';
+  const clarityEnabled = /^[A-Za-z0-9_-]+$/.test(clarityId);
+  const analyticsEnabled = isValidMeasurementId(id) || clarityEnabled;
 
   useEffect(() => {
-    if (!enabled) {
+    if (!analyticsEnabled) {
       setMounted(true);
       return;
     }
@@ -38,15 +40,15 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
       // If storage is blocked, the banner remains available for this visit.
     }
     setMounted(true);
-  }, [enabled]);
+  }, [analyticsEnabled]);
 
   useEffect(() => {
-    if (enabled && consent === 'granted') {
+    if (isValidMeasurementId(id) && consent === 'granted') {
       trackAnalyticsPageView(pathname);
     }
-  }, [consent, enabled, pathname]);
+  }, [consent, id, pathname]);
 
-  if (!enabled) return null;
+  if (!analyticsEnabled) return null;
 
   const chooseConsent = (next: Exclude<ConsentState, 'unknown'>) => {
     try {
@@ -76,24 +78,45 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
     <>
       {consent === 'granted' ? (
         <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`}
-            strategy="afterInteractive"
-          />
-          <Script id="satrcrm-google-analytics" strategy="afterInteractive">
-            {`
-              window.dataLayer = window.dataLayer || [];
-              window.gtag = function(){window.dataLayer.push(arguments);};
-              window.gtag('js', new Date());
-              window.gtag('consent', 'update', {
-                analytics_storage: 'granted',
-                ad_storage: 'denied',
-                ad_user_data: 'denied',
-                ad_personalization: 'denied'
-              });
-              window.gtag('config', '${id}', { send_page_view: false });
-            `}
-          </Script>
+          {isValidMeasurementId(id) ? (
+            <>
+              <Script
+                src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`}
+                strategy="afterInteractive"
+              />
+              <Script id="satrcrm-google-analytics" strategy="afterInteractive">
+                {`
+                  window.dataLayer = window.dataLayer || [];
+                  window.gtag = function(){window.dataLayer.push(arguments);};
+                  window.gtag('js', new Date());
+                  window.gtag('consent', 'update', {
+                    analytics_storage: 'granted',
+                    ad_storage: 'denied',
+                    ad_user_data: 'denied',
+                    ad_personalization: 'denied'
+                  });
+                  window.gtag('config', '${id}', { send_page_view: false });
+                `}
+              </Script>
+            </>
+          ) : null}
+
+          {clarityEnabled ? (
+            <>
+              <Script id="satrcrm-microsoft-clarity-init" strategy="afterInteractive">
+                {`
+                  window.clarity = window.clarity || function(){
+                    (window.clarity.q = window.clarity.q || []).push(arguments);
+                  };
+                `}
+              </Script>
+              <Script
+                id="satrcrm-microsoft-clarity"
+                src={`https://www.clarity.ms/tag/${encodeURIComponent(clarityId)}`}
+                strategy="afterInteractive"
+              />
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -109,8 +132,8 @@ export function GoogleAnalytics({ measurementId }: { measurementId?: string }) {
             </p>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
               {isEnglish
-                ? 'We use Google Analytics to understand page usage and improve the system. Tracking will not start until you consent.'
-                : 'نستخدم Google Analytics لفهم استخدام الصفحات وتحسين النظام. لن يبدأ التتبع قبل موافقتك.'}
+                ? 'We use analytics tools, including Google Analytics and Microsoft Clarity, to understand page usage and improve the system. Tracking will not start until you consent.'
+                : 'نستخدم أدوات تحليلات، منها Google Analytics وMicrosoft Clarity، لفهم استخدام الصفحات وتحسين النظام. لن يبدأ التتبع قبل موافقتك.'}
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
